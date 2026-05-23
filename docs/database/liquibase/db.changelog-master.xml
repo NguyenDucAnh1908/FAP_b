@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <changeSet id="001-create-fap-schema-oracle" author="codex">
+        <preConditions onFail="HALT">
+            <dbms type="oracle"/>
+        </preConditions>
+        <comment>
+            FAP Backend v1 Oracle schema generated from docs/01_database_schema.md
+            and docs/07_scope_freeze.md. This changeSet creates all frozen v1 tables,
+            foreign keys, unique constraints, check constraints, and indexes.
+        </comment>
+        <sqlFile
+            path="../oracle/schema.sql"
+            relativeToChangelogFile="true"
+            splitStatements="true"
+            stripComments="false"
+            endDelimiter=";"/>
+        <rollback>
+            <sqlFile
+                path="rollback/001_drop_fap_schema_oracle.sql"
+                relativeToChangelogFile="true"
+                splitStatements="true"
+                stripComments="false"
+                endDelimiter=";"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

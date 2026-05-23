@@ -1,0 +1,76 @@
+package com.fap.user.controller;
+
+import com.fap.common.api.ApiResponse;
+import com.fap.common.api.PageResponse;
+import com.fap.user.dto.CreateUserRequest;
+import com.fap.user.dto.UpdateUserRequest;
+import com.fap.user.dto.UpdateUserStatusRequest;
+import com.fap.user.dto.UserResponse;
+import com.fap.user.enums.UserStatus;
+import com.fap.user.service.UserService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@Validated
+@RestController
+@RequestMapping("/api/v1/users")
+public class UserController {
+
+	private final UserService userService;
+
+	public UserController(UserService userService) {
+		this.userService = userService;
+	}
+
+	@GetMapping
+	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'read')")
+	public PageResponse<UserResponse> list(
+			@RequestParam(required = false) UserStatus status,
+			@RequestParam(defaultValue = "1") @Min(1) int page,
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
+		Page<UserResponse> users = userService.list(status, page - 1, limit);
+		return PageResponse.of(users.getContent(), page, limit, users.getTotalElements());
+	}
+
+	@PostMapping
+	@ResponseStatus(HttpStatus.CREATED)
+	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'create')")
+	public ApiResponse<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
+		return ApiResponse.ok(userService.create(request), "User created");
+	}
+
+	@GetMapping("/{id}")
+	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'read')")
+	public ApiResponse<UserResponse> get(@PathVariable Long id) {
+		return ApiResponse.ok(userService.get(id));
+	}
+
+	@PutMapping("/{id}")
+	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'update')")
+	public ApiResponse<UserResponse> update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request) {
+		return ApiResponse.ok(userService.update(id, request));
+	}
+
+	@PatchMapping("/{id}/status")
+	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'transition')")
+	public ApiResponse<UserResponse> updateStatus(
+			@PathVariable Long id,
+			@Valid @RequestBody UpdateUserStatusRequest request) {
+		return ApiResponse.ok(userService.updateStatus(id, request.status()));
+	}
+}
