@@ -13,7 +13,7 @@ Generated from:
 | `oracle/indexes.sql` | Standalone index DDL extracted for DBA review |
 | `oracle/constraints_validation.sql` | Oracle data dictionary queries to validate constraints and indexes after migration |
 | `flyway/V1__create_fap_schema.sql` | Flyway migration using the canonical Oracle DDL |
-| `flyway/V2__seed_initial_roles_and_admin.sql` | Initial roles, permission matrix, and local Super Admin seed |
+| `flyway/V2__create_sequences_and_seed_initial_roles_and_admin.sql` | Oracle sequences for JPA ID generation plus initial roles, permission matrix, and local Super Admin seed |
 | `liquibase/db.changelog-master.xml` | Liquibase changelog that executes the canonical Oracle DDL |
 | `liquibase/rollback/001_drop_fap_schema_oracle.sql` | Liquibase rollback SQL |
 | `indexes_and_constraints.md` | Human-readable inventory of indexes, constraints, and non-DDL rules |
@@ -24,7 +24,7 @@ Place Flyway migrations under your backend migration folder, for example:
 
 ```text
 src/main/resources/db/migration/V1__create_fap_schema.sql
-src/main/resources/db/migration/V2__seed_initial_roles_and_admin.sql
+src/main/resources/db/migration/V2__create_sequences_and_seed_initial_roles_and_admin.sql
 ```
 
 ## Liquibase
@@ -37,5 +37,6 @@ Use `liquibase/db.changelog-master.xml` as the master changelog. It imports `ora
 - Booleans are implemented as `NUMBER(1)` plus `CHECK (... IN (0, 1))`.
 - JSON columns are implemented as `CLOB` plus `IS JSON` constraints.
 - `TIME` fields from the logical schema are represented as `TIMESTAMP` in Oracle for simpler comparisons.
+- JPA ID generation uses explicit Oracle sequences created by Flyway. Tables keep `NUMBER(19) PRIMARY KEY` columns rather than Oracle identity columns.
 - Optimistic locking uses `version_no`.
 - Audit timestamps are stored as `TIMESTAMP`.

@@ -1,0 +1,98 @@
+-- ============================================================
+-- FAP Database Reset Script
+-- Run this script as the FAP user (or DBA with FAP prefix)
+-- when the Flyway migration state is corrupted / out-of-sync.
+--
+-- WHEN TO USE:
+--   - V2 failed because tables from V1 don't exist (ORA-00942)
+--   - flyway_schema_history shows baseline at version 1 but
+--     no tables were actually created
+--   - You want a fully clean re-run of ALL migrations
+--
+-- AFTER RUNNING THIS SCRIPT:
+--   Restart the Spring Boot application; Flyway will re-run
+--   V1 (create schema) and V2 (seed data) from scratch.
+-- ============================================================
+
+-- 1. Drop Flyway tracking table
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE "flyway_schema_history"';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -942 THEN RAISE; END IF;
+END;
+/
+
+-- 2. Drop sequences created by V2 (safe to drop; V2 recreates them with NOCACHE)
+BEGIN EXECUTE IMMEDIATE 'DROP SEQUENCE users_seq';       EXCEPTION WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP SEQUENCE roles_seq';       EXCEPTION WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP SEQUENCE permissions_seq'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP SEQUENCE refresh_tokens_seq'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -2289 THEN RAISE; END IF; END;
+/
+
+-- 3. Drop all application tables (in FK-safe order, child to parent)
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE audit_logs';                  EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE attendance_records';          EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE training_registrations';      EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE quiz_attempts';               EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE quiz_assignments';            EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE quiz_questions';              EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE quizzes';                     EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE questions';                   EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE class_admins';                EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE class_trainers';              EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE training_sessions';           EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE classes';                     EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE training_program_syllabuses'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE training_programs';           EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE material_files';              EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE syllabus_topics';             EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE syllabus_units';              EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE syllabus_days';               EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE syllabus_output_standards';   EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE syllabuses';                  EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE notifications';               EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE refresh_tokens';              EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE system_settings';             EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE user_roles';                  EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE permissions';                 EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE roles';                       EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE users';                       EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;
+/
+
+COMMIT;
+
+-- Verify the schema is now clean
+SELECT object_name, object_type
+FROM user_objects
+ORDER BY object_type, object_name;
+

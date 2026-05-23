@@ -34,6 +34,7 @@ This document adapts the `.claude` rules to the FAP backend implementation using
 | ORM | Spring Data JPA + Hibernate |
 | Database | Oracle 19c+ |
 | Migration | Flyway primary; Liquibase also generated for teams that prefer it |
+| ID Generation | Explicit Oracle sequences with JPA `GenerationType.SEQUENCE` |
 | Security | Spring Security, JWT access token, refresh token table, BCrypt |
 | API Docs | springdoc-openapi / Swagger UI |
 | Mapping | MapStruct |
@@ -194,6 +195,8 @@ Spring backend should copy:
 ```text
 docs/database/flyway/V1__create_fap_schema.sql
 -> src/main/resources/db/migration/V1__create_fap_schema.sql
+docs/database/flyway/V2__create_sequences_and_seed_initial_roles_and_admin.sql
+-> src/main/resources/db/migration/V2__create_sequences_and_seed_initial_roles_and_admin.sql
 ```
 
 Recommended Flyway config:
@@ -204,6 +207,7 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+    baseline-version: "0.1"
   jpa:
     hibernate:
       ddl-auto: validate
@@ -212,6 +216,7 @@ spring:
 Important:
 - Do not use `ddl-auto: update` for this project.
 - Schema changes must be migration files.
+- `baseline-version: "0.1"` is used for local Oracle schemas that are not empty yet still need V1 to run before V2.
 - Keep Oracle DDL as source of truth unless the team intentionally switches to Liquibase.
 
 ---

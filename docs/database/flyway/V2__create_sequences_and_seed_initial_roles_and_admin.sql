@@ -1,9 +1,49 @@
--- Seed initial FAP roles, permissions, and first Super Admin account.
+-- Create Oracle sequences for JPA ID generation and seed initial access data.
 -- Initial local password for admin@fap.local: password
 -- Change this password immediately after first login.
 
+BEGIN
+    EXECUTE IMMEDIATE 'CREATE SEQUENCE users_seq START WITH 1000 INCREMENT BY 1 NOCACHE NOCYCLE';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -955 THEN
+            RAISE;
+        END IF;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'CREATE SEQUENCE roles_seq START WITH 1000 INCREMENT BY 1 NOCACHE NOCYCLE';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -955 THEN
+            RAISE;
+        END IF;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'CREATE SEQUENCE permissions_seq START WITH 1000 INCREMENT BY 1 NOCACHE NOCYCLE';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -955 THEN
+            RAISE;
+        END IF;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'CREATE SEQUENCE refresh_tokens_seq START WITH 1000 INCREMENT BY 1 NOCACHE NOCYCLE';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -955 THEN
+            RAISE;
+        END IF;
+END;
+/
+
 INSERT INTO roles (id, name, description, created_at, updated_at)
-SELECT (SELECT COALESCE(MAX(id), 0) + 1 FROM roles),
+SELECT roles_seq.NEXTVAL,
        'Super Admin',
        'Full system administrator',
        CURRENT_TIMESTAMP,
@@ -12,7 +52,7 @@ FROM dual
 WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'Super Admin');
 
 INSERT INTO roles (id, name, description, created_at, updated_at)
-SELECT (SELECT COALESCE(MAX(id), 0) + 1 FROM roles),
+SELECT roles_seq.NEXTVAL,
        'Class Admin',
        'Class and training operation administrator',
        CURRENT_TIMESTAMP,
@@ -21,7 +61,7 @@ FROM dual
 WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'Class Admin');
 
 INSERT INTO roles (id, name, description, created_at, updated_at)
-SELECT (SELECT COALESCE(MAX(id), 0) + 1 FROM roles),
+SELECT roles_seq.NEXTVAL,
        'Trainer',
        'Trainer assigned to classes and sessions',
        CURRENT_TIMESTAMP,
@@ -30,7 +70,7 @@ FROM dual
 WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'Trainer');
 
 INSERT INTO roles (id, name, description, created_at, updated_at)
-SELECT (SELECT COALESCE(MAX(id), 0) + 1 FROM roles),
+SELECT roles_seq.NEXTVAL,
        'Trainee',
        'Self-service trainee user',
        CURRENT_TIMESTAMP,
@@ -50,7 +90,7 @@ INSERT INTO users (
     created_at,
     updated_at
 )
-SELECT (SELECT COALESCE(MAX(id), 0) + 1 FROM users),
+SELECT users_seq.NEXTVAL,
        'System Super Admin',
        'admin@fap.local',
        '$2a$10$7EqJtq98hPqEX7fNZaFWoOhi7xP18N3aZ51WkS4h.9i5wVP5PZ8y6',
@@ -77,9 +117,9 @@ WHERE u.email = 'admin@fap.local'
   );
 
 INSERT INTO permissions (id, role_id, resource_name, permission_level)
-SELECT (SELECT COALESCE(MAX(id), 0) FROM permissions) + ROW_NUMBER() OVER (ORDER BY resource.resource_name),
+SELECT permissions_seq.NEXTVAL,
        r.id,
-       resource.resource_name,
+       perm_resource.resource_name,
        'full_access'
 FROM roles r
 CROSS JOIN (
@@ -88,20 +128,20 @@ CROSS JOIN (
     SELECT 'training_program' FROM dual UNION ALL
     SELECT 'class' FROM dual UNION ALL
     SELECT 'learning_material' FROM dual
-) resource
+) perm_resource
 WHERE r.name = 'Super Admin'
   AND NOT EXISTS (
       SELECT 1
       FROM permissions p
       WHERE p.role_id = r.id
-        AND p.resource_name = resource.resource_name
+        AND p.resource_name = perm_resource.resource_name
   );
 
 INSERT INTO permissions (id, role_id, resource_name, permission_level)
-SELECT (SELECT COALESCE(MAX(id), 0) FROM permissions) + ROW_NUMBER() OVER (ORDER BY resource.resource_name),
+SELECT permissions_seq.NEXTVAL,
        r.id,
-       resource.resource_name,
-       resource.permission_level
+       perm_resource.resource_name,
+       perm_resource.permission_level
 FROM roles r
 CROSS JOIN (
     SELECT 'user' resource_name, 'view' permission_level FROM dual UNION ALL
@@ -109,20 +149,20 @@ CROSS JOIN (
     SELECT 'training_program', 'modify' FROM dual UNION ALL
     SELECT 'class', 'full_access' FROM dual UNION ALL
     SELECT 'learning_material', 'modify' FROM dual
-) resource
+) perm_resource
 WHERE r.name = 'Class Admin'
   AND NOT EXISTS (
       SELECT 1
       FROM permissions p
       WHERE p.role_id = r.id
-        AND p.resource_name = resource.resource_name
+        AND p.resource_name = perm_resource.resource_name
   );
 
 INSERT INTO permissions (id, role_id, resource_name, permission_level)
-SELECT (SELECT COALESCE(MAX(id), 0) FROM permissions) + ROW_NUMBER() OVER (ORDER BY resource.resource_name),
+SELECT permissions_seq.NEXTVAL,
        r.id,
-       resource.resource_name,
-       resource.permission_level
+       perm_resource.resource_name,
+       perm_resource.permission_level
 FROM roles r
 CROSS JOIN (
     SELECT 'user' resource_name, 'view' permission_level FROM dual UNION ALL
@@ -130,19 +170,19 @@ CROSS JOIN (
     SELECT 'training_program', 'view' FROM dual UNION ALL
     SELECT 'class', 'modify' FROM dual UNION ALL
     SELECT 'learning_material', 'modify' FROM dual
-) resource
+) perm_resource
 WHERE r.name = 'Trainer'
   AND NOT EXISTS (
       SELECT 1
       FROM permissions p
       WHERE p.role_id = r.id
-        AND p.resource_name = resource.resource_name
+        AND p.resource_name = perm_resource.resource_name
   );
 
 INSERT INTO permissions (id, role_id, resource_name, permission_level)
-SELECT (SELECT COALESCE(MAX(id), 0) FROM permissions) + ROW_NUMBER() OVER (ORDER BY resource.resource_name),
+SELECT permissions_seq.NEXTVAL,
        r.id,
-       resource.resource_name,
+       perm_resource.resource_name,
        'view'
 FROM roles r
 CROSS JOIN (
@@ -150,11 +190,11 @@ CROSS JOIN (
     SELECT 'training_program' FROM dual UNION ALL
     SELECT 'class' FROM dual UNION ALL
     SELECT 'learning_material' FROM dual
-) resource
+) perm_resource
 WHERE r.name = 'Trainee'
   AND NOT EXISTS (
       SELECT 1
       FROM permissions p
       WHERE p.role_id = r.id
-        AND p.resource_name = resource.resource_name
+        AND p.resource_name = perm_resource.resource_name
   );
