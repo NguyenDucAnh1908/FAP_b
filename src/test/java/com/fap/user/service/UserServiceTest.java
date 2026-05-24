@@ -14,14 +14,18 @@ import com.fap.user.enums.UserStatus;
 import com.fap.user.mapper.UserMapper;
 import com.fap.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
 import java.util.Set;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,6 +43,38 @@ class UserServiceTest {
 			passwordEncoder,
 			userMapper,
 			auditLogService);
+
+	@Test
+	void listNormalizesFiltersAndDelegatesToSearchRepository() {
+		when(userRepository.search(
+				eq(UserStatus.Active),
+				eq("admin"),
+				eq("admin@example.com"),
+				eq("System Admin"),
+				eq(1L),
+				eq("super admin"),
+				any(Pageable.class)))
+				.thenReturn(new PageImpl<>(List.of()));
+
+		userService.list(
+				UserStatus.Active,
+				" admin ",
+				" admin@example.com ",
+				" System Admin ",
+				1L,
+				" Super Admin ",
+				0,
+				20);
+
+		verify(userRepository).search(
+				eq(UserStatus.Active),
+				eq("admin"),
+				eq("admin@example.com"),
+				eq("System Admin"),
+				eq(1L),
+				eq("super admin"),
+				any(Pageable.class));
+	}
 
 	@Test
 	void createHashesPasswordAndMapsResponse() {

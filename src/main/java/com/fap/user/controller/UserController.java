@@ -46,9 +46,22 @@ public class UserController {
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'view')")
 	public PageResponse<UserResponse> list(
 			@RequestParam(required = false) UserStatus status,
+			@RequestParam(required = false) String keyword,
+			@RequestParam(required = false) String email,
+			@RequestParam(required = false) String fullName,
+			@RequestParam(required = false) Long roleId,
+			@RequestParam(required = false) String roleName,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
 			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<UserResponse> users = userService.list(status, page - 1, limit);
+		Page<UserResponse> users = userService.list(
+				status,
+				keyword,
+				email,
+				fullName,
+				roleId,
+				roleName,
+				page - 1,
+				limit);
 		return PageResponse.of(users.getContent(), page, limit, users.getTotalElements());
 	}
 

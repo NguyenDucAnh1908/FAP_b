@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -47,11 +48,24 @@ public class UserService {
 	}
 
 	@Transactional(readOnly = true)
-	public Page<UserResponse> list(UserStatus status, int page, int limit) {
+	public Page<UserResponse> list(
+			UserStatus status,
+			String keyword,
+			String email,
+			String fullName,
+			Long roleId,
+			String roleName,
+			int page,
+			int limit) {
 		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-		Page<User> users = status == null
-				? userRepository.findAll(pageRequest)
-				: userRepository.findByStatus(status, pageRequest);
+		Page<User> users = userRepository.search(
+				status,
+				normalizeLikeFilter(keyword),
+				normalizeLikeFilter(email),
+				normalizeLikeFilter(fullName),
+				roleId,
+				normalizeExactFilter(roleName),
+				pageRequest);
 		return users.map(userMapper::toResponse);
 	}
 
@@ -161,5 +175,13 @@ public class UserService {
 		if (currentHasSuperAdminRole != requestedHasSuperAdminRole && !currentUserRoles.contains(SUPER_ADMIN_ROLE)) {
 			throw new ConflictException("CANNOT_MANAGE_SUPER_ADMIN_ROLE", "Only Super Admin can manage Super Admin role");
 		}
+	}
+
+	private String normalizeLikeFilter(String value) {
+		return value == null || value.isBlank() ? null : value.trim();
+	}
+
+	private String normalizeExactFilter(String value) {
+		return value == null || value.isBlank() ? null : value.trim().toLowerCase(Locale.ROOT);
 	}
 }

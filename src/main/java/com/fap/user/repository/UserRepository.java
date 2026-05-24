@@ -22,7 +22,29 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	boolean existsByEmailIgnoreCase(String email);
 
-	Page<User> findByStatus(UserStatus status, Pageable pageable);
+	@EntityGraph(attributePaths = "roles")
+	@Query("""
+			select distinct u
+			from User u
+			left join u.roles r
+			where (:status is null or u.status = :status)
+			  and (:keyword is null
+			       or lower(u.email) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(u.fullName) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(coalesce(u.phone, '')) like concat(concat('%', lower(:keyword)), '%'))
+			  and (:email is null or lower(u.email) like concat(concat('%', lower(:email)), '%'))
+			  and (:fullName is null or lower(u.fullName) like concat(concat('%', lower(:fullName)), '%'))
+			  and (:roleId is null or r.id = :roleId)
+			  and (:roleName is null or lower(r.name) = lower(:roleName))
+			""")
+	Page<User> search(
+			@Param("status") UserStatus status,
+			@Param("keyword") String keyword,
+			@Param("email") String email,
+			@Param("fullName") String fullName,
+			@Param("roleId") Long roleId,
+			@Param("roleName") String roleName,
+			Pageable pageable);
 
 	@Query("""
 			select count(u)
