@@ -185,6 +185,12 @@ public class SyllabusService {
 		if (syllabusRepository.countTopicsBySyllabusId(syllabus.getId()) == 0) {
 			throw new ConflictException("SYLLABUS_OUTLINE_REQUIRED", "Syllabus outline is required before submit or publish");
 		}
+		if (syllabusRepository.countOutputStandardsBySyllabusId(syllabus.getId()) == 0) {
+			throw new ConflictException("SYLLABUS_OUTPUT_STANDARDS_REQUIRED", "Syllabus output standards are required before submit or publish");
+		}
+		if (syllabusRepository.countTopicsWithoutSelectedOutputStandard(syllabus.getId()) > 0) {
+			throw new ConflictException("SYLLABUS_TOPIC_OUTPUT_STANDARD_INVALID", "Every topic output standard must be selected by the syllabus");
+		}
 	}
 
 	private void validatePercentTotals(

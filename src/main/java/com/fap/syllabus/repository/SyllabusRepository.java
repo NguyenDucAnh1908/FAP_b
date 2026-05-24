@@ -38,4 +38,30 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
 					""",
 			nativeQuery = true)
 	long countTopicsBySyllabusId(@Param("syllabusId") Long syllabusId);
+
+	@Query(
+			value = """
+					select count(*)
+					from syllabus_output_standards
+					where syllabus_id = :syllabusId
+					""",
+			nativeQuery = true)
+	long countOutputStandardsBySyllabusId(@Param("syllabusId") Long syllabusId);
+
+	@Query(
+			value = """
+					select count(*)
+					from syllabus_topics topic
+					join syllabus_units unit on unit.id = topic.unit_id
+					join syllabus_days day on day.id = unit.day_id
+					where day.syllabus_id = :syllabusId
+					  and not exists (
+					      select 1
+					      from syllabus_output_standards standard
+					      where standard.syllabus_id = day.syllabus_id
+					        and standard.standard_code = topic.output_standard
+					  )
+					""",
+			nativeQuery = true)
+	long countTopicsWithoutSelectedOutputStandard(@Param("syllabusId") Long syllabusId);
 }
