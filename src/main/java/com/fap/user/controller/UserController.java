@@ -3,6 +3,7 @@ package com.fap.user.controller;
 import com.fap.common.api.ApiResponse;
 import com.fap.common.api.PageResponse;
 import com.fap.common.i18n.MessageService;
+import com.fap.common.security.FapUserPrincipal;
 import com.fap.user.dto.CreateUserRequest;
 import com.fap.user.dto.UpdateUserRequest;
 import com.fap.user.dto.UpdateUserStatusRequest;
@@ -15,6 +16,7 @@ import jakarta.validation.constraints.Min;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -41,7 +43,7 @@ public class UserController {
 	}
 
 	@GetMapping
-	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'read')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'view')")
 	public PageResponse<UserResponse> list(
 			@RequestParam(required = false) UserStatus status,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
@@ -52,28 +54,34 @@ public class UserController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'create')")
-	public ApiResponse<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
-		return ApiResponse.ok(userService.create(request), messageService.get("success.user.created"));
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'create')")
+	public ApiResponse<UserResponse> create(
+			@AuthenticationPrincipal FapUserPrincipal principal,
+			@Valid @RequestBody CreateUserRequest request) {
+		return ApiResponse.ok(userService.create(request, principal.roles()), messageService.get("success.user.created"));
 	}
 
 	@GetMapping("/{id}")
-	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'read')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'view')")
 	public ApiResponse<UserResponse> get(@PathVariable Long id) {
 		return ApiResponse.ok(userService.get(id));
 	}
 
 	@PutMapping("/{id}")
-	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'update')")
-	public ApiResponse<UserResponse> update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request) {
-		return ApiResponse.ok(userService.update(id, request));
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'modify')")
+	public ApiResponse<UserResponse> update(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal,
+			@Valid @RequestBody UpdateUserRequest request) {
+		return ApiResponse.ok(userService.update(id, request, principal.roles()));
 	}
 
 	@PatchMapping("/{id}/status")
-	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'transition')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'modify')")
 	public ApiResponse<UserResponse> updateStatus(
 			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateUserStatusRequest request) {
-		return ApiResponse.ok(userService.updateStatus(id, request.status()));
+		return ApiResponse.ok(userService.updateStatus(id, request.status(), principal.id()));
 	}
 }

@@ -2,6 +2,7 @@ package com.fap.user.service;
 
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.audit.AuditLogService;
 import com.fap.role.entity.Role;
 import com.fap.role.repository.RoleRepository;
 import com.fap.user.dto.CreateUserRequest;
@@ -24,20 +25,25 @@ import java.util.Set;
 @Service
 public class UserService {
 
+	private static final String SUPER_ADMIN_ROLE = "Super Admin";
+
 	private final UserRepository userRepository;
 	private final RoleRepository roleRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final UserMapper userMapper;
+	private final AuditLogService auditLogService;
 
 	public UserService(
 			UserRepository userRepository,
 			RoleRepository roleRepository,
 			PasswordEncoder passwordEncoder,
-			UserMapper userMapper) {
+			UserMapper userMapper,
+			AuditLogService auditLogService) {
 		this.userRepository = userRepository;
 		this.roleRepository = roleRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.userMapper = userMapper;
+		this.auditLogService = auditLogService;
 	}
 
 	@Transactional(readOnly = true)
@@ -50,10 +56,12 @@ public class UserService {
 	}
 
 	@Transactional
-	public UserResponse create(CreateUserRequest request) {
+	public UserResponse create(CreateUserRequest request, Set<String> currentUserRoles) {
 		if (userRepository.existsByEmailIgnoreCase(request.email())) {
 			throw new ConflictException("Email already exists");
 		}
+		Set<Role> roles = resolveRoles(request.roleIds());
+		validateSuperAdminRoleChange(false, hasSuperAdminRole(roles), currentUserRoles);
 		LocalDateTime now = LocalDateTime.now();
 		User user = new User();
 		user.setFullName(request.fullName());
@@ -66,8 +74,10 @@ public class UserService {
 		user.setStatus(UserStatus.Active);
 		user.setCreatedAt(now);
 		user.setUpdatedAt(now);
-		user.setRoles(resolveRoles(request.roleIds()));
-		return userMapper.toResponse(userRepository.save(user));
+		user.setRoles(roles);
+		User saved = userRepository.save(user);
+		auditLogService.record("CREATE_USER", "user", saved.getId());
+		return userMapper.toResponse(saved);
 	}
 
 	@Transactional(readOnly = true)
@@ -76,29 +86,49 @@ public class UserService {
 	}
 
 	@Transactional
-	public UserResponse update(Long id, UpdateUserRequest request) {
+	public UserResponse update(Long id, UpdateUserRequest request, Set<String> currentUserRoles) {
 		User user = findUser(id);
 		userRepository.findByEmailIgnoreCase(request.email())
 				.filter(existing -> !existing.getId().equals(id))
 				.ifPresent(existing -> {
 					throw new ConflictException("Email already exists");
 				});
+		Set<Role> roles = resolveRoles(request.roleIds());
+		boolean currentlySuperAdmin = isSuperAdmin(user);
+		boolean requestedSuperAdmin = hasSuperAdminRole(roles);
+		validateSuperAdminRoleChange(currentlySuperAdmin, requestedSuperAdmin, currentUserRoles);
+		if (currentlySuperAdmin
+				&& !requestedSuperAdmin
+				&& user.getStatus() == UserStatus.Active
+				&& userRepository.countByRoleNameAndStatus(SUPER_ADMIN_ROLE, UserStatus.Active) <= 1) {
+			throw new ConflictException("CANNOT_REMOVE_LAST_SUPER_ADMIN_ROLE", "Cannot remove Super Admin role from the last active Super Admin");
+		}
 		user.setFullName(request.fullName());
 		user.setEmail(request.email().trim().toLowerCase());
 		user.setPhone(request.phone());
 		user.setDateOfBirth(request.dateOfBirth());
 		user.setGender(request.gender());
 		user.setAvatarUrl(request.avatarUrl());
-		user.setRoles(resolveRoles(request.roleIds()));
+		user.setRoles(roles);
 		user.setUpdatedAt(LocalDateTime.now());
+		auditLogService.record("UPDATE_USER", "user", user.getId());
 		return userMapper.toResponse(user);
 	}
 
 	@Transactional
-	public UserResponse updateStatus(Long id, UserStatus status) {
+	public UserResponse updateStatus(Long id, UserStatus status, Long currentUserId) {
 		User user = findUser(id);
+		if (status == UserStatus.Inactive) {
+			if (user.getId().equals(currentUserId)) {
+				throw new ConflictException("CANNOT_DEACTIVATE_SELF", "Cannot deactivate your own account");
+			}
+			if (isSuperAdmin(user) && userRepository.countByRoleNameAndStatus(SUPER_ADMIN_ROLE, UserStatus.Active) <= 1) {
+				throw new ConflictException("CANNOT_DEACTIVATE_LAST_SUPER_ADMIN", "Cannot deactivate the last active Super Admin");
+			}
+		}
 		user.setStatus(status);
 		user.setUpdatedAt(LocalDateTime.now());
+		auditLogService.record("UPDATE_USER_STATUS:" + status.name(), "user", user.getId());
 		return userMapper.toResponse(user);
 	}
 
@@ -113,5 +143,23 @@ public class UserService {
 			throw new NotFoundException("One or more roles were not found");
 		}
 		return roles;
+	}
+
+	private boolean isSuperAdmin(User user) {
+		return hasSuperAdminRole(user.getRoles());
+	}
+
+	private boolean hasSuperAdminRole(Set<Role> roles) {
+		return roles.stream()
+				.anyMatch(role -> SUPER_ADMIN_ROLE.equals(role.getName()));
+	}
+
+	private void validateSuperAdminRoleChange(
+			boolean currentHasSuperAdminRole,
+			boolean requestedHasSuperAdminRole,
+			Set<String> currentUserRoles) {
+		if (currentHasSuperAdminRole != requestedHasSuperAdminRole && !currentUserRoles.contains(SUPER_ADMIN_ROLE)) {
+			throw new ConflictException("CANNOT_MANAGE_SUPER_ADMIN_ROLE", "Only Super Admin can manage Super Admin role");
+		}
 	}
 }

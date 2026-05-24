@@ -17,4 +17,16 @@ class PermissionLevelTest {
 		assertThat(PermissionLevel.modify.allows("delete")).isFalse();
 		assertThat(PermissionLevel.full_access.allows("admin")).isTrue();
 	}
+
+	@Test
+	void permissionLevelsCanCheckRequiredLevels() {
+		assertThat(PermissionLevel.view.allows(PermissionLevel.view)).isTrue();
+		assertThat(PermissionLevel.view.allows(PermissionLevel.create)).isFalse();
+		assertThat(PermissionLevel.create.allows(PermissionLevel.view)).isTrue();
+		assertThat(PermissionLevel.create.allows(PermissionLevel.modify)).isFalse();
+		assertThat(PermissionLevel.modify.allows(PermissionLevel.view)).isTrue();
+		assertThat(PermissionLevel.modify.allows(PermissionLevel.create)).isFalse();
+		assertThat(PermissionLevel.full_access.allows(PermissionLevel.modify)).isTrue();
+		assertThat(PermissionLevel.full_access.allows(PermissionLevel.full_access)).isTrue();
+	}
 }

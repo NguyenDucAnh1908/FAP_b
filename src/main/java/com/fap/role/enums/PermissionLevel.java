@@ -18,4 +18,14 @@ public enum PermissionLevel {
 	public boolean allows(String action) {
 		return actions.contains(action);
 	}
+
+	public boolean allows(PermissionLevel requiredLevel) {
+		return switch (requiredLevel) {
+			case access_denied -> false;
+			case view -> allows("read");
+			case create -> allows("create");
+			case modify -> allows("update");
+			case full_access -> allows("admin");
+		};
+	}
 }

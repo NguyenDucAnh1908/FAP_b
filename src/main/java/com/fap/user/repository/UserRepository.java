@@ -23,4 +23,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	boolean existsByEmailIgnoreCase(String email);
 
 	Page<User> findByStatus(UserStatus status, Pageable pageable);
+
+	@Query("""
+			select count(u)
+			from User u
+			join u.roles r
+			where r.name = :roleName
+			  and u.status = :status
+			""")
+	long countByRoleNameAndStatus(@Param("roleName") String roleName, @Param("status") UserStatus status);
 }

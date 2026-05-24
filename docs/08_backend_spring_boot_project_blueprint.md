@@ -303,7 +303,7 @@ Permission model:
 Security annotations should express action:
 
 ```java
-@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'syllabus', 'create')")
+@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'syllabus', 'create')")
 ```
 
 Ownership examples:

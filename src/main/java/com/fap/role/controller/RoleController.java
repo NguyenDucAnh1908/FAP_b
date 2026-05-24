@@ -29,19 +29,19 @@ public class RoleController {
 	}
 
 	@GetMapping
-	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'read')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'view')")
 	public ApiResponse<List<RoleResponse>> listRoles() {
 		return ApiResponse.ok(roleService.listRoles());
 	}
 
 	@GetMapping("/permissions")
-	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'read')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'view')")
 	public ApiResponse<List<PermissionResponse>> permissionMatrix() {
 		return ApiResponse.ok(roleService.permissionMatrix());
 	}
 
 	@PutMapping("/permissions")
-	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'admin')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'full_access')")
 	public ApiResponse<List<PermissionResponse>> updatePermissionMatrix(
 			@Valid @RequestBody UpdatePermissionMatrixRequest request) {
 		return ApiResponse.ok(roleService.updatePermissionMatrix(request), messageService.get("success.permission_matrix.updated"));

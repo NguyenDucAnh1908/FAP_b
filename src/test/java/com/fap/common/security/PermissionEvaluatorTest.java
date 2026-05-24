@@ -60,6 +60,30 @@ class PermissionEvaluatorTest {
 	}
 
 	@Test
+	void evaluatesStoredLevelByRequiredPermissionLevel() {
+		Permission permission = new Permission();
+		permission.setResource("user");
+		permission.setPermissionLevel(PermissionLevel.modify);
+		when(permissionRepository.findByRoleIdIn(anySet())).thenReturn(List.of(permission));
+		FapUserPrincipal principal = new FapUserPrincipal(
+				2L,
+				"manager@example.com",
+				"hash",
+				Set.of("Class Admin"),
+				true,
+				List.of(new SimpleGrantedAuthority("ROLE_ID_10")));
+		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+				principal,
+				null,
+				principal.getAuthorities());
+
+		assertThat(evaluator.hasPermission(authentication, "user", "view")).isTrue();
+		assertThat(evaluator.hasPermission(authentication, "user", "modify")).isTrue();
+		assertThat(evaluator.hasPermission(authentication, "user", "create")).isFalse();
+		assertThat(evaluator.hasPermission(authentication, "user", "full_access")).isFalse();
+	}
+
+	@Test
 	void deniesWhenNoMatchingPermissionExists() {
 		when(permissionRepository.findByRoleIdIn(anySet())).thenReturn(List.of());
 		FapUserPrincipal principal = new FapUserPrincipal(
