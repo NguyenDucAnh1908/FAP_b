@@ -1,6 +1,7 @@
 package com.fap.common.exception;
 
 import com.fap.common.api.ErrorResponse;
+import com.fap.common.i18n.MessageService;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,12 @@ import java.util.List;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+	private final MessageService messageService;
+
+	public GlobalExceptionHandler(MessageService messageService) {
+		this.messageService = messageService;
+	}
+
 	@ExceptionHandler(MethodArgumentNotValidException.class)
 	ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException exception) {
 		List<ErrorResponse.FieldError> details = exception.getBindingResult()
@@ -23,7 +30,7 @@ public class GlobalExceptionHandler {
 				.toList();
 
 		return ResponseEntity.unprocessableEntity()
-				.body(ErrorResponse.of("VALIDATION_ERROR", "Validation failed", details));
+				.body(ErrorResponse.of("VALIDATION_ERROR", messageService.get("error.VALIDATION_ERROR"), details));
 	}
 
 	@ExceptionHandler(ConstraintViolationException.class)
@@ -36,48 +43,52 @@ public class GlobalExceptionHandler {
 				.toList();
 
 		return ResponseEntity.unprocessableEntity()
-				.body(ErrorResponse.of("VALIDATION_ERROR", "Validation failed", details));
+				.body(ErrorResponse.of("VALIDATION_ERROR", messageService.get("error.VALIDATION_ERROR", details)));
 	}
 
 	@ExceptionHandler(NotFoundException.class)
 	ResponseEntity<ErrorResponse> handleNotFound(NotFoundException exception) {
 		return ResponseEntity.status(HttpStatus.NOT_FOUND)
-				.body(ErrorResponse.of(exception.getCode(), exception.getMessage()));
+				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
 	}
 
 	@ExceptionHandler(ForbiddenException.class)
 	ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException exception) {
 		return ResponseEntity.status(HttpStatus.FORBIDDEN)
-				.body(ErrorResponse.of(exception.getCode(), exception.getMessage()));
+				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
 	}
 
 	@ExceptionHandler(ConflictException.class)
 	ResponseEntity<ErrorResponse> handleConflict(ConflictException exception) {
 		return ResponseEntity.status(HttpStatus.CONFLICT)
-				.body(ErrorResponse.of(exception.getCode(), exception.getMessage()));
+				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
 	}
 
 	@ExceptionHandler(BadCredentialsException.class)
 	ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException exception) {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-				.body(ErrorResponse.of("UNAUTHORIZED", "Invalid credentials"));
+				.body(ErrorResponse.of("UNAUTHORIZED", messageService.get("error.UNAUTHORIZED")));
 	}
 
 	@ExceptionHandler(UnauthorizedException.class)
 	ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedException exception) {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-				.body(ErrorResponse.of(exception.getCode(), exception.getMessage()));
+				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
 	}
 
 	@ExceptionHandler(BusinessException.class)
 	ResponseEntity<ErrorResponse> handleBusiness(BusinessException exception) {
 		return ResponseEntity.status(HttpStatus.CONFLICT)
-				.body(ErrorResponse.of(exception.getCode(), exception.getMessage()));
+				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
 	}
 
 	@ExceptionHandler(Exception.class)
 	ResponseEntity<ErrorResponse> handleUnexpected(Exception exception) {
 		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-				.body(ErrorResponse.of("INTERNAL_ERROR", "Unexpected server error"));
+				.body(ErrorResponse.of("INTERNAL_ERROR", messageService.get("error.INTERNAL_ERROR")));
+	}
+
+	private String errorMessage(BusinessException exception) {
+		return messageService.getOrDefault("error." + exception.getCode(), exception.getMessage());
 	}
 }

@@ -7,6 +7,7 @@ import com.fap.auth.dto.LogoutRequest;
 import com.fap.auth.dto.RefreshTokenRequest;
 import com.fap.auth.service.AuthService;
 import com.fap.common.api.ApiResponse;
+import com.fap.common.i18n.MessageService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,9 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
 	private final AuthService authService;
+	private final MessageService messageService;
 
-	public AuthController(AuthService authService) {
+	public AuthController(AuthService authService, MessageService messageService) {
 		this.authService = authService;
+		this.messageService = messageService;
 	}
 
 	@PostMapping("/login")
@@ -42,6 +45,6 @@ public class AuthController {
 	@PostMapping("/logout")
 	public ResponseEntity<ApiResponse<Void>> logout(@Valid @RequestBody LogoutRequest request) {
 		authService.logout(request.refreshToken());
-		return ResponseEntity.ok(ApiResponse.ok(null, "Logged out"));
+		return ResponseEntity.ok(ApiResponse.ok(null, messageService.get("success.auth.logged_out")));
 	}
 }

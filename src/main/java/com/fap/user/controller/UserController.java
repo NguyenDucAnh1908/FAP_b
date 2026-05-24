@@ -2,6 +2,7 @@ package com.fap.user.controller;
 
 import com.fap.common.api.ApiResponse;
 import com.fap.common.api.PageResponse;
+import com.fap.common.i18n.MessageService;
 import com.fap.user.dto.CreateUserRequest;
 import com.fap.user.dto.UpdateUserRequest;
 import com.fap.user.dto.UpdateUserStatusRequest;
@@ -32,9 +33,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
 	private final UserService userService;
+	private final MessageService messageService;
 
-	public UserController(UserService userService) {
+	public UserController(UserService userService, MessageService messageService) {
 		this.userService = userService;
+		this.messageService = messageService;
 	}
 
 	@GetMapping
@@ -51,7 +54,7 @@ public class UserController {
 	@ResponseStatus(HttpStatus.CREATED)
 	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'create')")
 	public ApiResponse<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
-		return ApiResponse.ok(userService.create(request), "User created");
+		return ApiResponse.ok(userService.create(request), messageService.get("success.user.created"));
 	}
 
 	@GetMapping("/{id}")

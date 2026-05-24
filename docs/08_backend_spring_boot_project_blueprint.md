@@ -197,6 +197,8 @@ docs/database/flyway/V1__create_fap_schema.sql
 -> src/main/resources/db/migration/V1__create_fap_schema.sql
 docs/database/flyway/V2__create_sequences_and_seed_initial_roles_and_admin.sql
 -> src/main/resources/db/migration/V2__create_sequences_and_seed_initial_roles_and_admin.sql
+docs/database/flyway/V3__fix_initial_admin_password_hash.sql
+-> src/main/resources/db/migration/V3__fix_initial_admin_password_hash.sql
 ```
 
 Recommended Flyway config:

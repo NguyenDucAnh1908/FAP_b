@@ -31,6 +31,21 @@ Spring Boot backend scaffold for the FAP v1 scope.
 - Health: `GET /actuator/health`
 - Swagger UI: `/swagger-ui/index.html`
 
+## Local Logs
+
+When running with the `local` profile, application logs are written to:
+
+```text
+logs/fap-backend-local.log
+```
+
+Useful overrides:
+
+```bash
+LOG_LEVEL=DEBUG APP_LOG_LEVEL=DEBUG ./mvnw spring-boot:run
+LOG_FILE=logs/custom.log ./mvnw spring-boot:run
+```
+
 ## Documentation
 
 - Frozen backend scope: `docs/07_scope_freeze.md`

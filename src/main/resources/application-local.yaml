@@ -4,6 +4,20 @@ spring:
       on-profile: local
 
 logging:
+  file:
+    name: ${LOG_FILE:logs/fap-backend-local.log}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{64} - %msg%n"
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_FILE_PATTERN:logs/fap-backend-local.%d{yyyy-MM-dd}.%i.log}
+      max-file-size: ${LOG_MAX_FILE_SIZE:10MB}
+      max-history: ${LOG_MAX_HISTORY:14}
+      total-size-cap: ${LOG_TOTAL_SIZE_CAP:200MB}
   level:
     root: ${LOG_LEVEL:INFO}
-    com.fap: DEBUG
+    com.fap: ${APP_LOG_LEVEL:DEBUG}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:INFO}
+    org.flywaydb: ${FLYWAY_LOG_LEVEL:INFO}
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}

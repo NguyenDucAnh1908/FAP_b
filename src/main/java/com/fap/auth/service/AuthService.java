@@ -13,6 +13,7 @@ import com.fap.user.mapper.UserMapper;
 import com.fap.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -50,8 +51,13 @@ public class AuthService {
 
 	@Transactional
 	public AuthResponse login(LoginRequest request) {
-		Authentication authentication = authenticationManager.authenticate(
-				new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+		Authentication authentication;
+		try {
+			authentication = authenticationManager.authenticate(
+					new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+		} catch (AuthenticationException exception) {
+			throw new UnauthorizedException("Invalid credentials");
+		}
 		FapUserPrincipal principal = (FapUserPrincipal) authentication.getPrincipal();
 		User user = userRepository.findWithRolesById(principal.id())
 				.orElseThrow(() -> new UnauthorizedException("Invalid credentials"));

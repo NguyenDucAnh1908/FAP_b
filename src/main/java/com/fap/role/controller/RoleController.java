@@ -1,6 +1,7 @@
 package com.fap.role.controller;
 
 import com.fap.common.api.ApiResponse;
+import com.fap.common.i18n.MessageService;
 import com.fap.role.dto.PermissionResponse;
 import com.fap.role.dto.RoleResponse;
 import com.fap.role.dto.UpdatePermissionMatrixRequest;
@@ -20,9 +21,11 @@ import java.util.List;
 public class RoleController {
 
 	private final RoleService roleService;
+	private final MessageService messageService;
 
-	public RoleController(RoleService roleService) {
+	public RoleController(RoleService roleService, MessageService messageService) {
 		this.roleService = roleService;
+		this.messageService = messageService;
 	}
 
 	@GetMapping
@@ -41,6 +44,6 @@ public class RoleController {
 	@PreAuthorize("@permissionEvaluator.hasAction(authentication, 'user', 'admin')")
 	public ApiResponse<List<PermissionResponse>> updatePermissionMatrix(
 			@Valid @RequestBody UpdatePermissionMatrixRequest request) {
-		return ApiResponse.ok(roleService.updatePermissionMatrix(request), "Permission matrix updated");
+		return ApiResponse.ok(roleService.updatePermissionMatrix(request), messageService.get("success.permission_matrix.updated"));
 	}
 }
