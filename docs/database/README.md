@@ -15,6 +15,7 @@ Generated from:
 | `flyway/V1__create_fap_schema.sql` | Flyway migration using the canonical Oracle DDL |
 | `flyway/V2__create_sequences_and_seed_initial_roles_and_admin.sql` | Oracle sequences for JPA ID generation plus initial roles, permission matrix, and local Super Admin seed |
 | `flyway/V3__fix_initial_admin_password_hash.sql` | Corrects the initial local Super Admin BCrypt password hash |
+| `flyway/V4__create_password_reset_tokens.sql` | Adds password reset OTP storage for forgot-password flow |
 | `liquibase/db.changelog-master.xml` | Liquibase changelog that executes the canonical Oracle DDL |
 | `liquibase/rollback/001_drop_fap_schema_oracle.sql` | Liquibase rollback SQL |
 | `indexes_and_constraints.md` | Human-readable inventory of indexes, constraints, and non-DDL rules |
@@ -27,6 +28,7 @@ Place Flyway migrations under your backend migration folder, for example:
 src/main/resources/db/migration/V1__create_fap_schema.sql
 src/main/resources/db/migration/V2__create_sequences_and_seed_initial_roles_and_admin.sql
 src/main/resources/db/migration/V3__fix_initial_admin_password_hash.sql
+src/main/resources/db/migration/V4__create_password_reset_tokens.sql
 ```
 
 ## Liquibase

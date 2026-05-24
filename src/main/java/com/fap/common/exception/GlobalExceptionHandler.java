@@ -64,6 +64,12 @@ public class GlobalExceptionHandler {
 				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
 	}
 
+	@ExceptionHandler(BadRequestException.class)
+	ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException exception) {
+		return ResponseEntity.badRequest()
+				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
+	}
+
 	@ExceptionHandler(BadCredentialsException.class)
 	ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException exception) {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

@@ -46,6 +46,34 @@ LOG_LEVEL=DEBUG APP_LOG_LEVEL=DEBUG ./mvnw spring-boot:run
 LOG_FILE=logs/custom.log ./mvnw spring-boot:run
 ```
 
+## Password Reset OTP Email
+
+Forgot password uses a 6-digit OTP. In local/dev, if mail is not enabled, the OTP is written to the application log.
+
+To send OTP by SMTP, set:
+
+```bash
+MAIL_ENABLED=true
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_app_password
+MAIL_FROM=your_email@gmail.com
+```
+
+Mail health check is disabled by default for local development. Enable it only after SMTP is fully configured:
+
+```bash
+MAIL_HEALTH_ENABLED=true
+```
+
+Then call:
+
+```text
+POST /api/v1/auth/forgot-password
+POST /api/v1/auth/reset-password
+```
+
 ## Documentation
 
 - Frozen backend scope: `docs/07_scope_freeze.md`
