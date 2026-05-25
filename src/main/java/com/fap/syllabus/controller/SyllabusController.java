@@ -4,10 +4,12 @@ import com.fap.common.api.ApiResponse;
 import com.fap.common.api.PageResponse;
 import com.fap.common.i18n.MessageService;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.syllabus.dto.CreateMaterialFileRequest;
 import com.fap.syllabus.dto.CreateSyllabusRequest;
 import com.fap.syllabus.dto.CreateSyllabusDayRequest;
 import com.fap.syllabus.dto.CreateSyllabusTopicRequest;
 import com.fap.syllabus.dto.CreateSyllabusUnitRequest;
+import com.fap.syllabus.dto.MaterialFileResponse;
 import com.fap.syllabus.dto.SyllabusDayResponse;
 import com.fap.syllabus.dto.SyllabusResponse;
 import com.fap.syllabus.dto.SyllabusTopicResponse;
@@ -16,6 +18,7 @@ import com.fap.syllabus.dto.UpdateSyllabusOutputStandardsRequest;
 import com.fap.syllabus.dto.UpdateSyllabusRequest;
 import com.fap.syllabus.dto.UpdateSyllabusStatusRequest;
 import com.fap.syllabus.enums.SyllabusStatus;
+import com.fap.syllabus.service.MaterialFileService;
 import com.fap.syllabus.service.SyllabusOutlineService;
 import com.fap.syllabus.service.SyllabusOutputStandardService;
 import com.fap.syllabus.service.SyllabusService;
@@ -49,16 +52,19 @@ public class SyllabusController {
 	private final SyllabusService syllabusService;
 	private final SyllabusOutlineService outlineService;
 	private final SyllabusOutputStandardService outputStandardService;
+	private final MaterialFileService materialFileService;
 	private final MessageService messageService;
 
 	public SyllabusController(
 			SyllabusService syllabusService,
 			SyllabusOutlineService outlineService,
 			SyllabusOutputStandardService outputStandardService,
+			MaterialFileService materialFileService,
 			MessageService messageService) {
 		this.syllabusService = syllabusService;
 		this.outlineService = outlineService;
 		this.outputStandardService = outputStandardService;
+		this.materialFileService = materialFileService;
 		this.messageService = messageService;
 	}
 
@@ -213,5 +219,34 @@ public class SyllabusController {
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'syllabus', 'modify')")
 	public void deleteTopic(@PathVariable Long id, @PathVariable Long topicId) {
 		outlineService.deleteTopic(id, topicId);
+	}
+
+	@GetMapping("/{id}/topics/{topicId}/materials")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'syllabus', 'view')")
+	public ApiResponse<List<MaterialFileResponse>> listMaterials(
+			@PathVariable Long id,
+			@PathVariable Long topicId) {
+		return ApiResponse.ok(materialFileService.list(id, topicId));
+	}
+
+	@PostMapping("/{id}/topics/{topicId}/materials")
+	@ResponseStatus(HttpStatus.CREATED)
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'syllabus', 'modify')")
+	public ApiResponse<MaterialFileResponse> createMaterial(
+			@PathVariable Long id,
+			@PathVariable Long topicId,
+			@AuthenticationPrincipal FapUserPrincipal principal,
+			@Valid @RequestBody CreateMaterialFileRequest request) {
+		return ApiResponse.ok(materialFileService.create(id, topicId, request, principal.id()));
+	}
+
+	@DeleteMapping("/{id}/topics/{topicId}/materials/{materialId}")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'syllabus', 'modify')")
+	public void deleteMaterial(
+			@PathVariable Long id,
+			@PathVariable Long topicId,
+			@PathVariable Long materialId) {
+		materialFileService.delete(id, topicId, materialId);
 	}
 }
