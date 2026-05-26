@@ -1,0 +1,176 @@
+package com.fap.clazz.service;
+
+import com.fap.clazz.dto.ClassResponse;
+import com.fap.clazz.dto.CreateClassRequest;
+import com.fap.clazz.dto.UpdateClassRequest;
+import com.fap.clazz.entity.FapClass;
+import com.fap.clazz.enums.ClassStatus;
+import com.fap.clazz.mapper.ClassMapper;
+import com.fap.clazz.repository.ClassRepository;
+import com.fap.common.audit.AuditLogService;
+import com.fap.common.exception.BadRequestException;
+import com.fap.common.exception.ConflictException;
+import com.fap.common.exception.NotFoundException;
+import com.fap.program.entity.TrainingProgram;
+import com.fap.program.enums.TrainingProgramStatus;
+import com.fap.program.repository.TrainingProgramRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+
+@Service
+public class ClassService {
+
+	private final ClassRepository classRepository;
+	private final TrainingProgramRepository trainingProgramRepository;
+	private final ClassMapper classMapper;
+	private final AuditLogService auditLogService;
+
+	public ClassService(
+			ClassRepository classRepository,
+			TrainingProgramRepository trainingProgramRepository,
+			ClassMapper classMapper,
+			AuditLogService auditLogService) {
+		this.classRepository = classRepository;
+		this.trainingProgramRepository = trainingProgramRepository;
+		this.classMapper = classMapper;
+		this.auditLogService = auditLogService;
+	}
+
+	@Transactional(readOnly = true)
+	public Page<ClassResponse> list(
+			ClassStatus status,
+			Long trainingProgramId,
+			String keyword,
+			int page,
+			int limit) {
+		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+		return classRepository.search(status, trainingProgramId, normalize(keyword), pageRequest)
+				.map(classMapper::toResponse);
+	}
+
+	@Transactional
+	public ClassResponse create(CreateClassRequest request, Long currentUserId) {
+		if (classRepository.existsByClassCodeIgnoreCase(request.classCode())) {
+			throw new ConflictException("CLASS_CODE_EXISTS", "Class code already exists");
+		}
+		validateDateRange(request.startDate(), request.endDate());
+		TrainingProgram program = trainingProgramRepository.findById(request.trainingProgramId())
+				.orElseThrow(() -> new NotFoundException("Training program not found"));
+		if (program.getStatus() != TrainingProgramStatus.Active) {
+			throw new ConflictException("CLASS_TRAINING_PROGRAM_NOT_ACTIVE", "Class requires an active training program");
+		}
+		LocalDateTime now = LocalDateTime.now();
+		FapClass fapClass = new FapClass();
+		fapClass.setName(request.name());
+		fapClass.setClassCode(request.classCode().trim().toUpperCase());
+		fapClass.setTrainingProgram(program);
+		fapClass.setStatus(ClassStatus.Planning);
+		applyFields(fapClass, request);
+		fapClass.setCreatedAt(now);
+		fapClass.setUpdatedAt(now);
+		fapClass.setCreatedBy(currentUserId);
+		fapClass.setUpdatedBy(currentUserId);
+		FapClass saved = classRepository.save(fapClass);
+		auditLogService.record("CREATE_CLASS", "class", saved.getId());
+		return classMapper.toResponse(saved);
+	}
+
+	@Transactional(readOnly = true)
+	public ClassResponse get(Long id) {
+		return classMapper.toResponse(findClass(id));
+	}
+
+	@Transactional
+	public ClassResponse update(Long id, UpdateClassRequest request, Long currentUserId) {
+		FapClass fapClass = findClass(id);
+		ensurePlanning(fapClass);
+		validateDateRange(request.startDate(), request.endDate());
+		applyFields(fapClass, request);
+		fapClass.setUpdatedAt(LocalDateTime.now());
+		fapClass.setUpdatedBy(currentUserId);
+		auditLogService.record("UPDATE_CLASS", "class", fapClass.getId());
+		return classMapper.toResponse(fapClass);
+	}
+
+	@Transactional
+	public ClassResponse updateStatus(Long id, ClassStatus status, Long currentUserId) {
+		FapClass fapClass = findClass(id);
+		validateTransition(fapClass.getStatus(), status);
+		fapClass.setStatus(status);
+		fapClass.setUpdatedAt(LocalDateTime.now());
+		fapClass.setUpdatedBy(currentUserId);
+		auditLogService.record("UPDATE_CLASS_STATUS:" + status.name(), "class", fapClass.getId());
+		return classMapper.toResponse(fapClass);
+	}
+
+	@Transactional
+	public void delete(Long id, Long currentUserId) {
+		FapClass fapClass = findClass(id);
+		ensurePlanning(fapClass);
+		fapClass.setDeleted(true);
+		fapClass.setDeletedAt(LocalDateTime.now());
+		fapClass.setUpdatedAt(LocalDateTime.now());
+		fapClass.setUpdatedBy(currentUserId);
+		auditLogService.record("DELETE_CLASS", "class", fapClass.getId());
+	}
+
+	private FapClass findClass(Long id) {
+		return classRepository.findWithTrainingProgramById(id)
+				.orElseThrow(() -> new NotFoundException("Class not found"));
+	}
+
+	private void applyFields(FapClass fapClass, CreateClassRequest request) {
+		fapClass.setLocation(request.location());
+		fapClass.setLocationDetail(request.locationDetail());
+		fapClass.setFsu(request.fsu());
+		fapClass.setClassTime(request.classTime());
+		fapClass.setStartDate(request.startDate());
+		fapClass.setEndDate(request.endDate());
+		fapClass.setDuration(request.duration());
+	}
+
+	private void applyFields(FapClass fapClass, UpdateClassRequest request) {
+		if (request.name() != null) {
+			fapClass.setName(request.name());
+		}
+		fapClass.setLocation(request.location());
+		fapClass.setLocationDetail(request.locationDetail());
+		fapClass.setFsu(request.fsu());
+		fapClass.setClassTime(request.classTime());
+		fapClass.setStartDate(request.startDate());
+		fapClass.setEndDate(request.endDate());
+		fapClass.setDuration(request.duration());
+	}
+
+	private void validateTransition(ClassStatus current, ClassStatus target) {
+		if (current == target) {
+			return;
+		}
+		boolean allowed = (current == ClassStatus.Planning && target == ClassStatus.Active)
+				|| (current == ClassStatus.Active && target == ClassStatus.Closed);
+		if (!allowed) {
+			throw new ConflictException("INVALID_CLASS_STATUS_TRANSITION", "Invalid class status transition");
+		}
+	}
+
+	private void ensurePlanning(FapClass fapClass) {
+		if (fapClass.getStatus() != ClassStatus.Planning) {
+			throw new ConflictException("CLASS_NOT_EDITABLE", "Only planning class can be edited");
+		}
+	}
+
+	private void validateDateRange(java.time.LocalDate startDate, java.time.LocalDate endDate) {
+		if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+			throw new BadRequestException("INVALID_CLASS_DATE_RANGE", "Class start date must be before or equal to end date");
+		}
+	}
+
+	private String normalize(String value) {
+		return value == null || value.isBlank() ? null : value.trim();
+	}
+}

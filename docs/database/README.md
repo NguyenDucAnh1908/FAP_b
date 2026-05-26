@@ -21,6 +21,7 @@ Generated from:
 | `flyway/V7__create_syllabus_outline_sequences.sql` | Adds Oracle sequences for syllabus day, unit, and topic JPA ID generation |
 | `flyway/V8__create_material_files_sequence.sql` | Adds Oracle sequence for material file JPA ID generation |
 | `flyway/V9__create_training_programs_sequence.sql` | Adds Oracle sequence for training program JPA ID generation |
+| `flyway/V10__create_classes_sequence.sql` | Adds Oracle sequence for class JPA ID generation |
 | `liquibase/db.changelog-master.xml` | Liquibase changelog that executes the canonical Oracle DDL |
 | `liquibase/rollback/001_drop_fap_schema_oracle.sql` | Liquibase rollback SQL |
 | `indexes_and_constraints.md` | Human-readable inventory of indexes, constraints, and non-DDL rules |
