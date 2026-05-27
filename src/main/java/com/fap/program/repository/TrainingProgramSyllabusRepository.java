@@ -14,4 +14,6 @@ public interface TrainingProgramSyllabusRepository
 	long countByIdProgramId(Long programId);
 
 	void deleteByIdProgramId(Long programId);
+
+	boolean existsByIdProgramIdAndIdSyllabusId(Long programId, Long syllabusId);
 }

@@ -172,6 +172,9 @@ Entity rules:
 | `POST` | `/api/v1/classes` | Create planning class |
 | `GET` | `/api/v1/classes/{id}` | Detail |
 | `PUT` | `/api/v1/classes/{id}` | Update planning class |
+| `GET` | `/api/v1/classes/{id}/admins` | List class admins |
+| `PUT` | `/api/v1/classes/{id}/admins` | Assign class admins |
+| `GET` | `/api/v1/classes/{id}/trainers` | List trainers |
 | `PUT` | `/api/v1/classes/{id}/trainers` | Assign trainers |
 | `PATCH` | `/api/v1/classes/{id}/status` | Publish/close |
 | `DELETE` | `/api/v1/classes/{id}` | Soft-delete allowed states |

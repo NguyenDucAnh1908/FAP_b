@@ -28,7 +28,8 @@ public class RoleService {
 			"syllabus",
 			"training_program",
 			"class",
-			"learning_material");
+			"learning_material",
+			"quiz");
 
 	private final RoleRepository roleRepository;
 	private final PermissionRepository permissionRepository;

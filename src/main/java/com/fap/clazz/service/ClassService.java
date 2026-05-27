@@ -6,7 +6,9 @@ import com.fap.clazz.dto.UpdateClassRequest;
 import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassStatus;
 import com.fap.clazz.mapper.ClassMapper;
+import com.fap.clazz.repository.ClassAdminRepository;
 import com.fap.clazz.repository.ClassRepository;
+import com.fap.clazz.repository.ClassTrainerRepository;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
@@ -26,16 +28,22 @@ import java.time.LocalDateTime;
 public class ClassService {
 
 	private final ClassRepository classRepository;
+	private final ClassAdminRepository classAdminRepository;
+	private final ClassTrainerRepository classTrainerRepository;
 	private final TrainingProgramRepository trainingProgramRepository;
 	private final ClassMapper classMapper;
 	private final AuditLogService auditLogService;
 
 	public ClassService(
 			ClassRepository classRepository,
+			ClassAdminRepository classAdminRepository,
+			ClassTrainerRepository classTrainerRepository,
 			TrainingProgramRepository trainingProgramRepository,
 			ClassMapper classMapper,
 			AuditLogService auditLogService) {
 		this.classRepository = classRepository;
+		this.classAdminRepository = classAdminRepository;
+		this.classTrainerRepository = classTrainerRepository;
 		this.trainingProgramRepository = trainingProgramRepository;
 		this.classMapper = classMapper;
 		this.auditLogService = auditLogService;
@@ -101,6 +109,9 @@ public class ClassService {
 	public ClassResponse updateStatus(Long id, ClassStatus status, Long currentUserId) {
 		FapClass fapClass = findClass(id);
 		validateTransition(fapClass.getStatus(), status);
+		if (fapClass.getStatus() == ClassStatus.Planning && status == ClassStatus.Active) {
+			validateReadyForActivation(fapClass);
+		}
 		fapClass.setStatus(status);
 		fapClass.setUpdatedAt(LocalDateTime.now());
 		fapClass.setUpdatedBy(currentUserId);
@@ -155,6 +166,22 @@ public class ClassService {
 				|| (current == ClassStatus.Active && target == ClassStatus.Closed);
 		if (!allowed) {
 			throw new ConflictException("INVALID_CLASS_STATUS_TRANSITION", "Invalid class status transition");
+		}
+	}
+
+	private void validateReadyForActivation(FapClass fapClass) {
+		if (fapClass.getTrainingProgram().getStatus() != TrainingProgramStatus.Active) {
+			throw new ConflictException("CLASS_TRAINING_PROGRAM_NOT_ACTIVE", "Class requires an active training program");
+		}
+		if (fapClass.getStartDate() == null || fapClass.getEndDate() == null) {
+			throw new ConflictException("CLASS_SCHEDULE_REQUIRED", "Class requires start date and end date before activation");
+		}
+		validateDateRange(fapClass.getStartDate(), fapClass.getEndDate());
+		if (!classAdminRepository.existsByFapClassId(fapClass.getId())) {
+			throw new ConflictException("CLASS_ADMIN_REQUIRED", "Class requires at least one class admin before activation");
+		}
+		if (!classTrainerRepository.existsByFapClassId(fapClass.getId())) {
+			throw new ConflictException("CLASS_TRAINER_REQUIRED", "Class requires at least one trainer before activation");
 		}
 	}
 

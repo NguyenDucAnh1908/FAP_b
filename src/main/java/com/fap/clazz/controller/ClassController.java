@@ -1,11 +1,17 @@
 package com.fap.clazz.controller;
 
+import com.fap.clazz.dto.ClassAdminResponse;
 import com.fap.clazz.dto.ClassResponse;
+import com.fap.clazz.dto.ClassTrainerResponse;
 import com.fap.clazz.dto.CreateClassRequest;
+import com.fap.clazz.dto.UpdateClassAdminsRequest;
+import com.fap.clazz.dto.UpdateClassTrainersRequest;
 import com.fap.clazz.dto.UpdateClassRequest;
 import com.fap.clazz.dto.UpdateClassStatusRequest;
 import com.fap.clazz.enums.ClassStatus;
+import com.fap.clazz.service.ClassAdminService;
 import com.fap.clazz.service.ClassService;
+import com.fap.clazz.service.ClassTrainerService;
 import com.fap.common.api.ApiResponse;
 import com.fap.common.api.PageResponse;
 import com.fap.common.i18n.MessageService;
@@ -30,16 +36,26 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @Validated
 @RestController
 @RequestMapping("/api/v1/classes")
 public class ClassController {
 
 	private final ClassService classService;
+	private final ClassAdminService classAdminService;
+	private final ClassTrainerService classTrainerService;
 	private final MessageService messageService;
 
-	public ClassController(ClassService classService, MessageService messageService) {
+	public ClassController(
+			ClassService classService,
+			ClassAdminService classAdminService,
+			ClassTrainerService classTrainerService,
+			MessageService messageService) {
 		this.classService = classService;
+		this.classAdminService = classAdminService;
+		this.classTrainerService = classTrainerService;
 		this.messageService = messageService;
 	}
 
@@ -97,5 +113,33 @@ public class ClassController {
 			@PathVariable Long id,
 			@AuthenticationPrincipal FapUserPrincipal principal) {
 		classService.delete(id, principal.id());
+	}
+
+	@GetMapping("/{id}/trainers")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
+	public ApiResponse<List<ClassTrainerResponse>> listTrainers(@PathVariable Long id) {
+		return ApiResponse.ok(classTrainerService.list(id));
+	}
+
+	@PutMapping("/{id}/trainers")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
+	public ApiResponse<List<ClassTrainerResponse>> replaceTrainers(
+			@PathVariable Long id,
+			@Valid @RequestBody UpdateClassTrainersRequest request) {
+		return ApiResponse.ok(classTrainerService.replace(id, request));
+	}
+
+	@GetMapping("/{id}/admins")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
+	public ApiResponse<List<ClassAdminResponse>> listAdmins(@PathVariable Long id) {
+		return ApiResponse.ok(classAdminService.list(id));
+	}
+
+	@PutMapping("/{id}/admins")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
+	public ApiResponse<List<ClassAdminResponse>> replaceAdmins(
+			@PathVariable Long id,
+			@Valid @RequestBody UpdateClassAdminsRequest request) {
+		return ApiResponse.ok(classAdminService.replace(id, request));
 	}
 }
