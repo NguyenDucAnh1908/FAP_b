@@ -3,6 +3,7 @@ package com.fap.training.controller;
 import com.fap.common.api.ApiResponse;
 import com.fap.common.api.PageResponse;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.clazz.service.ClassAccessService;
 import com.fap.training.dto.AttendanceRecordResponse;
 import com.fap.training.dto.CreateTrainingSessionRequest;
 import com.fap.training.dto.TrainingParticipantsResponse;
@@ -47,14 +48,17 @@ public class TrainingSessionController {
 	private final TrainingSessionService trainingSessionService;
 	private final TrainingRegistrationService trainingRegistrationService;
 	private final AttendanceService attendanceService;
+	private final ClassAccessService classAccessService;
 
 	public TrainingSessionController(
 			TrainingSessionService trainingSessionService,
 			TrainingRegistrationService trainingRegistrationService,
-			AttendanceService attendanceService) {
+			AttendanceService attendanceService,
+			ClassAccessService classAccessService) {
 		this.trainingSessionService = trainingSessionService;
 		this.trainingRegistrationService = trainingRegistrationService;
 		this.attendanceService = attendanceService;
+		this.classAccessService = classAccessService;
 	}
 
 	@GetMapping
@@ -86,12 +90,16 @@ public class TrainingSessionController {
 	public ApiResponse<TrainingSessionResponse> create(
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody CreateTrainingSessionRequest request) {
+		classAccessService.assertCanManageClass(principal, request.classId());
 		return ApiResponse.ok(trainingSessionService.create(request, principal.id()));
 	}
 
 	@GetMapping("/{id}")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
-	public ApiResponse<TrainingSessionResponse> get(@PathVariable Long id) {
+	public ApiResponse<TrainingSessionResponse> get(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		classAccessService.assertCanViewSession(principal, id);
 		return ApiResponse.ok(trainingSessionService.get(id));
 	}
 
@@ -101,6 +109,7 @@ public class TrainingSessionController {
 			@PathVariable Long id,
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateTrainingSessionRequest request) {
+		classAccessService.assertCanManageSession(principal, id);
 		return ApiResponse.ok(trainingSessionService.update(id, request, principal.id()));
 	}
 
@@ -110,6 +119,7 @@ public class TrainingSessionController {
 			@PathVariable Long id,
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateTrainingSessionStatusRequest request) {
+		classAccessService.assertCanManageSession(principal, id);
 		return ApiResponse.ok(trainingSessionService.updateStatus(id, request.status(), principal.id()));
 	}
 
@@ -131,13 +141,19 @@ public class TrainingSessionController {
 
 	@GetMapping("/{id}/participants")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
-	public ApiResponse<TrainingParticipantsResponse> participants(@PathVariable Long id) {
+	public ApiResponse<TrainingParticipantsResponse> participants(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		classAccessService.assertCanViewSession(principal, id);
 		return ApiResponse.ok(trainingRegistrationService.participants(id));
 	}
 
 	@GetMapping("/{id}/attendance")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
-	public ApiResponse<List<AttendanceRecordResponse>> attendance(@PathVariable Long id) {
+	public ApiResponse<List<AttendanceRecordResponse>> attendance(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		classAccessService.assertCanViewSession(principal, id);
 		return ApiResponse.ok(attendanceService.list(id));
 	}
 
@@ -147,6 +163,7 @@ public class TrainingSessionController {
 			@PathVariable Long id,
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateAttendanceRequest request) {
+		classAccessService.assertCanManageSession(principal, id);
 		return ApiResponse.ok(attendanceService.upsert(id, request, principal.id()));
 	}
 }

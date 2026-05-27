@@ -9,6 +9,7 @@ import com.fap.clazz.dto.UpdateClassTrainersRequest;
 import com.fap.clazz.dto.UpdateClassRequest;
 import com.fap.clazz.dto.UpdateClassStatusRequest;
 import com.fap.clazz.enums.ClassStatus;
+import com.fap.clazz.service.ClassAccessService;
 import com.fap.clazz.service.ClassAdminService;
 import com.fap.clazz.service.ClassService;
 import com.fap.clazz.service.ClassTrainerService;
@@ -44,16 +45,19 @@ import java.util.List;
 public class ClassController {
 
 	private final ClassService classService;
+	private final ClassAccessService classAccessService;
 	private final ClassAdminService classAdminService;
 	private final ClassTrainerService classTrainerService;
 	private final MessageService messageService;
 
 	public ClassController(
 			ClassService classService,
+			ClassAccessService classAccessService,
 			ClassAdminService classAdminService,
 			ClassTrainerService classTrainerService,
 			MessageService messageService) {
 		this.classService = classService;
+		this.classAccessService = classAccessService;
 		this.classAdminService = classAdminService;
 		this.classTrainerService = classTrainerService;
 		this.messageService = messageService;
@@ -84,7 +88,10 @@ public class ClassController {
 
 	@GetMapping("/{id}")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
-	public ApiResponse<ClassResponse> get(@PathVariable Long id) {
+	public ApiResponse<ClassResponse> get(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		classAccessService.assertCanViewClass(principal, id);
 		return ApiResponse.ok(classService.get(id));
 	}
 
@@ -94,6 +101,7 @@ public class ClassController {
 			@PathVariable Long id,
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateClassRequest request) {
+		classAccessService.assertCanManageClass(principal, id);
 		return ApiResponse.ok(classService.update(id, request, principal.id()));
 	}
 
@@ -103,6 +111,7 @@ public class ClassController {
 			@PathVariable Long id,
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateClassStatusRequest request) {
+		classAccessService.assertCanManageClass(principal, id);
 		return ApiResponse.ok(classService.updateStatus(id, request.status(), principal.id()));
 	}
 
@@ -112,12 +121,16 @@ public class ClassController {
 	public void delete(
 			@PathVariable Long id,
 			@AuthenticationPrincipal FapUserPrincipal principal) {
+		classAccessService.assertCanManageClass(principal, id);
 		classService.delete(id, principal.id());
 	}
 
 	@GetMapping("/{id}/trainers")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
-	public ApiResponse<List<ClassTrainerResponse>> listTrainers(@PathVariable Long id) {
+	public ApiResponse<List<ClassTrainerResponse>> listTrainers(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		classAccessService.assertCanViewClass(principal, id);
 		return ApiResponse.ok(classTrainerService.list(id));
 	}
 
@@ -125,13 +138,18 @@ public class ClassController {
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
 	public ApiResponse<List<ClassTrainerResponse>> replaceTrainers(
 			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateClassTrainersRequest request) {
+		classAccessService.assertCanManageClass(principal, id);
 		return ApiResponse.ok(classTrainerService.replace(id, request));
 	}
 
 	@GetMapping("/{id}/admins")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
-	public ApiResponse<List<ClassAdminResponse>> listAdmins(@PathVariable Long id) {
+	public ApiResponse<List<ClassAdminResponse>> listAdmins(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		classAccessService.assertCanViewClass(principal, id);
 		return ApiResponse.ok(classAdminService.list(id));
 	}
 
@@ -139,7 +157,9 @@ public class ClassController {
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
 	public ApiResponse<List<ClassAdminResponse>> replaceAdmins(
 			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateClassAdminsRequest request) {
+		classAccessService.assertCanManageClass(principal, id);
 		return ApiResponse.ok(classAdminService.replace(id, request));
 	}
 }

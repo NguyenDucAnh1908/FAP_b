@@ -15,4 +15,6 @@ public interface ClassAdminRepository extends JpaRepository<ClassAdmin, ClassAdm
 	void deleteByFapClassId(Long classId);
 
 	boolean existsByFapClassId(Long classId);
+
+	boolean existsByFapClassIdAndUserId(Long classId, Long userId);
 }
