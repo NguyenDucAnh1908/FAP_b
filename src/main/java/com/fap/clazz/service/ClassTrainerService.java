@@ -13,6 +13,7 @@ import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.notification.service.NotificationService;
 import com.fap.program.repository.TrainingProgramSyllabusRepository;
 import com.fap.syllabus.entity.Syllabus;
 import com.fap.syllabus.repository.SyllabusRepository;
@@ -38,6 +39,7 @@ public class ClassTrainerService {
 	private final TrainingProgramSyllabusRepository trainingProgramSyllabusRepository;
 	private final ClassTrainerMapper classTrainerMapper;
 	private final AuditLogService auditLogService;
+	private final NotificationService notificationService;
 
 	public ClassTrainerService(
 			ClassRepository classRepository,
@@ -46,7 +48,8 @@ public class ClassTrainerService {
 			SyllabusRepository syllabusRepository,
 			TrainingProgramSyllabusRepository trainingProgramSyllabusRepository,
 			ClassTrainerMapper classTrainerMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			NotificationService notificationService) {
 		this.classRepository = classRepository;
 		this.classTrainerRepository = classTrainerRepository;
 		this.userRepository = userRepository;
@@ -54,6 +57,7 @@ public class ClassTrainerService {
 		this.trainingProgramSyllabusRepository = trainingProgramSyllabusRepository;
 		this.classTrainerMapper = classTrainerMapper;
 		this.auditLogService = auditLogService;
+		this.notificationService = notificationService;
 	}
 
 	@Transactional(readOnly = true)
@@ -74,6 +78,10 @@ public class ClassTrainerService {
 				.toList();
 		classTrainerRepository.saveAll(trainers);
 		auditLogService.record("UPDATE_CLASS_TRAINERS", "class", classId);
+		trainers.forEach(trainer -> notificationService.create(
+				trainer.getUser().getId(),
+				"Class trainer assignment",
+				"You have been assigned as trainer for " + fapClass.getClassCode() + " - " + fapClass.getName()));
 		return trainers.stream()
 				.map(classTrainerMapper::toResponse)
 				.toList();

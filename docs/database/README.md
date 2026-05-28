@@ -26,6 +26,7 @@ Generated from:
 | `flyway/V12__create_training_sessions_sequence.sql` | Adds Oracle sequence for training session JPA ID generation |
 | `flyway/V13__create_training_registrations_sequence.sql` | Adds Oracle sequence for training registration JPA ID generation |
 | `flyway/V14__create_attendance_records_sequence.sql` | Adds Oracle sequence for attendance record JPA ID generation |
+| `flyway/V15__create_notifications_sequence.sql` | Adds Oracle sequence for notification JPA ID generation |
 | `liquibase/db.changelog-master.xml` | Liquibase changelog that executes the canonical Oracle DDL |
 | `liquibase/rollback/001_drop_fap_schema_oracle.sql` | Liquibase rollback SQL |
 | `indexes_and_constraints.md` | Human-readable inventory of indexes, constraints, and non-DDL rules |

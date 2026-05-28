@@ -64,6 +64,7 @@ public class TrainingSessionController {
 	@GetMapping
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
 	public PageResponse<TrainingSessionResponse> list(
+			@AuthenticationPrincipal FapUserPrincipal principal,
 			@RequestParam(required = false) TrainingSessionStatus status,
 			@RequestParam(required = false) Long classId,
 			@RequestParam(required = false) Long trainerId,
@@ -72,7 +73,8 @@ public class TrainingSessionController {
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
 			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<TrainingSessionResponse> sessions = trainingSessionService.list(
+		Page<TrainingSessionResponse> sessions = trainingSessionService.listScoped(
+				principal,
 				status,
 				classId,
 				trainerId,

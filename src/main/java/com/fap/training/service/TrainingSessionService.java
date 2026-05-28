@@ -8,6 +8,8 @@ import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.security.FapUserPrincipal;
+import com.fap.notification.service.NotificationService;
 import com.fap.training.dto.CreateTrainingSessionRequest;
 import com.fap.training.dto.TrainingSessionResponse;
 import com.fap.training.dto.UpdateTrainingSessionRequest;
@@ -40,6 +42,7 @@ public class TrainingSessionService {
 	private final UserRepository userRepository;
 	private final TrainingSessionMapper trainingSessionMapper;
 	private final AuditLogService auditLogService;
+	private final NotificationService notificationService;
 
 	public TrainingSessionService(
 			TrainingSessionRepository trainingSessionRepository,
@@ -49,7 +52,8 @@ public class TrainingSessionService {
 			ClassTrainerRepository classTrainerRepository,
 			UserRepository userRepository,
 			TrainingSessionMapper trainingSessionMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			NotificationService notificationService) {
 		this.trainingSessionRepository = trainingSessionRepository;
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
 		this.attendanceRecordRepository = attendanceRecordRepository;
@@ -58,6 +62,7 @@ public class TrainingSessionService {
 		this.userRepository = userRepository;
 		this.trainingSessionMapper = trainingSessionMapper;
 		this.auditLogService = auditLogService;
+		this.notificationService = notificationService;
 	}
 
 	@Transactional(readOnly = true)
@@ -70,9 +75,23 @@ public class TrainingSessionService {
 			String keyword,
 			int page,
 			int limit) {
+		return listScoped(null, status, classId, trainerId, fromDate, toDate, keyword, page, limit);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<TrainingSessionResponse> listScoped(
+			FapUserPrincipal principal,
+			TrainingSessionStatus status,
+			Long classId,
+			Long trainerId,
+			LocalDate fromDate,
+			LocalDate toDate,
+			String keyword,
+			int page,
+			int limit) {
 		validateDateFilter(fromDate, toDate);
 		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.ASC, "sessionDate", "startTime"));
-		return trainingSessionRepository.search(status, classId, trainerId, fromDate, toDate, normalize(keyword), pageRequest)
+		return trainingSessionRepository.searchScoped(scopeUserId(principal), status, classId, trainerId, fromDate, toDate, normalize(keyword), pageRequest)
 				.map(trainingSessionMapper::toResponse);
 	}
 
@@ -130,6 +149,7 @@ public class TrainingSessionService {
 		session.setUpdatedAt(LocalDateTime.now());
 		session.setUpdatedBy(currentUserId);
 		auditLogService.record("UPDATE_TRAINING_SESSION_STATUS:" + status.name(), "training_session", session.getId());
+		notifyRegisteredParticipants(session, status);
 		return trainingSessionMapper.toResponse(session);
 	}
 
@@ -216,6 +236,20 @@ public class TrainingSessionService {
 				});
 	}
 
+	private void notifyRegisteredParticipants(TrainingSession session, TrainingSessionStatus status) {
+		if (status != TrainingSessionStatus.Completed && status != TrainingSessionStatus.Canceled) {
+			return;
+		}
+		trainingRegistrationRepository
+				.findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
+						session.getId(),
+						java.util.List.of(TrainingRegistrationStatus.Registered, TrainingRegistrationStatus.Completed))
+				.forEach(registration -> notificationService.create(
+						registration.getUser().getId(),
+						"Training session " + status.name().toLowerCase(),
+						session.getTitle() + " has been marked as " + status.name()));
+	}
+
 	private void ensureUpcoming(TrainingSession session) {
 		if (session.getStatus() != TrainingSessionStatus.Upcoming) {
 			throw new ConflictException("TRAINING_SESSION_NOT_EDITABLE", "Only upcoming training session can be edited");
@@ -248,5 +282,9 @@ public class TrainingSessionService {
 
 	private String normalize(String value) {
 		return value == null || value.isBlank() ? null : value.trim();
+	}
+
+	private Long scopeUserId(FapUserPrincipal principal) {
+		return principal == null || principal.roles().contains("Super Admin") ? null : principal.id();
 	}
 }

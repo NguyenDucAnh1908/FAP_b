@@ -34,4 +34,25 @@ public interface ClassRepository extends JpaRepository<FapClass, Long> {
 			@Param("trainingProgramId") Long trainingProgramId,
 			@Param("keyword") String keyword,
 			Pageable pageable);
+
+	@EntityGraph(attributePaths = "trainingProgram")
+	@Query("""
+			select distinct c
+			from FapClass c
+			left join ClassAdmin ca on ca.fapClass = c and ca.user.id = :scopeUserId
+			left join ClassTrainer ct on ct.fapClass = c and ct.user.id = :scopeUserId
+			where (:scopeUserId is null or ca.id is not null or ct.id is not null)
+			  and (:status is null or c.status = :status)
+			  and (:trainingProgramId is null or c.trainingProgram.id = :trainingProgramId)
+			  and (:keyword is null
+			       or lower(c.name) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(c.classCode) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(coalesce(c.location, '')) like concat(concat('%', lower(:keyword)), '%'))
+			""")
+	Page<FapClass> searchScoped(
+			@Param("scopeUserId") Long scopeUserId,
+			@Param("status") ClassStatus status,
+			@Param("trainingProgramId") Long trainingProgramId,
+			@Param("keyword") String keyword,
+			Pageable pageable);
 }

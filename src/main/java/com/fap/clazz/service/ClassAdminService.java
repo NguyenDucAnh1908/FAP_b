@@ -13,6 +13,7 @@ import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.notification.service.NotificationService;
 import com.fap.user.entity.User;
 import com.fap.user.enums.UserStatus;
 import com.fap.user.repository.UserRepository;
@@ -33,18 +34,21 @@ public class ClassAdminService {
 	private final UserRepository userRepository;
 	private final ClassAdminMapper classAdminMapper;
 	private final AuditLogService auditLogService;
+	private final NotificationService notificationService;
 
 	public ClassAdminService(
 			ClassRepository classRepository,
 			ClassAdminRepository classAdminRepository,
 			UserRepository userRepository,
 			ClassAdminMapper classAdminMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			NotificationService notificationService) {
 		this.classRepository = classRepository;
 		this.classAdminRepository = classAdminRepository;
 		this.userRepository = userRepository;
 		this.classAdminMapper = classAdminMapper;
 		this.auditLogService = auditLogService;
+		this.notificationService = notificationService;
 	}
 
 	@Transactional(readOnly = true)
@@ -65,6 +69,10 @@ public class ClassAdminService {
 				.toList();
 		classAdminRepository.saveAll(admins);
 		auditLogService.record("UPDATE_CLASS_ADMINS", "class", classId);
+		admins.forEach(admin -> notificationService.create(
+				admin.getUser().getId(),
+				"Class admin assignment",
+				"You have been assigned as class admin for " + fapClass.getClassCode() + " - " + fapClass.getName()));
 		return admins.stream()
 				.map(classAdminMapper::toResponse)
 				.toList();

@@ -66,12 +66,13 @@ public class ClassController {
 	@GetMapping
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
 	public PageResponse<ClassResponse> list(
+			@AuthenticationPrincipal FapUserPrincipal principal,
 			@RequestParam(required = false) ClassStatus status,
 			@RequestParam(required = false) Long trainingProgramId,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
 			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<ClassResponse> classes = classService.list(status, trainingProgramId, keyword, page - 1, limit);
+		Page<ClassResponse> classes = classService.listScoped(principal, status, trainingProgramId, keyword, page - 1, limit);
 		return PageResponse.of(classes.getContent(), page, limit, classes.getTotalElements());
 	}
 

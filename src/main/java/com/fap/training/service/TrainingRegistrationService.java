@@ -3,6 +3,7 @@ package com.fap.training.service;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.notification.service.NotificationService;
 import com.fap.training.dto.TrainingParticipantsResponse;
 import com.fap.training.dto.TrainingRegistrationResponse;
 import com.fap.training.entity.TrainingRegistration;
@@ -29,18 +30,21 @@ public class TrainingRegistrationService {
 	private final UserRepository userRepository;
 	private final TrainingRegistrationMapper trainingRegistrationMapper;
 	private final AuditLogService auditLogService;
+	private final NotificationService notificationService;
 
 	public TrainingRegistrationService(
 			TrainingSessionRepository trainingSessionRepository,
 			TrainingRegistrationRepository trainingRegistrationRepository,
 			UserRepository userRepository,
 			TrainingRegistrationMapper trainingRegistrationMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			NotificationService notificationService) {
 		this.trainingSessionRepository = trainingSessionRepository;
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
 		this.userRepository = userRepository;
 		this.trainingRegistrationMapper = trainingRegistrationMapper;
 		this.auditLogService = auditLogService;
+		this.notificationService = notificationService;
 	}
 
 	@Transactional
@@ -54,6 +58,10 @@ public class TrainingRegistrationService {
 				.orElseGet(() -> createRegistration(session, user, now));
 		TrainingRegistration saved = trainingRegistrationRepository.save(registration);
 		auditLogService.record("REGISTER_TRAINING_SESSION:" + saved.getStatus().name(), "training_session", trainingSessionId);
+		notificationService.create(
+				currentUserId,
+				"Training session registration",
+				"Your registration for " + session.getTitle() + " is " + saved.getStatus().name());
 		return trainingRegistrationMapper.toResponse(saved);
 	}
 
@@ -77,6 +85,10 @@ public class TrainingRegistrationService {
 			throw new ConflictException("TRAINING_REGISTRATION_NOT_CANCELABLE", "Only registered or waitlisted registration can be cancelled");
 		}
 		auditLogService.record("CANCEL_TRAINING_REGISTRATION", "training_session", trainingSessionId);
+		notificationService.create(
+				currentUserId,
+				"Training registration cancelled",
+				"Your registration for " + session.getTitle() + " has been cancelled");
 		return trainingRegistrationMapper.toResponse(registration);
 	}
 
@@ -147,6 +159,10 @@ public class TrainingRegistrationService {
 					waitlisted.setCancelledAt(null);
 					waitlisted.setCompletedAt(null);
 					session.setEnrolledCount(session.getEnrolledCount() + 1);
+					notificationService.create(
+							waitlisted.getUser().getId(),
+							"Waitlist promoted",
+							"You have been moved from waitlist to registered for " + session.getTitle());
 				});
 	}
 

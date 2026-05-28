@@ -16,6 +16,7 @@ import com.fap.common.exception.NotFoundException;
 import com.fap.program.entity.TrainingProgram;
 import com.fap.program.enums.TrainingProgramStatus;
 import com.fap.program.repository.TrainingProgramRepository;
+import com.fap.common.security.FapUserPrincipal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -56,8 +57,19 @@ public class ClassService {
 			String keyword,
 			int page,
 			int limit) {
+		return listScoped(null, status, trainingProgramId, keyword, page, limit);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<ClassResponse> listScoped(
+			FapUserPrincipal principal,
+			ClassStatus status,
+			Long trainingProgramId,
+			String keyword,
+			int page,
+			int limit) {
 		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-		return classRepository.search(status, trainingProgramId, normalize(keyword), pageRequest)
+		return classRepository.searchScoped(scopeUserId(principal), status, trainingProgramId, normalize(keyword), pageRequest)
 				.map(classMapper::toResponse);
 	}
 
@@ -199,5 +211,9 @@ public class ClassService {
 
 	private String normalize(String value) {
 		return value == null || value.isBlank() ? null : value.trim();
+	}
+
+	private Long scopeUserId(FapUserPrincipal principal) {
+		return principal == null || principal.roles().contains("Super Admin") ? null : principal.id();
 	}
 }
