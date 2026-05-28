@@ -55,4 +55,32 @@ public interface ClassRepository extends JpaRepository<FapClass, Long> {
 			@Param("trainingProgramId") Long trainingProgramId,
 			@Param("keyword") String keyword,
 			Pageable pageable);
+
+	@Query("""
+			select count(distinct c)
+			from FapClass c
+			join ClassAdmin ca on ca.fapClass = c
+			where ca.user.id = :adminId
+			  and (:status is null or c.status = :status)
+			""")
+	long countByAdminIdAndStatus(
+			@Param("adminId") Long adminId,
+			@Param("status") ClassStatus status);
+
+	@EntityGraph(attributePaths = "trainingProgram")
+	@Query("""
+			select distinct c
+			from FapClass c
+			join ClassAdmin ca on ca.fapClass = c
+			where ca.user.id = :adminId
+			  and (:status is null or c.status = :status)
+			  and (:fromDate is null or c.startDate >= :fromDate)
+			  and (:toDate is null or c.startDate <= :toDate)
+			""")
+	Page<FapClass> searchByAdminId(
+			@Param("adminId") Long adminId,
+			@Param("status") ClassStatus status,
+			@Param("fromDate") java.time.LocalDate fromDate,
+			@Param("toDate") java.time.LocalDate toDate,
+			Pageable pageable);
 }

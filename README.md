@@ -80,4 +80,5 @@ POST /api/v1/auth/reset-password
 - Business rules: `docs/06_business_logic_review.md`
 - Spring Boot blueprint: `docs/08_backend_spring_boot_project_blueprint.md`
 - Scaffold checklist: `docs/09_backend_scaffold_checklist.md`
+- Dashboard APIs: `docs/api/dashboard_apis.md`
 - Database artifacts: `docs/database/README.md`

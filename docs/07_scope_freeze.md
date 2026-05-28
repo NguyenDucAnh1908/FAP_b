@@ -211,6 +211,17 @@ Entity rules:
 | `GET` | `/api/v1/training-sessions/{id}/participants` | Participant/waitlist view |
 | `PUT` | `/api/v1/training-sessions/{id}/attendance` | Upsert attendance batch |
 
+### Dashboards and Self-Service Views
+
+| Method | Endpoint | Scope |
+|---|---|---|
+| `GET` | `/api/v1/me/training-registrations` | Current user's training registration list |
+| `GET` | `/api/v1/me/training-sessions` | Current user's registered training sessions |
+| `GET` | `/api/v1/me/attendance` | Current user's attendance records |
+| `GET` | `/api/v1/me/training-dashboard` | Current user's trainee learning summary |
+| `GET` | `/api/v1/me/trainer-dashboard` | Current trainer's teaching dashboard |
+| `GET` | `/api/v1/me/class-admin-dashboard` | Current class admin's managed-class dashboard |
+
 ### System
 
 | Method | Endpoint | Scope |

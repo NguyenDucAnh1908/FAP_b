@@ -1,18 +1,29 @@
 package com.fap.training.service;
 
+import com.fap.clazz.dto.ClassResponse;
+import com.fap.clazz.enums.ClassStatus;
+import com.fap.clazz.mapper.ClassMapper;
+import com.fap.clazz.repository.ClassRepository;
+import com.fap.clazz.repository.ClassTrainerRepository;
 import com.fap.common.exception.BadRequestException;
 import com.fap.training.dto.MyAttendanceResponse;
+import com.fap.training.dto.MyClassAdminDashboardResponse;
+import com.fap.training.dto.MyTrainerDashboardResponse;
 import com.fap.training.dto.MyTrainingDashboardResponse;
 import com.fap.training.dto.MyTrainingRegistrationResponse;
 import com.fap.training.dto.MyTrainingSessionResponse;
+import com.fap.training.dto.TrainingSessionResponse;
 import com.fap.training.enums.AttendanceStatus;
 import com.fap.training.enums.TrainingRegistrationStatus;
 import com.fap.training.enums.TrainingSessionStatus;
 import com.fap.training.mapper.MyTrainingMapper;
+import com.fap.training.mapper.TrainingSessionMapper;
 import com.fap.training.repository.AttendanceRecordRepository;
 import com.fap.training.repository.TrainingRegistrationRepository;
+import com.fap.training.repository.TrainingSessionRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,15 +35,30 @@ public class MyTrainingService {
 
 	private final TrainingRegistrationRepository trainingRegistrationRepository;
 	private final AttendanceRecordRepository attendanceRecordRepository;
+	private final TrainingSessionRepository trainingSessionRepository;
+	private final ClassRepository classRepository;
+	private final ClassTrainerRepository classTrainerRepository;
+	private final ClassMapper classMapper;
 	private final MyTrainingMapper myTrainingMapper;
+	private final TrainingSessionMapper trainingSessionMapper;
 
 	public MyTrainingService(
 			TrainingRegistrationRepository trainingRegistrationRepository,
 			AttendanceRecordRepository attendanceRecordRepository,
-			MyTrainingMapper myTrainingMapper) {
+			TrainingSessionRepository trainingSessionRepository,
+			ClassRepository classRepository,
+			ClassTrainerRepository classTrainerRepository,
+			ClassMapper classMapper,
+			MyTrainingMapper myTrainingMapper,
+			TrainingSessionMapper trainingSessionMapper) {
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
 		this.attendanceRecordRepository = attendanceRecordRepository;
+		this.trainingSessionRepository = trainingSessionRepository;
+		this.classRepository = classRepository;
+		this.classTrainerRepository = classTrainerRepository;
+		this.classMapper = classMapper;
 		this.myTrainingMapper = myTrainingMapper;
+		this.trainingSessionMapper = trainingSessionMapper;
 	}
 
 	@Transactional(readOnly = true)
@@ -162,6 +188,103 @@ public class MyTrainingService {
 				attendanceSummary,
 				nextSessions,
 				recentAttendance);
+	}
+
+	@Transactional(readOnly = true)
+	public MyTrainerDashboardResponse trainerDashboard(Long currentUserId) {
+		LocalDate today = LocalDate.now();
+		long assignedClasses = classTrainerRepository.countDistinctClassesByTrainerId(currentUserId);
+		long upcomingSessions = trainingSessionRepository.countByTrainerIdAndStatusAndSessionDateGreaterThanEqual(
+				currentUserId,
+				TrainingSessionStatus.Upcoming,
+				today);
+		long completedSessions = trainingSessionRepository.countByTrainerIdAndStatus(
+				currentUserId,
+				TrainingSessionStatus.Completed);
+		long pendingAttendanceSessions = trainingSessionRepository.countPendingAttendanceSessions(
+				currentUserId,
+				TrainingSessionStatus.Upcoming,
+				TrainingRegistrationStatus.Registered,
+				today);
+		List<TrainingSessionResponse> nextSessions = trainingSessionRepository
+				.search(
+						TrainingSessionStatus.Upcoming,
+						null,
+						currentUserId,
+						today,
+						null,
+						null,
+						PageRequest.of(0, 5, Sort.by(Sort.Direction.ASC, "sessionDate", "startTime", "id")))
+				.map(trainingSessionMapper::toResponse)
+				.getContent();
+		List<TrainingSessionResponse> recentCompletedSessions = trainingSessionRepository
+				.search(
+						TrainingSessionStatus.Completed,
+						null,
+						currentUserId,
+						null,
+						null,
+						null,
+						PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "sessionDate", "startTime", "id")))
+				.map(trainingSessionMapper::toResponse)
+				.getContent();
+		return new MyTrainerDashboardResponse(
+				assignedClasses,
+				upcomingSessions,
+				completedSessions,
+				pendingAttendanceSessions,
+				nextSessions,
+				recentCompletedSessions);
+	}
+
+	@Transactional(readOnly = true)
+	public MyClassAdminDashboardResponse classAdminDashboard(Long currentUserId) {
+		LocalDate today = LocalDate.now();
+		long assignedClasses = classRepository.countByAdminIdAndStatus(currentUserId, null);
+		long activeClasses = classRepository.countByAdminIdAndStatus(currentUserId, ClassStatus.Active);
+		long planningClasses = classRepository.countByAdminIdAndStatus(currentUserId, ClassStatus.Planning);
+		long upcomingSessions = trainingSessionRepository.countByClassAdminId(
+				currentUserId,
+				TrainingSessionStatus.Upcoming,
+				today,
+				null);
+		long pendingAttendanceSessions = trainingSessionRepository.countPendingAttendanceSessionsByClassAdminId(
+				currentUserId,
+				TrainingSessionStatus.Upcoming,
+				TrainingRegistrationStatus.Registered,
+				today);
+		long totalTrainers = classTrainerRepository.countDistinctTrainersByClassAdminId(currentUserId);
+		long totalParticipants = trainingRegistrationRepository.countByClassAdminIdAndStatus(
+				currentUserId,
+				TrainingRegistrationStatus.Registered);
+		List<ClassResponse> classesStartingSoon = classRepository
+				.searchByAdminId(
+						currentUserId,
+						null,
+						today,
+						null,
+						PageRequest.of(0, 5, Sort.by(Sort.Direction.ASC, "startDate", "id")))
+				.map(classMapper::toResponse)
+				.getContent();
+		List<TrainingSessionResponse> recentSessions = trainingSessionRepository
+				.searchByClassAdminId(
+						currentUserId,
+						null,
+						null,
+						null,
+						PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "sessionDate", "startTime", "id")))
+				.map(trainingSessionMapper::toResponse)
+				.getContent();
+		return new MyClassAdminDashboardResponse(
+				assignedClasses,
+				activeClasses,
+				planningClasses,
+				upcomingSessions,
+				pendingAttendanceSessions,
+				totalTrainers,
+				totalParticipants,
+				classesStartingSoon,
+				recentSessions);
 	}
 
 	private void validateDateFilter(LocalDate fromDate, LocalDate toDate) {

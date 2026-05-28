@@ -1,6 +1,7 @@
 package com.fap.training.repository;
 
 import com.fap.training.entity.TrainingSession;
+import com.fap.training.enums.TrainingRegistrationStatus;
 import com.fap.training.enums.TrainingSessionStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -78,5 +79,85 @@ public interface TrainingSessionRepository extends JpaRepository<TrainingSession
 			@Param("fromDate") LocalDate fromDate,
 			@Param("toDate") LocalDate toDate,
 			@Param("keyword") String keyword,
+			Pageable pageable);
+
+	long countByTrainerIdAndStatus(Long trainerId, TrainingSessionStatus status);
+
+	long countByTrainerIdAndStatusAndSessionDateGreaterThanEqual(
+			Long trainerId,
+			TrainingSessionStatus status,
+			LocalDate sessionDate);
+
+	@Query("""
+			select count(s)
+			from TrainingSession s
+			where s.trainer.id = :trainerId
+			  and s.status = :sessionStatus
+			  and s.sessionDate <= :asOfDate
+			  and (select count(r)
+			       from TrainingRegistration r
+			       where r.trainingSession = s
+			         and r.status = :registrationStatus) >
+			      (select count(a)
+			       from AttendanceRecord a
+			       where a.trainingSession = s)
+			""")
+	long countPendingAttendanceSessions(
+			@Param("trainerId") Long trainerId,
+			@Param("sessionStatus") TrainingSessionStatus sessionStatus,
+			@Param("registrationStatus") TrainingRegistrationStatus registrationStatus,
+			@Param("asOfDate") LocalDate asOfDate);
+
+	@Query("""
+			select count(distinct s)
+			from TrainingSession s
+			join ClassAdmin ca on ca.fapClass = s.fapClass
+			where ca.user.id = :adminId
+			  and (:status is null or s.status = :status)
+			  and (:fromDate is null or s.sessionDate >= :fromDate)
+			  and (:toDate is null or s.sessionDate <= :toDate)
+			""")
+	long countByClassAdminId(
+			@Param("adminId") Long adminId,
+			@Param("status") TrainingSessionStatus status,
+			@Param("fromDate") LocalDate fromDate,
+			@Param("toDate") LocalDate toDate);
+
+	@Query("""
+			select count(distinct s)
+			from TrainingSession s
+			join ClassAdmin ca on ca.fapClass = s.fapClass
+			where ca.user.id = :adminId
+			  and s.status = :sessionStatus
+			  and s.sessionDate <= :asOfDate
+			  and (select count(r)
+			       from TrainingRegistration r
+			       where r.trainingSession = s
+			         and r.status = :registrationStatus) >
+			      (select count(a)
+			       from AttendanceRecord a
+			       where a.trainingSession = s)
+			""")
+	long countPendingAttendanceSessionsByClassAdminId(
+			@Param("adminId") Long adminId,
+			@Param("sessionStatus") TrainingSessionStatus sessionStatus,
+			@Param("registrationStatus") TrainingRegistrationStatus registrationStatus,
+			@Param("asOfDate") LocalDate asOfDate);
+
+	@EntityGraph(attributePaths = {"fapClass", "trainer"})
+	@Query("""
+			select distinct s
+			from TrainingSession s
+			join ClassAdmin ca on ca.fapClass = s.fapClass
+			where ca.user.id = :adminId
+			  and (:status is null or s.status = :status)
+			  and (:fromDate is null or s.sessionDate >= :fromDate)
+			  and (:toDate is null or s.sessionDate <= :toDate)
+			""")
+	Page<TrainingSession> searchByClassAdminId(
+			@Param("adminId") Long adminId,
+			@Param("status") TrainingSessionStatus status,
+			@Param("fromDate") LocalDate fromDate,
+			@Param("toDate") LocalDate toDate,
 			Pageable pageable);
 }

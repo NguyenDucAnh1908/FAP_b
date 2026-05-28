@@ -4,6 +4,8 @@ import com.fap.common.api.PageResponse;
 import com.fap.common.api.ApiResponse;
 import com.fap.common.security.FapUserPrincipal;
 import com.fap.training.dto.MyAttendanceResponse;
+import com.fap.training.dto.MyClassAdminDashboardResponse;
+import com.fap.training.dto.MyTrainerDashboardResponse;
 import com.fap.training.dto.MyTrainingDashboardResponse;
 import com.fap.training.dto.MyTrainingRegistrationResponse;
 import com.fap.training.dto.MyTrainingSessionResponse;
@@ -39,6 +41,18 @@ public class MyTrainingController {
 	public ApiResponse<MyTrainingDashboardResponse> dashboard(
 			@AuthenticationPrincipal FapUserPrincipal principal) {
 		return ApiResponse.ok(myTrainingService.dashboard(principal.id()));
+	}
+
+	@GetMapping("/trainer-dashboard")
+	public ApiResponse<MyTrainerDashboardResponse> trainerDashboard(
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		return ApiResponse.ok(myTrainingService.trainerDashboard(principal.id()));
+	}
+
+	@GetMapping("/class-admin-dashboard")
+	public ApiResponse<MyClassAdminDashboardResponse> classAdminDashboard(
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		return ApiResponse.ok(myTrainingService.classAdminDashboard(principal.id()));
 	}
 
 	@GetMapping("/training-registrations")

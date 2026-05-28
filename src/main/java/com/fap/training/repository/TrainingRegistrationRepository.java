@@ -73,5 +73,16 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 			@Param("fromDate") LocalDate fromDate,
 			@Param("toDate") LocalDate toDate);
 
+	@Query("""
+			select count(r)
+			from TrainingRegistration r
+			join ClassAdmin ca on ca.fapClass = r.trainingSession.fapClass
+			where ca.user.id = :adminId
+			  and (:registrationStatus is null or r.status = :registrationStatus)
+			""")
+	long countByClassAdminIdAndStatus(
+			@Param("adminId") Long adminId,
+			@Param("registrationStatus") TrainingRegistrationStatus registrationStatus);
+
 	long countByTrainingSessionIdAndStatus(Long trainingSessionId, TrainingRegistrationStatus status);
 }
