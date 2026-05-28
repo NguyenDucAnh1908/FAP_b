@@ -46,6 +46,7 @@ Quiz:
 Calendar:
 - `training_registrations(training_id, user_id)`
 - `attendance_records(training_id, user_id)`
+- `training_feedbacks(training_id, user_id)`
 
 System:
 - `system_settings(category, setting_key)`
@@ -102,6 +103,9 @@ Calendar:
 - `Completed` registrations require `completed_at`
 - `attendance_records.status IN ('Present', 'Late', 'Absent')`
 - `attendance_records.check_in_method IN ('Manual', 'QR')`
+- `training_feedbacks.rating_content BETWEEN 1 AND 5`
+- `training_feedbacks.rating_trainer BETWEEN 1 AND 5`
+- `training_feedbacks.rating_organization BETWEEN 1 AND 5`
 
 System:
 - Boolean-like flags are `NUMBER(1)` with `CHECK (... IN (0, 1))`
@@ -116,6 +120,7 @@ Cascade delete is used only for owned child rows:
 - Class trainer/admin join rows
 - Quiz question rows and quiz assignment rows
 - Training registration and attendance rows under training session
+- Training feedback rows under training session
 
 No cascade delete from shared/reference parents:
 - `users`
@@ -175,6 +180,8 @@ Training calendar:
 - `idx_reg_training_status`
 - `idx_reg_user`
 - `idx_att_user`
+- `idx_feedback_training`
+- `idx_feedback_user`
 
 System:
 - `idx_notifications_user_read`
@@ -197,5 +204,6 @@ These must be implemented in service logic, triggers, or stored procedures:
 - Quiz attempt requires assignment to trainee class/session.
 - `training_sessions.enrolled_count` must equal count of `Registered` rows under concurrent registration.
 - Waitlist FIFO promotion on cancellation.
+- Feedback is allowed only once per participant per completed session.
 - Trainer/Class Admin ownership scopes.
 - Soft-delete blocked when active dependencies exist.

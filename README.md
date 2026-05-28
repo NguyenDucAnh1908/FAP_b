@@ -81,4 +81,6 @@ POST /api/v1/auth/reset-password
 - Spring Boot blueprint: `docs/08_backend_spring_boot_project_blueprint.md`
 - Scaffold checklist: `docs/09_backend_scaffold_checklist.md`
 - Dashboard APIs: `docs/api/dashboard_apis.md`
+- Training feedback APIs: `docs/api/training_feedback_apis.md`
+- Training feedback test flow: `docs/api/training_feedback_test_flow.md`
 - Database artifacts: `docs/database/README.md`

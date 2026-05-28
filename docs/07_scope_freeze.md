@@ -103,6 +103,7 @@ Role rules:
 | `training_sessions` | Canonical aggregate root |
 | `training_registrations` | Canonical registration/waitlist state |
 | `attendance_records` | Canonical attendance state |
+| `training_feedbacks` | Canonical post-session feedback state |
 
 ### System
 
@@ -210,6 +211,8 @@ Entity rules:
 | `DELETE` | `/api/v1/training-sessions/{id}/registrations/me` | Cancel self registration |
 | `GET` | `/api/v1/training-sessions/{id}/participants` | Participant/waitlist view |
 | `PUT` | `/api/v1/training-sessions/{id}/attendance` | Upsert attendance batch |
+| `POST` | `/api/v1/training-sessions/{id}/feedback` | Submit post-session feedback |
+| `GET` | `/api/v1/training-sessions/{id}/feedback-summary` | Feedback rating summary |
 
 ### Dashboards and Self-Service Views
 
@@ -218,6 +221,7 @@ Entity rules:
 | `GET` | `/api/v1/me/training-registrations` | Current user's training registration list |
 | `GET` | `/api/v1/me/training-sessions` | Current user's registered training sessions |
 | `GET` | `/api/v1/me/attendance` | Current user's attendance records |
+| `GET` | `/api/v1/me/feedback` | Current user's submitted training feedback |
 | `GET` | `/api/v1/me/training-dashboard` | Current user's trainee learning summary |
 | `GET` | `/api/v1/me/trainer-dashboard` | Current trainer's teaching dashboard |
 | `GET` | `/api/v1/me/class-admin-dashboard` | Current class admin's managed-class dashboard |
@@ -291,6 +295,13 @@ API rules:
 2. Attendance is upserted per participant.
 3. QR check-in marks only current authenticated user.
 4. Manual correction after completion requires reason and audit log.
+
+### Training Feedback Workflow
+
+1. Session must be marked `Completed`.
+2. Trainee submits one feedback record per completed session.
+3. Backend validates current user is a registered or completed participant.
+4. Trainer/Class Admin/Super Admin can view feedback summary within their session scope.
 
 ### Permission Workflow
 
