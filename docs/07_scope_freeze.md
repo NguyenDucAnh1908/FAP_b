@@ -186,6 +186,7 @@ Entity rules:
 |---|---|---|
 | `GET` | `/api/v1/questions` | List/filter question bank |
 | `POST` | `/api/v1/questions` | Create question |
+| `GET` | `/api/v1/questions/{id}` | Question detail |
 | `PUT` | `/api/v1/questions/{id}` | Update question |
 | `DELETE` | `/api/v1/questions/{id}` | Soft-delete unused question |
 | `GET` | `/api/v1/quizzes` | List/filter quizzes |

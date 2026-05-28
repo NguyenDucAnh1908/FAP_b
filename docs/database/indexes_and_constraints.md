@@ -81,8 +81,6 @@ Training program/class:
 Quiz:
 - `questions.question_type IN ('single', 'multiple')`
 - `questions.difficulty IN ('Easy', 'Medium', 'Hard')`
-- `questions.options_json IS JSON`
-- `questions.correct_answers_json IS JSON`
 - `quizzes.duration_minutes > 0`
 - `quizzes.passing_score BETWEEN 0 AND 100`
 - `quizzes.max_attempts > 0`
@@ -198,6 +196,8 @@ These must be implemented in service logic, triggers, or stored procedures:
 
 - Active syllabus immutability.
 - Published quiz grading immutability after attempts exist.
+- Question `options_json` and `correct_answers_json` must be valid non-empty JSON arrays.
+- Single-choice questions must have exactly one correct answer.
 - Training program publish requires at least one active syllabus.
 - Class publish requires active program, class admin, trainer assignment, and valid schedule.
 - Quiz publish requires at least one question.

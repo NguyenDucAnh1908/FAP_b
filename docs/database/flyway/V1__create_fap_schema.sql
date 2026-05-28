@@ -261,9 +261,7 @@ CREATE TABLE questions (
     CONSTRAINT fk_questions_updated_by FOREIGN KEY (updated_by) REFERENCES users(id),
     CONSTRAINT ck_questions_type CHECK (question_type IN ('single', 'multiple')),
     CONSTRAINT ck_questions_diff CHECK (difficulty IN ('Easy', 'Medium', 'Hard')),
-    CONSTRAINT ck_questions_deleted CHECK (is_deleted IN (0, 1)),
-    CONSTRAINT ck_questions_options_json CHECK (options_json IS JSON),
-    CONSTRAINT ck_questions_correct_json CHECK (correct_answers_json IS JSON)
+    CONSTRAINT ck_questions_deleted CHECK (is_deleted IN (0, 1))
 );
 
 CREATE TABLE quizzes (
