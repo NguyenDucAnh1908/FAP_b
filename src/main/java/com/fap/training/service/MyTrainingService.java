@@ -2,6 +2,7 @@ package com.fap.training.service;
 
 import com.fap.common.exception.BadRequestException;
 import com.fap.training.dto.MyAttendanceResponse;
+import com.fap.training.dto.MyTrainingDashboardResponse;
 import com.fap.training.dto.MyTrainingRegistrationResponse;
 import com.fap.training.dto.MyTrainingSessionResponse;
 import com.fap.training.enums.AttendanceStatus;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Service
 public class MyTrainingService {
@@ -98,6 +100,68 @@ public class MyTrainingService {
 						normalize(keyword),
 						PageRequest.of(page, limit))
 				.map(myTrainingMapper::toAttendanceResponse);
+	}
+
+	@Transactional(readOnly = true)
+	public MyTrainingDashboardResponse dashboard(Long currentUserId) {
+		LocalDate today = LocalDate.now();
+		long registeredSessions = trainingRegistrationRepository.countMine(
+				currentUserId,
+				TrainingRegistrationStatus.Registered,
+				null,
+				null,
+				null);
+		long upcomingSessions = trainingRegistrationRepository.countMine(
+				currentUserId,
+				TrainingRegistrationStatus.Registered,
+				TrainingSessionStatus.Upcoming,
+				today,
+				null);
+		long completedSessions = trainingRegistrationRepository.countMine(
+				currentUserId,
+				TrainingRegistrationStatus.Completed,
+				null,
+				null,
+				null);
+		long waitlistedSessions = trainingRegistrationRepository.countMine(
+				currentUserId,
+				TrainingRegistrationStatus.Waitlist,
+				null,
+				null,
+				null);
+		MyTrainingDashboardResponse.AttendanceSummary attendanceSummary = new MyTrainingDashboardResponse.AttendanceSummary(
+				attendanceRecordRepository.countMine(currentUserId, AttendanceStatus.Present, null, null),
+				attendanceRecordRepository.countMine(currentUserId, AttendanceStatus.Late, null, null),
+				attendanceRecordRepository.countMine(currentUserId, AttendanceStatus.Absent, null, null));
+		List<MyTrainingSessionResponse> nextSessions = trainingRegistrationRepository
+				.searchMine(
+						currentUserId,
+						TrainingRegistrationStatus.Registered,
+						TrainingSessionStatus.Upcoming,
+						today,
+						null,
+						null,
+						PageRequest.of(0, 5))
+				.map(myTrainingMapper::toSessionResponse)
+				.getContent();
+		List<MyAttendanceResponse> recentAttendance = attendanceRecordRepository
+				.searchMine(
+						currentUserId,
+						null,
+						null,
+						null,
+						null,
+						PageRequest.of(0, 5))
+				.map(myTrainingMapper::toAttendanceResponse)
+				.getContent();
+		return new MyTrainingDashboardResponse(
+				registeredSessions,
+				upcomingSessions,
+				completedSessions,
+				waitlistedSessions,
+				attendanceSummary,
+				nextSessions,
+				recentAttendance);
 	}
 
 	private void validateDateFilter(LocalDate fromDate, LocalDate toDate) {

@@ -1,8 +1,10 @@
 package com.fap.training.controller;
 
 import com.fap.common.api.PageResponse;
+import com.fap.common.api.ApiResponse;
 import com.fap.common.security.FapUserPrincipal;
 import com.fap.training.dto.MyAttendanceResponse;
+import com.fap.training.dto.MyTrainingDashboardResponse;
 import com.fap.training.dto.MyTrainingRegistrationResponse;
 import com.fap.training.dto.MyTrainingSessionResponse;
 import com.fap.training.enums.AttendanceStatus;
@@ -31,6 +33,12 @@ public class MyTrainingController {
 
 	public MyTrainingController(MyTrainingService myTrainingService) {
 		this.myTrainingService = myTrainingService;
+	}
+
+	@GetMapping("/training-dashboard")
+	public ApiResponse<MyTrainingDashboardResponse> dashboard(
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		return ApiResponse.ok(myTrainingService.dashboard(principal.id()));
 	}
 
 	@GetMapping("/training-registrations")

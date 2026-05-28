@@ -46,5 +46,19 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
 			@Param("keyword") String keyword,
 			Pageable pageable);
 
+	@Query("""
+			select count(a)
+			from AttendanceRecord a
+			where a.user.id = :userId
+			  and (:status is null or a.status = :status)
+			  and (:fromDate is null or a.trainingSession.sessionDate >= :fromDate)
+			  and (:toDate is null or a.trainingSession.sessionDate <= :toDate)
+			""")
+	long countMine(
+			@Param("userId") Long userId,
+			@Param("status") AttendanceStatus status,
+			@Param("fromDate") LocalDate fromDate,
+			@Param("toDate") LocalDate toDate);
+
 	long countByTrainingSessionId(Long trainingSessionId);
 }

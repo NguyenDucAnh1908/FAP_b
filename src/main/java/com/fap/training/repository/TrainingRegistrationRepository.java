@@ -57,5 +57,21 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 			@Param("keyword") String keyword,
 			Pageable pageable);
 
+	@Query("""
+			select count(r)
+			from TrainingRegistration r
+			where r.user.id = :userId
+			  and (:registrationStatus is null or r.status = :registrationStatus)
+			  and (:sessionStatus is null or r.trainingSession.status = :sessionStatus)
+			  and (:fromDate is null or r.trainingSession.sessionDate >= :fromDate)
+			  and (:toDate is null or r.trainingSession.sessionDate <= :toDate)
+			""")
+	long countMine(
+			@Param("userId") Long userId,
+			@Param("registrationStatus") TrainingRegistrationStatus registrationStatus,
+			@Param("sessionStatus") TrainingSessionStatus sessionStatus,
+			@Param("fromDate") LocalDate fromDate,
+			@Param("toDate") LocalDate toDate);
+
 	long countByTrainingSessionIdAndStatus(Long trainingSessionId, TrainingRegistrationStatus status);
 }
