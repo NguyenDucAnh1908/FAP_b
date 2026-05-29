@@ -52,7 +52,7 @@ CREATE TABLE permissions (
                              permission_level VARCHAR2(30) NOT NULL,
                              CONSTRAINT fk_permissions_role FOREIGN KEY (role_id) REFERENCES roles(id),
                              CONSTRAINT uk_permissions_role_res UNIQUE (role_id, resource_name),
-                             CONSTRAINT ck_permissions_resource CHECK (resource_name IN ('syllabus', 'training_program', 'class', 'learning_material', 'user')),
+                             CONSTRAINT ck_permissions_resource CHECK (resource_name IN ('syllabus', 'training_program', 'class', 'learning_material', 'user', 'quiz')),
                              CONSTRAINT ck_permissions_level CHECK (permission_level IN ('access_denied', 'view', 'create', 'modify', 'full_access'))
 );
 
@@ -298,11 +298,13 @@ CREATE TABLE quiz_questions (
                                 quiz_id NUMBER(19) NOT NULL,
                                 question_id NUMBER(19) NOT NULL,
                                 sort_order NUMBER(10) NOT NULL,
+                                points NUMBER(5,2) DEFAULT 1 NOT NULL,
                                 CONSTRAINT pk_quiz_questions PRIMARY KEY (quiz_id, question_id),
                                 CONSTRAINT fk_qq_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE,
                                 CONSTRAINT fk_qq_question FOREIGN KEY (question_id) REFERENCES questions(id),
                                 CONSTRAINT uk_qq_sort UNIQUE (quiz_id, sort_order),
-                                CONSTRAINT ck_qq_sort CHECK (sort_order > 0)
+                                CONSTRAINT ck_qq_sort CHECK (sort_order > 0),
+                                CONSTRAINT ck_qq_points CHECK (points > 0)
 );
 
 CREATE TABLE training_sessions (

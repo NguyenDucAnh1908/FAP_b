@@ -16,11 +16,11 @@ Swagger test flow:
 
 | Method | Endpoint | Permission | Purpose |
 |---|---|---|---|
-| `GET` | `/api/v1/questions` | `class:view` | List/filter question bank. |
-| `POST` | `/api/v1/questions` | `class:modify` | Create a question. |
-| `GET` | `/api/v1/questions/{id}` | `class:view` | View question detail. |
-| `PUT` | `/api/v1/questions/{id}` | `class:modify` | Update a question. |
-| `DELETE` | `/api/v1/questions/{id}` | `class:modify` | Soft-delete a question. |
+| `GET` | `/api/v1/questions` | `quiz:view` | List/filter question bank. |
+| `POST` | `/api/v1/questions` | `quiz:create` | Create a question. |
+| `GET` | `/api/v1/questions/{id}` | `quiz:view` | View question detail. |
+| `PUT` | `/api/v1/questions/{id}` | `quiz:modify` | Update a question. |
+| `DELETE` | `/api/v1/questions/{id}` | `quiz:modify` | Soft-delete a question. |
 
 ## Rules
 

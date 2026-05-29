@@ -193,6 +193,9 @@ Entity rules:
 | `POST` | `/api/v1/quizzes` | Create draft quiz |
 | `GET` | `/api/v1/quizzes/{id}` | Quiz detail |
 | `PUT` | `/api/v1/quizzes/{id}` | Update draft quiz |
+| `DELETE` | `/api/v1/quizzes/{id}` | Soft-delete draft quiz |
+| `GET` | `/api/v1/quizzes/{id}/questions` | List ordered quiz questions |
+| `PUT` | `/api/v1/quizzes/{id}/questions` | Replace ordered quiz questions |
 | `PATCH` | `/api/v1/quizzes/{id}/status` | Publish/close |
 | `POST` | `/api/v1/quizzes/{id}/assignments` | Assign quiz to class/session |
 | `GET` | `/api/v1/quizzes/assigned` | Trainee assigned quizzes |

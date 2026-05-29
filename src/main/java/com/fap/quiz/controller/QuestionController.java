@@ -40,7 +40,7 @@ public class QuestionController {
 	}
 
 	@GetMapping
-	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'view')")
 	public PageResponse<QuestionResponse> list(
 			@RequestParam(required = false) QuestionType questionType,
 			@RequestParam(required = false) QuestionDifficulty difficulty,
@@ -54,7 +54,7 @@ public class QuestionController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'create')")
 	public ApiResponse<QuestionResponse> create(
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody CreateQuestionRequest request) {
@@ -62,13 +62,13 @@ public class QuestionController {
 	}
 
 	@GetMapping("/{id}")
-	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'view')")
 	public ApiResponse<QuestionResponse> get(@PathVariable Long id) {
 		return ApiResponse.ok(questionService.get(id));
 	}
 
 	@PutMapping("/{id}")
-	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'modify')")
 	public ApiResponse<QuestionResponse> update(
 			@PathVariable Long id,
 			@AuthenticationPrincipal FapUserPrincipal principal,
@@ -78,7 +78,7 @@ public class QuestionController {
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'modify')")
 	public void delete(
 			@PathVariable Long id,
 			@AuthenticationPrincipal FapUserPrincipal principal) {

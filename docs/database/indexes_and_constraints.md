@@ -59,7 +59,7 @@ System:
 Identity/security:
 - `users.gender IN ('Male', 'Female')`
 - `users.status IN ('Active', 'Inactive')`
-- `permissions.resource_name IN ('syllabus', 'training_program', 'class', 'learning_material', 'user')`
+- `permissions.resource_name IN ('syllabus', 'training_program', 'class', 'learning_material', 'user', 'quiz')`
 - `permissions.permission_level IN ('access_denied', 'view', 'create', 'modify', 'full_access')`
 
 Syllabus:
@@ -86,6 +86,7 @@ Quiz:
 - `quizzes.max_attempts > 0`
 - `quizzes.status IN ('Draft', 'Published', 'Closed')`
 - `quizzes.open_date <= quizzes.close_date` when both are set
+- `quiz_questions.points > 0`
 - `quiz_assignments` requires exactly one of `class_id` or `training_session_id`
 - `quiz_attempts.answers_json IS JSON`
 - Attempt score/count/time bounds are enforced
