@@ -87,4 +87,6 @@ POST /api/v1/auth/reset-password
 - Quiz Draft APIs: `docs/api/quiz_draft_apis.md`
 - Quiz Assignment APIs: `docs/api/quiz_assignment_apis.md`
 - Quiz Attempt APIs: `docs/api/quiz_attempt_apis.md`
+- Quiz Result APIs: `docs/api/quiz_result_apis.md`
+- Learning Material APIs: `docs/api/material_apis.md`
 - Database artifacts: `docs/database/README.md`

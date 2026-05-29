@@ -156,8 +156,12 @@ Entity rules:
 | `DELETE` | `/api/v1/syllabuses/{id}` | Soft-delete allowed states |
 | `POST` | `/api/v1/syllabuses/import` | Import CSV |
 | `POST` | `/api/v1/syllabuses/{id}/topics/{topicId}/materials` | Upload material |
+| `GET` | `/api/v1/materials` | List/search material library |
+| `POST` | `/api/v1/materials` | Create material metadata |
+| `GET` | `/api/v1/materials/{id}` | Material detail |
 | `PUT` | `/api/v1/materials/{id}` | Rename/update material metadata |
 | `DELETE` | `/api/v1/materials/{id}` | Delete material |
+| `GET` | `/api/v1/me/materials` | Current user's assigned materials |
 
 ### Training Program and Class
 
@@ -206,6 +210,9 @@ Entity rules:
 | `PUT` | `/api/v1/quiz-attempts/{attemptId}/answers` | Save answers |
 | `POST` | `/api/v1/quiz-attempts/{attemptId}/submit` | Submit attempt |
 | `GET` | `/api/v1/quiz-attempts/{attemptId}/review` | Review submitted attempt |
+| `GET` | `/api/v1/quizzes/{id}/attempts` | Manage/list quiz attempts |
+| `GET` | `/api/v1/quizzes/{id}/attempts/{attemptId}` | Manage/review quiz attempt |
+| `GET` | `/api/v1/quizzes/{id}/attempt-summary` | Quiz result summary |
 
 ### Training Calendar
 
