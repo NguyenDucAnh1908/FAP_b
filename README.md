@@ -30,6 +30,8 @@ Spring Boot backend scaffold for the FAP v1 scope.
 
 - Health: `GET /actuator/health`
 - Swagger UI: `/swagger-ui/index.html`
+- OpenAPI JSON: `/v3/api-docs`
+- OpenAPI YAML: `/v3/api-docs.yaml`
 
 ## Local Logs
 
@@ -90,4 +92,13 @@ POST /api/v1/auth/reset-password
 - Quiz Result APIs: `docs/api/quiz_result_apis.md`
 - Learning Material APIs: `docs/api/material_apis.md`
 - My Learning APIs: `docs/api/my_learning_apis.md`
+- Generated OpenAPI endpoint inventory: `docs/api/openapi-endpoints.md`
+- Swagger UI verification checklist: `docs/api/swagger_ui_verification.md`
 - Database artifacts: `docs/database/README.md`
+
+Regenerate the OpenAPI endpoint inventory after controller mapping or annotation changes:
+
+```powershell
+node .\scripts\generate-openapi-endpoints.js
+```
+

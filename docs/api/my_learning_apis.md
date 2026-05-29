@@ -139,3 +139,54 @@ Response data:
   ]
 }
 ```
+
+## Get My Class Progress
+
+```http
+GET /api/v1/me/classes/{classId}/progress
+```
+
+Rules:
+- Returns `404` if the class is not assigned to the current user through a `Registered` or `Completed` registration.
+- Session progress is calculated from the current user's eligible registrations in the class.
+- Attendance progress is calculated from attendance records for the current user in the class.
+- Material progress counts assigned material links from syllabuses attached to the class training program.
+- Quiz progress counts currently available published quizzes assigned to the class or to one of the user's eligible sessions in that class.
+
+Response data:
+
+```json
+{
+  "classInfo": {
+    "id": 1001,
+    "name": "Java Backend Foundation",
+    "classCode": "JAVA-BE-01",
+    "trainingProgramId": 501,
+    "trainingProgramName": "Backend Foundation Program",
+    "status": "Active"
+  },
+  "sessions": {
+    "total": 10,
+    "completed": 4,
+    "upcoming": 5,
+    "canceled": 1
+  },
+  "attendance": {
+    "present": 3,
+    "late": 1,
+    "absent": 0
+  },
+  "materials": {
+    "total": 12
+  },
+  "quizzes": {
+    "assigned": 5,
+    "attempted": 3,
+    "passed": 2,
+    "remaining": 2,
+    "latestAttemptId": 6001,
+    "latestScore": 80,
+    "latestPassed": true
+  }
+}
+```

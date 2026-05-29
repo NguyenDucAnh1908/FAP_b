@@ -19,6 +19,8 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
 
 	long countByQuizIdAndUserIdAndStatus(Long quizId, Long userId, QuizAttemptStatus status);
 
+	long countByQuizIdAndUserIdAndPassed(Long quizId, Long userId, Boolean passed);
+
 	@EntityGraph(attributePaths = {"quiz", "user"})
 	Optional<QuizAttempt> findByIdAndUserId(Long id, Long userId);
 

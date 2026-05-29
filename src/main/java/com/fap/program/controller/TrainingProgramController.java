@@ -33,7 +33,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "Training Programs")
 @Validated
 @RestController
 @RequestMapping("/api/v1/training-programs")
@@ -47,6 +51,15 @@ public class TrainingProgramController {
 		this.messageService = messageService;
 	}
 
+	@Operation(summary = "List training programs")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'training_program', 'view')")
 	public PageResponse<TrainingProgramResponse> list(
@@ -58,6 +71,15 @@ public class TrainingProgramController {
 		return PageResponse.of(programs.getContent(), page, limit, programs.getTotalElements());
 	}
 
+	@Operation(summary = "Create training programs")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'training_program', 'create')")
@@ -69,12 +91,30 @@ public class TrainingProgramController {
 				messageService.get("success.training_program.created"));
 	}
 
+	@Operation(summary = "Get training programs detail")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping("/{id}")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'training_program', 'view')")
 	public ApiResponse<TrainingProgramResponse> get(@PathVariable Long id) {
 		return ApiResponse.ok(trainingProgramService.get(id));
 	}
 
+	@Operation(summary = "Update training programs")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@PutMapping("/{id}")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'training_program', 'modify')")
 	public ApiResponse<TrainingProgramResponse> update(
@@ -84,6 +124,15 @@ public class TrainingProgramController {
 		return ApiResponse.ok(trainingProgramService.update(id, request, principal.id()));
 	}
 
+	@Operation(summary = "Update status")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@PatchMapping("/{id}/status")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'training_program', 'modify')")
 	public ApiResponse<TrainingProgramResponse> updateStatus(
@@ -93,6 +142,15 @@ public class TrainingProgramController {
 		return ApiResponse.ok(trainingProgramService.updateStatus(id, request.status(), principal.id()));
 	}
 
+	@Operation(summary = "Delete training programs")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'training_program', 'modify')")
@@ -102,12 +160,30 @@ public class TrainingProgramController {
 		trainingProgramService.delete(id, principal.id());
 	}
 
+	@Operation(summary = "List syllabuses")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping("/{id}/syllabuses")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'training_program', 'view')")
 	public ApiResponse<List<TrainingProgramSyllabusResponse>> listSyllabuses(@PathVariable Long id) {
 		return ApiResponse.ok(trainingProgramService.listSyllabuses(id));
 	}
 
+	@Operation(summary = "Replace syllabuses")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@PutMapping("/{id}/syllabuses")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'training_program', 'modify')")
 	public ApiResponse<List<TrainingProgramSyllabusResponse>> replaceSyllabuses(

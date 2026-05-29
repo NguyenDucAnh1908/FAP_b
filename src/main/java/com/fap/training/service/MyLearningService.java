@@ -22,10 +22,15 @@ import com.fap.syllabus.mapper.MaterialFileMapper;
 import com.fap.syllabus.repository.MaterialFileRepository;
 import com.fap.training.dto.MyClassDetailResponse;
 import com.fap.training.dto.MyClassLearningContentResponse;
+import com.fap.training.dto.MyClassProgressResponse;
 import com.fap.training.dto.MyClassSyllabusResponse;
 import com.fap.training.dto.MyTrainingSessionResponse;
+import com.fap.training.entity.TrainingRegistration;
+import com.fap.training.enums.AttendanceStatus;
 import com.fap.training.enums.TrainingRegistrationStatus;
+import com.fap.training.enums.TrainingSessionStatus;
 import com.fap.training.mapper.MyTrainingMapper;
+import com.fap.training.repository.AttendanceRecordRepository;
 import com.fap.training.repository.TrainingRegistrationRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -46,6 +51,7 @@ public class MyLearningService {
 
 	private final ClassRepository classRepository;
 	private final TrainingRegistrationRepository trainingRegistrationRepository;
+	private final AttendanceRecordRepository attendanceRecordRepository;
 	private final TrainingProgramSyllabusRepository trainingProgramSyllabusRepository;
 	private final MaterialFileRepository materialFileRepository;
 	private final QuizRepository quizRepository;
@@ -59,6 +65,7 @@ public class MyLearningService {
 	public MyLearningService(
 			ClassRepository classRepository,
 			TrainingRegistrationRepository trainingRegistrationRepository,
+			AttendanceRecordRepository attendanceRecordRepository,
 			TrainingProgramSyllabusRepository trainingProgramSyllabusRepository,
 			MaterialFileRepository materialFileRepository,
 			QuizRepository quizRepository,
@@ -70,6 +77,7 @@ public class MyLearningService {
 			QuizAttemptMapper quizAttemptMapper) {
 		this.classRepository = classRepository;
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
+		this.attendanceRecordRepository = attendanceRecordRepository;
 		this.trainingProgramSyllabusRepository = trainingProgramSyllabusRepository;
 		this.materialFileRepository = materialFileRepository;
 		this.quizRepository = quizRepository;
@@ -116,16 +124,8 @@ public class MyLearningService {
 						.thenComparing(MaterialFile::getId, Comparator.reverseOrder()))
 				.map(materialFileMapper::toAssignedResponse)
 				.toList();
-		List<AssignedQuizResponse> quizzes = quizRepository
-				.findAssignedToUserByClass(
-						currentUserId,
-						classId,
-						QuizStatus.Published,
-						ELIGIBLE_REGISTRATION_STATUSES,
-						LocalDate.now())
+		List<AssignedQuizResponse> quizzes = assignedQuizzes(currentUserId, classId)
 				.stream()
-				.sorted(Comparator.comparing(Quiz::getCloseDate, Comparator.nullsLast(Comparator.naturalOrder()))
-						.thenComparing(Quiz::getId, Comparator.reverseOrder()))
 				.map(quiz -> toAssignedQuiz(quiz, currentUserId))
 				.toList();
 		return new MyClassLearningContentResponse(
@@ -134,6 +134,24 @@ public class MyLearningService {
 				sessions,
 				materials,
 				quizzes);
+	}
+
+	@Transactional(readOnly = true)
+	public MyClassProgressResponse progress(Long classId, Long currentUserId) {
+		FapClass fapClass = findMyClass(classId, currentUserId);
+		List<TrainingRegistration> registrations = trainingRegistrationRepository
+				.findMineByClassId(currentUserId, classId, ELIGIBLE_REGISTRATION_STATUSES);
+		List<MaterialFile> materials = materialFileRepository
+				.findAssignedToUserByClass(currentUserId, classId, ELIGIBLE_REGISTRATION_STATUSES, null);
+		List<Quiz> quizzes = assignedQuizzes(currentUserId, classId);
+		QuizAttempt latestAttempt = latestAttempt(currentUserId, quizzes);
+
+		return new MyClassProgressResponse(
+				classMapper.toResponse(fapClass),
+				sessionProgress(registrations),
+				attendanceProgress(currentUserId, classId),
+				new MyClassProgressResponse.MaterialProgress(materials.size()),
+				quizProgress(currentUserId, quizzes, latestAttempt));
 	}
 
 	private FapClass findMyClass(Long classId, Long currentUserId) {
@@ -172,6 +190,71 @@ public class MyLearningService {
 				quizQuestionRepository.countByIdQuizId(quiz.getId()),
 				attemptCount,
 				latestAttempt);
+	}
+
+	private List<Quiz> assignedQuizzes(Long currentUserId, Long classId) {
+		return quizRepository
+				.findAssignedToUserByClass(
+						currentUserId,
+						classId,
+						QuizStatus.Published,
+						ELIGIBLE_REGISTRATION_STATUSES,
+						LocalDate.now())
+				.stream()
+				.sorted(Comparator.comparing(Quiz::getCloseDate, Comparator.nullsLast(Comparator.naturalOrder()))
+						.thenComparing(Quiz::getId, Comparator.reverseOrder()))
+				.toList();
+	}
+
+	private MyClassProgressResponse.SessionProgress sessionProgress(List<TrainingRegistration> registrations) {
+		long completed = countSessions(registrations, TrainingSessionStatus.Completed);
+		long upcoming = countSessions(registrations, TrainingSessionStatus.Upcoming);
+		long canceled = countSessions(registrations, TrainingSessionStatus.Canceled);
+		return new MyClassProgressResponse.SessionProgress(registrations.size(), completed, upcoming, canceled);
+	}
+
+	private long countSessions(List<TrainingRegistration> registrations, TrainingSessionStatus status) {
+		return registrations.stream()
+				.filter(registration -> registration.getTrainingSession().getStatus() == status)
+				.count();
+	}
+
+	private MyClassProgressResponse.AttendanceProgress attendanceProgress(Long currentUserId, Long classId) {
+		return new MyClassProgressResponse.AttendanceProgress(
+				attendanceRecordRepository.countMineByClassId(currentUserId, classId, AttendanceStatus.Present),
+				attendanceRecordRepository.countMineByClassId(currentUserId, classId, AttendanceStatus.Late),
+				attendanceRecordRepository.countMineByClassId(currentUserId, classId, AttendanceStatus.Absent));
+	}
+
+	private MyClassProgressResponse.QuizProgress quizProgress(
+			Long currentUserId,
+			List<Quiz> quizzes,
+			QuizAttempt latestAttempt) {
+		long attempted = quizzes.stream()
+				.filter(quiz -> quizAttemptRepository.countByQuizIdAndUserId(quiz.getId(), currentUserId) > 0)
+				.count();
+		long passed = quizzes.stream()
+				.filter(quiz -> quizAttemptRepository.countByQuizIdAndUserIdAndPassed(quiz.getId(), currentUserId, true) > 0)
+				.count();
+		return new MyClassProgressResponse.QuizProgress(
+				quizzes.size(),
+				attempted,
+				passed,
+				Math.max(quizzes.size() - attempted, 0),
+				latestAttempt == null ? null : latestAttempt.getId(),
+				latestAttempt == null ? null : latestAttempt.getScore(),
+				latestAttempt == null ? null : latestAttempt.getPassed());
+	}
+
+	private QuizAttempt latestAttempt(Long currentUserId, List<Quiz> quizzes) {
+		return quizzes.stream()
+				.map(quiz -> quizAttemptRepository
+						.findFirstByQuizIdAndUserIdOrderByIdDesc(quiz.getId(), currentUserId)
+						.orElse(null))
+				.filter(attempt -> attempt != null)
+				.max(Comparator.comparing(QuizAttempt::getStartedAt)
+						.thenComparing(QuizAttempt::getId))
+				.orElse(null);
 	}
 
 	private String normalize(String value) {

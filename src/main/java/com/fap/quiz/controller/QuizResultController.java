@@ -19,7 +19,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "Quiz Results")
 @Validated
 @RestController
 @RequestMapping("/api/v1/quizzes/{quizId}")
@@ -31,6 +35,15 @@ public class QuizResultController {
 		this.quizResultService = quizResultService;
 	}
 
+	@Operation(summary = "List attempts")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping("/attempts")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'view')")
 	public PageResponse<QuizAttemptResultResponse> listAttempts(
@@ -56,6 +69,15 @@ public class QuizResultController {
 		return PageResponse.of(attempts.getContent(), page, limit, attempts.getTotalElements());
 	}
 
+	@Operation(summary = "Get attempt detail detail")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping("/attempts/{attemptId}")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'view')")
 	public ApiResponse<QuizAttemptReviewResponse> getAttemptDetail(
@@ -65,6 +87,15 @@ public class QuizResultController {
 		return ApiResponse.ok(quizResultService.getAttemptDetail(quizId, attemptId, principal));
 	}
 
+	@Operation(summary = "Get summary")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping("/attempt-summary")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'view')")
 	public ApiResponse<QuizAttemptSummaryResponse> summary(

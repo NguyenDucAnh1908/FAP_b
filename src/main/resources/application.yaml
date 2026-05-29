@@ -47,6 +47,9 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui/index.html
+    tags-sorter: alpha
+    operations-sorter: method
+    display-request-duration: true
 
 app:
   cors:

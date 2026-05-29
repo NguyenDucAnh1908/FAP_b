@@ -35,7 +35,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "Quizzes")
 @Validated
 @RestController
 @RequestMapping("/api/v1/quizzes")
@@ -49,6 +53,15 @@ public class QuizController {
 		this.quizAssignmentService = quizAssignmentService;
 	}
 
+	@Operation(summary = "List quizzes")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'view')")
 	public PageResponse<QuizResponse> list(
@@ -61,6 +74,15 @@ public class QuizController {
 		return PageResponse.of(quizzes.getContent(), page, limit, quizzes.getTotalElements());
 	}
 
+	@Operation(summary = "Create quizzes")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'create')")
@@ -70,12 +92,30 @@ public class QuizController {
 		return ApiResponse.ok(quizService.create(request, principal.id()));
 	}
 
+	@Operation(summary = "Get quizzes detail")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping("/{id}")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'view')")
 	public ApiResponse<QuizResponse> get(@PathVariable Long id) {
 		return ApiResponse.ok(quizService.get(id));
 	}
 
+	@Operation(summary = "Update quizzes")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@PutMapping("/{id}")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'modify')")
 	public ApiResponse<QuizResponse> update(
@@ -85,6 +125,15 @@ public class QuizController {
 		return ApiResponse.ok(quizService.update(id, request, principal.id()));
 	}
 
+	@Operation(summary = "Delete quizzes")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'modify')")
@@ -94,6 +143,15 @@ public class QuizController {
 		quizService.delete(id, principal.id());
 	}
 
+	@Operation(summary = "Update status")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@PatchMapping("/{id}/status")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'modify')")
 	public ApiResponse<QuizResponse> updateStatus(
@@ -103,12 +161,30 @@ public class QuizController {
 		return ApiResponse.ok(quizService.updateStatus(id, request, principal.id()));
 	}
 
+	@Operation(summary = "List questions")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping("/{id}/questions")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'view')")
 	public ApiResponse<List<QuizQuestionResponse>> listQuestions(@PathVariable Long id) {
 		return ApiResponse.ok(quizService.listQuestions(id));
 	}
 
+	@Operation(summary = "Replace questions")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@PutMapping("/{id}/questions")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'modify')")
 	public ApiResponse<List<QuizQuestionResponse>> replaceQuestions(
@@ -118,12 +194,30 @@ public class QuizController {
 		return ApiResponse.ok(quizService.replaceQuestions(id, request, principal.id()));
 	}
 
+	@Operation(summary = "List assignments")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping("/{id}/assignments")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'view')")
 	public ApiResponse<List<QuizAssignmentResponse>> listAssignments(@PathVariable Long id) {
 		return ApiResponse.ok(quizAssignmentService.list(id));
 	}
 
+	@Operation(summary = "Assign")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@PostMapping("/{id}/assignments")
 	@ResponseStatus(HttpStatus.CREATED)
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'modify')")
@@ -134,6 +228,15 @@ public class QuizController {
 		return ApiResponse.ok(quizAssignmentService.assign(id, request, principal.id()));
 	}
 
+	@Operation(summary = "Delete assignment")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@DeleteMapping("/{id}/assignments/{assignmentId}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'modify')")

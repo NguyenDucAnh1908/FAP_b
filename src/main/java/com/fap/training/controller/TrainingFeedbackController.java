@@ -24,7 +24,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "Training Feedback")
 @Validated
 @RestController
 @RequestMapping("/api/v1")
@@ -40,6 +44,15 @@ public class TrainingFeedbackController {
 		this.classAccessService = classAccessService;
 	}
 
+	@Operation(summary = "Submit quiz attempt")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@PostMapping("/training-sessions/{id}/feedback")
 	@ResponseStatus(HttpStatus.CREATED)
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
@@ -50,6 +63,15 @@ public class TrainingFeedbackController {
 		return ApiResponse.ok(trainingFeedbackService.submit(id, principal.id(), request));
 	}
 
+	@Operation(summary = "Get summary")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping("/training-sessions/{id}/feedback-summary")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
 	public ApiResponse<TrainingFeedbackSummaryResponse> summary(
@@ -59,6 +81,15 @@ public class TrainingFeedbackController {
 		return ApiResponse.ok(trainingFeedbackService.summary(id));
 	}
 
+	@Operation(summary = "List current user training feedback")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
 	@GetMapping("/me/feedback")
 	public PageResponse<TrainingFeedbackResponse> myFeedback(
 			@AuthenticationPrincipal FapUserPrincipal principal,

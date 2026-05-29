@@ -241,6 +241,7 @@ Entity rules:
 | `GET` | `/api/v1/me/classes` | Current user's registered/completed classes |
 | `GET` | `/api/v1/me/classes/{classId}` | Current user's class detail and ordered syllabuses |
 | `GET` | `/api/v1/me/classes/{classId}/learning-content` | Current user's class sessions, materials, and assigned quizzes |
+| `GET` | `/api/v1/me/classes/{classId}/progress` | Current user's class learning progress summary |
 | `GET` | `/api/v1/me/training-dashboard` | Current user's trainee learning summary |
 | `GET` | `/api/v1/me/trainer-dashboard` | Current trainer's teaching dashboard |
 | `GET` | `/api/v1/me/class-admin-dashboard` | Current class admin's managed-class dashboard |

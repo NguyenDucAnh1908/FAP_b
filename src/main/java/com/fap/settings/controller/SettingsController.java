@@ -1,38 +1,35 @@
-package com.fap.role.controller;
+package com.fap.settings.controller;
 
 import com.fap.common.api.ApiResponse;
-import com.fap.common.i18n.MessageService;
-import com.fap.role.dto.PermissionResponse;
-import com.fap.role.dto.RoleResponse;
-import com.fap.role.dto.UpdatePermissionMatrixRequest;
-import com.fap.role.service.RoleService;
+import com.fap.settings.dto.SettingsResponse;
+import com.fap.settings.dto.UpdateSettingsRequest;
+import com.fap.settings.service.SettingsService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-@Tag(name = "Roles and Permissions")
+@Tag(name = "Settings")
+@Validated
 @RestController
-@RequestMapping("/api/v1/roles")
-public class RoleController {
+@RequestMapping("/api/v1/settings")
+public class SettingsController {
 
-	private final RoleService roleService;
-	private final MessageService messageService;
+	private final SettingsService settingsService;
 
-	public RoleController(RoleService roleService, MessageService messageService) {
-		this.roleService = roleService;
-		this.messageService = messageService;
+	public SettingsController(SettingsService settingsService) {
+		this.settingsService = settingsService;
 	}
 
-	@Operation(summary = "List roles")
+	@Operation(summary = "Get settings detail")
 	@ApiResponses(value = {
 		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
 		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
@@ -43,11 +40,14 @@ public class RoleController {
 	})
 	@GetMapping
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'view')")
-	public ApiResponse<List<RoleResponse>> listRoles() {
-		return ApiResponse.ok(roleService.listRoles());
+	public ApiResponse<SettingsResponse> get(@RequestParam(required = false) String category) {
+		if (category != null && !category.isBlank()) {
+			return ApiResponse.ok(settingsService.getByCategory(category));
+		}
+		return ApiResponse.ok(settingsService.getAll());
 	}
 
-	@Operation(summary = "Get role permission matrix")
+	@Operation(summary = "Update settings")
 	@ApiResponses(value = {
 		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
 		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
@@ -56,25 +56,9 @@ public class RoleController {
 		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
 		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
 	})
-	@GetMapping("/permissions")
-	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'view')")
-	public ApiResponse<List<PermissionResponse>> permissionMatrix() {
-		return ApiResponse.ok(roleService.permissionMatrix());
-	}
-
-	@Operation(summary = "Update role permission matrix")
-	@ApiResponses(value = {
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
-		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
-	})
-	@PutMapping("/permissions")
+	@PutMapping
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'full_access')")
-	public ApiResponse<List<PermissionResponse>> updatePermissionMatrix(
-			@Valid @RequestBody UpdatePermissionMatrixRequest request) {
-		return ApiResponse.ok(roleService.updatePermissionMatrix(request), messageService.get("success.permission_matrix.updated"));
+	public ApiResponse<SettingsResponse> update(@Valid @RequestBody UpdateSettingsRequest request) {
+		return ApiResponse.ok(settingsService.update(request));
 	}
 }

@@ -61,4 +61,16 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
 			@Param("toDate") LocalDate toDate);
 
 	long countByTrainingSessionId(Long trainingSessionId);
+
+	@Query("""
+			select count(a)
+			from AttendanceRecord a
+			where a.user.id = :userId
+			  and a.trainingSession.fapClass.id = :classId
+			  and (:status is null or a.status = :status)
+			""")
+	long countMineByClassId(
+			@Param("userId") Long userId,
+			@Param("classId") Long classId,
+			@Param("status") AttendanceStatus status);
 }
