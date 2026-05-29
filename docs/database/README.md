@@ -30,6 +30,8 @@ Generated from:
 | `flyway/V16__create_training_feedbacks.sql` | Adds training feedback table, sequence, constraints, and indexes |
 | `flyway/V17__create_questions_sequence.sql` | Adds Oracle sequence for question bank JPA ID generation |
 | `flyway/V18__create_quizzes_sequence_and_quiz_permissions.sql` | Adds Oracle sequence for quiz JPA ID generation, question points, and quiz permission seed |
+| `flyway/V19__create_quiz_assignments_sequence_and_fix_assignment_uniques.sql` | Adds Oracle sequence for quiz assignment JPA ID generation and fixes assignment uniqueness indexes |
+| `flyway/V20__create_quiz_attempts_sequence_and_support_in_progress.sql` | Adds Oracle sequence for quiz attempt JPA ID generation and supports in-progress quiz attempts |
 | `liquibase/db.changelog-master.xml` | Liquibase changelog that executes the canonical Oracle DDL |
 | `liquibase/rollback/001_drop_fap_schema_oracle.sql` | Liquibase rollback SQL |
 | `indexes_and_constraints.md` | Human-readable inventory of indexes, constraints, and non-DDL rules |

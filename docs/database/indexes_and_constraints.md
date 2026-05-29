@@ -39,8 +39,8 @@ Training program/class:
 Quiz:
 - `quiz_questions(quiz_id, question_id)` via primary key
 - `quiz_questions(quiz_id, sort_order)`
-- `quiz_assignments(quiz_id, class_id)` via function-based unique index
-- `quiz_assignments(quiz_id, training_session_id)` via function-based unique index
+- `quiz_assignments(quiz_id, class_id)` via function-based unique index for class-scoped assignments only
+- `quiz_assignments(quiz_id, training_session_id)` via function-based unique index for session-scoped assignments only
 - `quiz_attempts(quiz_id, user_id, attempt_number)`
 
 Calendar:
@@ -89,7 +89,9 @@ Quiz:
 - `quiz_questions.points > 0`
 - `quiz_assignments` requires exactly one of `class_id` or `training_session_id`
 - `quiz_attempts.answers_json IS JSON`
+- `quiz_attempts.status IN ('InProgress', 'Submitted')`
 - Attempt score/count/time bounds are enforced
+- Submitted attempts require score, counts, pass flag, time taken, and `submitted_at`
 
 Calendar:
 - `training_sessions.session_type IN ('Offline', 'Online', 'Hybrid')`

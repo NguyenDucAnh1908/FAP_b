@@ -359,13 +359,13 @@ CREATE TABLE quiz_assignments (
 );
 
 CREATE UNIQUE INDEX uk_qa_quiz_class ON quiz_assignments (
-                                                          quiz_id,
-                                                          NVL(class_id, -1)
+                                                          CASE WHEN class_id IS NOT NULL THEN quiz_id END,
+                                                          CASE WHEN class_id IS NOT NULL THEN class_id END
     );
 
 CREATE UNIQUE INDEX uk_qa_quiz_session ON quiz_assignments (
-                                                            quiz_id,
-                                                            NVL(training_session_id, -1)
+                                                            CASE WHEN training_session_id IS NOT NULL THEN quiz_id END,
+                                                            CASE WHEN training_session_id IS NOT NULL THEN training_session_id END
     );
 
 CREATE TABLE quiz_attempts (
@@ -373,20 +373,35 @@ CREATE TABLE quiz_attempts (
                                quiz_id NUMBER(19) NOT NULL,
                                user_id NUMBER(19) NOT NULL,
                                attempt_number NUMBER(10) NOT NULL,
+                               status VARCHAR2(20) DEFAULT 'InProgress' NOT NULL,
                                answers_json CLOB NOT NULL,
-                               score NUMBER(3) NOT NULL,
-                               correct_count NUMBER(10) NOT NULL,
-                               total_questions NUMBER(10) NOT NULL,
-                               passed NUMBER(1) NOT NULL,
-                               time_taken_seconds NUMBER(10) NOT NULL,
-                               submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                               score NUMBER(3),
+                               correct_count NUMBER(10),
+                               total_questions NUMBER(10),
+                               passed NUMBER(1),
+                               time_taken_seconds NUMBER(10),
+                               started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                               submitted_at TIMESTAMP,
                                CONSTRAINT fk_attempt_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes(id),
                                CONSTRAINT fk_attempt_user FOREIGN KEY (user_id) REFERENCES users(id),
                                CONSTRAINT uk_attempt_number UNIQUE (quiz_id, user_id, attempt_number),
+                               CONSTRAINT ck_attempt_answers_json CHECK (answers_json IS JSON),
+                               CONSTRAINT ck_attempt_status CHECK (status IN ('InProgress', 'Submitted')),
                                CONSTRAINT ck_attempt_score CHECK (score BETWEEN 0 AND 100),
                                CONSTRAINT ck_attempt_counts CHECK (correct_count >= 0 AND total_questions > 0 AND correct_count <= total_questions),
                                CONSTRAINT ck_attempt_passed CHECK (passed IN (0, 1)),
-                               CONSTRAINT ck_attempt_time CHECK (time_taken_seconds >= 0)
+                               CONSTRAINT ck_attempt_time CHECK (time_taken_seconds >= 0),
+                               CONSTRAINT ck_attempt_submission_complete CHECK (
+                                   status = 'InProgress'
+                                       OR (
+                                       score IS NOT NULL
+                                           AND correct_count IS NOT NULL
+                                           AND total_questions IS NOT NULL
+                                           AND passed IS NOT NULL
+                                           AND time_taken_seconds IS NOT NULL
+                                           AND submitted_at IS NOT NULL
+                                       )
+                                   )
 );
 
 CREATE TABLE training_registrations (

@@ -197,10 +197,15 @@ Entity rules:
 | `GET` | `/api/v1/quizzes/{id}/questions` | List ordered quiz questions |
 | `PUT` | `/api/v1/quizzes/{id}/questions` | Replace ordered quiz questions |
 | `PATCH` | `/api/v1/quizzes/{id}/status` | Publish/close |
+| `GET` | `/api/v1/quizzes/{id}/assignments` | List quiz assignments |
 | `POST` | `/api/v1/quizzes/{id}/assignments` | Assign quiz to class/session |
+| `DELETE` | `/api/v1/quizzes/{id}/assignments/{assignmentId}` | Remove quiz assignment |
 | `GET` | `/api/v1/quizzes/assigned` | Trainee assigned quizzes |
-| `POST` | `/api/v1/quizzes/{id}/attempts` | Submit attempt |
-| `GET` | `/api/v1/quizzes/{id}/attempts/{attemptId}` | Result/review |
+| `POST` | `/api/v1/quizzes/{id}/attempts` | Start attempt |
+| `GET` | `/api/v1/quiz-attempts/{attemptId}` | Attempt detail/result |
+| `PUT` | `/api/v1/quiz-attempts/{attemptId}/answers` | Save answers |
+| `POST` | `/api/v1/quiz-attempts/{attemptId}/submit` | Submit attempt |
+| `GET` | `/api/v1/quiz-attempts/{attemptId}/review` | Review submitted attempt |
 
 ### Training Calendar
 

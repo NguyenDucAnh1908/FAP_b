@@ -4,12 +4,15 @@ import com.fap.common.api.ApiResponse;
 import com.fap.common.api.PageResponse;
 import com.fap.common.security.FapUserPrincipal;
 import com.fap.quiz.dto.CreateQuizRequest;
+import com.fap.quiz.dto.CreateQuizAssignmentRequest;
+import com.fap.quiz.dto.QuizAssignmentResponse;
 import com.fap.quiz.dto.QuizQuestionResponse;
 import com.fap.quiz.dto.QuizResponse;
 import com.fap.quiz.dto.UpdateQuizQuestionsRequest;
 import com.fap.quiz.dto.UpdateQuizRequest;
 import com.fap.quiz.dto.UpdateQuizStatusRequest;
 import com.fap.quiz.enums.QuizStatus;
+import com.fap.quiz.service.QuizAssignmentService;
 import com.fap.quiz.service.QuizService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -39,9 +42,11 @@ import java.util.List;
 public class QuizController {
 
 	private final QuizService quizService;
+	private final QuizAssignmentService quizAssignmentService;
 
-	public QuizController(QuizService quizService) {
+	public QuizController(QuizService quizService, QuizAssignmentService quizAssignmentService) {
 		this.quizService = quizService;
+		this.quizAssignmentService = quizAssignmentService;
 	}
 
 	@GetMapping
@@ -111,5 +116,30 @@ public class QuizController {
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateQuizQuestionsRequest request) {
 		return ApiResponse.ok(quizService.replaceQuestions(id, request, principal.id()));
+	}
+
+	@GetMapping("/{id}/assignments")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'view')")
+	public ApiResponse<List<QuizAssignmentResponse>> listAssignments(@PathVariable Long id) {
+		return ApiResponse.ok(quizAssignmentService.list(id));
+	}
+
+	@PostMapping("/{id}/assignments")
+	@ResponseStatus(HttpStatus.CREATED)
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'modify')")
+	public ApiResponse<QuizAssignmentResponse> assign(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal,
+			@Valid @RequestBody CreateQuizAssignmentRequest request) {
+		return ApiResponse.ok(quizAssignmentService.assign(id, request, principal.id()));
+	}
+
+	@DeleteMapping("/{id}/assignments/{assignmentId}")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'quiz', 'modify')")
+	public void deleteAssignment(
+			@PathVariable Long id,
+			@PathVariable Long assignmentId) {
+		quizAssignmentService.delete(id, assignmentId);
 	}
 }
