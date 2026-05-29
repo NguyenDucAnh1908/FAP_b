@@ -1,0 +1,180 @@
+package com.fap.training.service;
+
+import com.fap.clazz.dto.ClassResponse;
+import com.fap.clazz.entity.FapClass;
+import com.fap.clazz.mapper.ClassMapper;
+import com.fap.clazz.repository.ClassRepository;
+import com.fap.common.exception.NotFoundException;
+import com.fap.program.entity.TrainingProgramSyllabus;
+import com.fap.program.repository.TrainingProgramSyllabusRepository;
+import com.fap.quiz.dto.AssignedQuizResponse;
+import com.fap.quiz.entity.Quiz;
+import com.fap.quiz.entity.QuizAttempt;
+import com.fap.quiz.enums.QuizStatus;
+import com.fap.quiz.mapper.QuizAttemptMapper;
+import com.fap.quiz.repository.QuizAttemptRepository;
+import com.fap.quiz.repository.QuizQuestionRepository;
+import com.fap.quiz.repository.QuizRepository;
+import com.fap.syllabus.dto.AssignedMaterialFileResponse;
+import com.fap.syllabus.entity.MaterialFile;
+import com.fap.syllabus.entity.Syllabus;
+import com.fap.syllabus.mapper.MaterialFileMapper;
+import com.fap.syllabus.repository.MaterialFileRepository;
+import com.fap.training.dto.MyClassDetailResponse;
+import com.fap.training.dto.MyClassLearningContentResponse;
+import com.fap.training.dto.MyClassSyllabusResponse;
+import com.fap.training.dto.MyTrainingSessionResponse;
+import com.fap.training.enums.TrainingRegistrationStatus;
+import com.fap.training.mapper.MyTrainingMapper;
+import com.fap.training.repository.TrainingRegistrationRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+
+@Service
+public class MyLearningService {
+
+	private static final Collection<TrainingRegistrationStatus> ELIGIBLE_REGISTRATION_STATUSES = List.of(
+			TrainingRegistrationStatus.Registered,
+			TrainingRegistrationStatus.Completed);
+
+	private final ClassRepository classRepository;
+	private final TrainingRegistrationRepository trainingRegistrationRepository;
+	private final TrainingProgramSyllabusRepository trainingProgramSyllabusRepository;
+	private final MaterialFileRepository materialFileRepository;
+	private final QuizRepository quizRepository;
+	private final QuizQuestionRepository quizQuestionRepository;
+	private final QuizAttemptRepository quizAttemptRepository;
+	private final ClassMapper classMapper;
+	private final MyTrainingMapper myTrainingMapper;
+	private final MaterialFileMapper materialFileMapper;
+	private final QuizAttemptMapper quizAttemptMapper;
+
+	public MyLearningService(
+			ClassRepository classRepository,
+			TrainingRegistrationRepository trainingRegistrationRepository,
+			TrainingProgramSyllabusRepository trainingProgramSyllabusRepository,
+			MaterialFileRepository materialFileRepository,
+			QuizRepository quizRepository,
+			QuizQuestionRepository quizQuestionRepository,
+			QuizAttemptRepository quizAttemptRepository,
+			ClassMapper classMapper,
+			MyTrainingMapper myTrainingMapper,
+			MaterialFileMapper materialFileMapper,
+			QuizAttemptMapper quizAttemptMapper) {
+		this.classRepository = classRepository;
+		this.trainingRegistrationRepository = trainingRegistrationRepository;
+		this.trainingProgramSyllabusRepository = trainingProgramSyllabusRepository;
+		this.materialFileRepository = materialFileRepository;
+		this.quizRepository = quizRepository;
+		this.quizQuestionRepository = quizQuestionRepository;
+		this.quizAttemptRepository = quizAttemptRepository;
+		this.classMapper = classMapper;
+		this.myTrainingMapper = myTrainingMapper;
+		this.materialFileMapper = materialFileMapper;
+		this.quizAttemptMapper = quizAttemptMapper;
+	}
+
+	@Transactional(readOnly = true)
+	public Page<ClassResponse> classes(Long currentUserId, String keyword, int page, int limit) {
+		return classRepository
+				.searchMine(currentUserId, ELIGIBLE_REGISTRATION_STATUSES, normalize(keyword), PageRequest.of(page, limit))
+				.map(classMapper::toResponse);
+	}
+
+	@Transactional(readOnly = true)
+	public MyClassDetailResponse classDetail(Long classId, Long currentUserId) {
+		FapClass fapClass = findMyClass(classId, currentUserId);
+		return new MyClassDetailResponse(
+				classMapper.toResponse(fapClass),
+				syllabuses(fapClass));
+	}
+
+	@Transactional(readOnly = true)
+	public MyClassLearningContentResponse learningContent(
+			Long classId,
+			Long currentUserId,
+			String keyword) {
+		FapClass fapClass = findMyClass(classId, currentUserId);
+		String normalizedKeyword = normalize(keyword);
+		List<MyTrainingSessionResponse> sessions = trainingRegistrationRepository
+				.findMineByClassId(currentUserId, classId, ELIGIBLE_REGISTRATION_STATUSES)
+				.stream()
+				.map(myTrainingMapper::toSessionResponse)
+				.toList();
+		List<AssignedMaterialFileResponse> materials = materialFileRepository
+				.findAssignedToUserByClass(currentUserId, classId, ELIGIBLE_REGISTRATION_STATUSES, normalizedKeyword)
+				.stream()
+				.sorted(Comparator
+						.comparing(MaterialFile::getUploadedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+						.thenComparing(MaterialFile::getId, Comparator.reverseOrder()))
+				.map(materialFileMapper::toAssignedResponse)
+				.toList();
+		List<AssignedQuizResponse> quizzes = quizRepository
+				.findAssignedToUserByClass(
+						currentUserId,
+						classId,
+						QuizStatus.Published,
+						ELIGIBLE_REGISTRATION_STATUSES,
+						LocalDate.now())
+				.stream()
+				.sorted(Comparator.comparing(Quiz::getCloseDate, Comparator.nullsLast(Comparator.naturalOrder()))
+						.thenComparing(Quiz::getId, Comparator.reverseOrder()))
+				.map(quiz -> toAssignedQuiz(quiz, currentUserId))
+				.toList();
+		return new MyClassLearningContentResponse(
+				classMapper.toResponse(fapClass),
+				syllabuses(fapClass),
+				sessions,
+				materials,
+				quizzes);
+	}
+
+	private FapClass findMyClass(Long classId, Long currentUserId) {
+		return classRepository.findMineById(classId, currentUserId, ELIGIBLE_REGISTRATION_STATUSES)
+				.orElseThrow(() -> new NotFoundException("Class not found"));
+	}
+
+	private List<MyClassSyllabusResponse> syllabuses(FapClass fapClass) {
+		return trainingProgramSyllabusRepository
+				.findByIdProgramIdOrderBySortOrderAsc(fapClass.getTrainingProgram().getId())
+				.stream()
+				.map(this::toSyllabusResponse)
+				.toList();
+	}
+
+	private MyClassSyllabusResponse toSyllabusResponse(TrainingProgramSyllabus programSyllabus) {
+		Syllabus syllabus = programSyllabus.getSyllabus();
+		return new MyClassSyllabusResponse(
+				syllabus.getId(),
+				syllabus.getName(),
+				syllabus.getCode(),
+				syllabus.getVersion(),
+				syllabus.getStatus(),
+				syllabus.getLevelName(),
+				syllabus.getDuration(),
+				programSyllabus.getSortOrder());
+	}
+
+	private AssignedQuizResponse toAssignedQuiz(Quiz quiz, Long currentUserId) {
+		long attemptCount = quizAttemptRepository.countByQuizIdAndUserId(quiz.getId(), currentUserId);
+		QuizAttempt latestAttempt = quizAttemptRepository
+				.findFirstByQuizIdAndUserIdOrderByIdDesc(quiz.getId(), currentUserId)
+				.orElse(null);
+		return quizAttemptMapper.toAssignedResponse(
+				quiz,
+				quizQuestionRepository.countByIdQuizId(quiz.getId()),
+				attemptCount,
+				latestAttempt);
+	}
+
+	private String normalize(String value) {
+		return value == null || value.isBlank() ? null : value.trim();
+	}
+}

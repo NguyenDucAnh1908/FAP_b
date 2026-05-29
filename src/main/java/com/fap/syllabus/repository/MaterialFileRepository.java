@@ -93,4 +93,29 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
 			@Param("keyword") String keyword,
 			Pageable pageable);
+
+	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
+	@Query("""
+			select distinct m
+			from MaterialFile m
+			join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
+			join FapClass c on c.trainingProgram = tps.program
+			join TrainingSession s on s.fapClass = c
+			join TrainingRegistration r on r.trainingSession = s
+			where r.user.id = :userId
+			  and c.id = :classId
+			  and r.status in :eligibleStatuses
+			  and (:keyword is null
+			       or lower(m.fileName) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(m.fileUrl) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(coalesce(m.contentType, '')) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(m.topic.name) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(m.topic.unit.day.syllabus.name) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(m.topic.unit.day.syllabus.code) like concat(concat('%', lower(:keyword)), '%'))
+			""")
+	List<MaterialFile> findAssignedToUserByClass(
+			@Param("userId") Long userId,
+			@Param("classId") Long classId,
+			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
+			@Param("keyword") String keyword);
 }

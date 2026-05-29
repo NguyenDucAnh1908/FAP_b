@@ -85,4 +85,18 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 			@Param("registrationStatus") TrainingRegistrationStatus registrationStatus);
 
 	long countByTrainingSessionIdAndStatus(Long trainingSessionId, TrainingRegistrationStatus status);
+
+	@EntityGraph(attributePaths = {"trainingSession", "trainingSession.fapClass", "trainingSession.trainer", "user"})
+	@Query("""
+			select r
+			from TrainingRegistration r
+			where r.user.id = :userId
+			  and r.trainingSession.fapClass.id = :classId
+			  and r.status in :eligibleStatuses
+			order by r.trainingSession.sessionDate asc, r.trainingSession.startTime asc, r.id asc
+			""")
+	List<TrainingRegistration> findMineByClassId(
+			@Param("userId") Long userId,
+			@Param("classId") Long classId,
+			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses);
 }

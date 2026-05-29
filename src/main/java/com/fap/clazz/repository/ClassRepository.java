@@ -2,6 +2,7 @@ package com.fap.clazz.repository;
 
 import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassStatus;
+import com.fap.training.enums.TrainingRegistrationStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -9,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.Optional;
 
 public interface ClassRepository extends JpaRepository<FapClass, Long> {
@@ -83,4 +85,39 @@ public interface ClassRepository extends JpaRepository<FapClass, Long> {
 			@Param("fromDate") java.time.LocalDate fromDate,
 			@Param("toDate") java.time.LocalDate toDate,
 			Pageable pageable);
+
+	@EntityGraph(attributePaths = "trainingProgram")
+	@Query("""
+			select distinct c
+			from FapClass c
+			join TrainingSession s on s.fapClass = c
+			join TrainingRegistration r on r.trainingSession = s
+			where r.user.id = :userId
+			  and r.status in :eligibleStatuses
+			  and (:keyword is null
+			       or lower(c.name) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(c.classCode) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(coalesce(c.location, '')) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(c.trainingProgram.name) like concat(concat('%', lower(:keyword)), '%'))
+			""")
+	Page<FapClass> searchMine(
+			@Param("userId") Long userId,
+			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
+			@Param("keyword") String keyword,
+			Pageable pageable);
+
+	@EntityGraph(attributePaths = "trainingProgram")
+	@Query("""
+			select distinct c
+			from FapClass c
+			join TrainingSession s on s.fapClass = c
+			join TrainingRegistration r on r.trainingSession = s
+			where c.id = :classId
+			  and r.user.id = :userId
+			  and r.status in :eligibleStatuses
+			""")
+	Optional<FapClass> findMineById(
+			@Param("classId") Long classId,
+			@Param("userId") Long userId,
+			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses);
 }

@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 
 public interface QuizRepository extends JpaRepository<Quiz, Long> {
 
@@ -95,4 +96,36 @@ public interface QuizRepository extends JpaRepository<Quiz, Long> {
 			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
 			@Param("today") LocalDate today,
 			Pageable pageable);
+
+	@Query("""
+			select distinct q
+			from Quiz q
+			join QuizAssignment qa on qa.quiz = q
+			where q.status = :status
+			  and (q.openDate is null or q.openDate <= :today)
+			  and (q.closeDate is null or q.closeDate >= :today)
+			  and (
+			       qa.fapClass.id = :classId
+			       or qa.trainingSession.id in (
+			           select r.trainingSession.id
+			           from TrainingRegistration r
+			           where r.user.id = :userId
+			             and r.trainingSession.fapClass.id = :classId
+			             and r.status in :eligibleStatuses
+			       )
+			  )
+			  and exists (
+			      select r.id
+			      from TrainingRegistration r
+			      where r.user.id = :userId
+			        and r.trainingSession.fapClass.id = :classId
+			        and r.status in :eligibleStatuses
+			  )
+			""")
+	List<Quiz> findAssignedToUserByClass(
+			@Param("userId") Long userId,
+			@Param("classId") Long classId,
+			@Param("status") QuizStatus status,
+			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
+			@Param("today") LocalDate today);
 }
