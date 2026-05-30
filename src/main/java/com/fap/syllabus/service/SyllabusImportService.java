@@ -18,6 +18,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -156,11 +157,10 @@ public class SyllabusImportService {
 			List<ImportError> errors,
 			Set<String> processedCodes,
 			LocalDateTime now,
-			Long currentUserId) {
+		Long currentUserId) {
 
 		if (row.length < headers.length) {
-			errors.add(new ImportError(rowNum, "row", "Row has fewer columns than headers"));
-			return null;
+			row = Arrays.copyOf(row, headers.length);
 		}
 
 		String name = getValue(row, headers, "name");
