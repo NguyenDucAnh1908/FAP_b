@@ -92,6 +92,7 @@ POST /api/v1/auth/reset-password
 - Quiz Result APIs: `docs/api/quiz_result_apis.md`
 - Learning Material APIs: `docs/api/material_apis.md`
 - My Learning APIs: `docs/api/my_learning_apis.md`
+- Syllabus Full Create API: `docs/api/syllabus_full_create_api.md`
 - Generated OpenAPI endpoint inventory: `docs/api/openapi-endpoints.md`
 - Swagger UI verification checklist: `docs/api/swagger_ui_verification.md`
 - Database artifacts: `docs/database/README.md`
@@ -101,4 +102,3 @@ Regenerate the OpenAPI endpoint inventory after controller mapping or annotation
 ```powershell
 node .\scripts\generate-openapi-endpoints.js
 ```
-

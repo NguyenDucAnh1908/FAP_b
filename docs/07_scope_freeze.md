@@ -150,6 +150,10 @@ Entity rules:
 |---|---|---|
 | `GET` | `/api/v1/syllabuses` | List/filter |
 | `POST` | `/api/v1/syllabuses` | Create draft |
+| `POST` | `/api/v1/syllabuses/quick-create` | Create draft with name, code, and technical requirements |
+| `POST` | `/api/v1/syllabuses/full` | Create draft with general info, output standards, outline, topics, and materials |
+| `PUT` | `/api/v1/syllabuses/{id}/full` | Replace editable syllabus general info, output standards, outline, topics, and materials |
+| `GET` | `/api/v1/syllabuses/{id}/full` | Load full syllabus general info, output standards, outline, topics, and materials |
 | `GET` | `/api/v1/syllabuses/{id}` | Detail |
 | `PUT` | `/api/v1/syllabuses/{id}` | Update editable syllabus |
 | `PATCH` | `/api/v1/syllabuses/{id}/status` | Submit/publish/close allowed states |

@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface StrongPassword {
 
-	String message() default "Password must contain uppercase, lowercase, number and must not be too common";
+	String message() default "{com.fap.common.validation.StrongPassword.message}";
 
 	Class<?>[] groups() default {};
 

@@ -6,6 +6,8 @@ import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -43,7 +45,7 @@ public class GlobalExceptionHandler {
 				.toList();
 
 		return ResponseEntity.unprocessableEntity()
-				.body(ErrorResponse.of("VALIDATION_ERROR", messageService.get("error.VALIDATION_ERROR", details)));
+				.body(ErrorResponse.of("VALIDATION_ERROR", messageService.get("error.VALIDATION_ERROR"), details));
 	}
 
 	@ExceptionHandler(NotFoundException.class)
@@ -80,6 +82,18 @@ public class GlobalExceptionHandler {
 	ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedException exception) {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
 				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
+	}
+
+	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+	ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException exception) {
+		return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+				.body(ErrorResponse.of("METHOD_NOT_ALLOWED", messageService.get("error.METHOD_NOT_ALLOWED")));
+	}
+
+	@ExceptionHandler(NoResourceFoundException.class)
+	ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException exception) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND)
+				.body(ErrorResponse.of("RESOURCE_NOT_FOUND", messageService.get("error.RESOURCE_NOT_FOUND")));
 	}
 
 	@ExceptionHandler(BusinessException.class)

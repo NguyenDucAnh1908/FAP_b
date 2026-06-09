@@ -2,6 +2,7 @@ package com.fap.syllabus.entity;
 
 import com.fap.syllabus.enums.SyllabusTopicStatus;
 import jakarta.persistence.Column;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -11,10 +12,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -49,4 +55,8 @@ public class SyllabusTopic {
 
 	@Column(name = "sort_order", nullable = false)
 	private Integer sortOrder;
+
+	@OneToMany(mappedBy = "topic", cascade = CascadeType.ALL, orphanRemoval = true)
+	@OrderBy("uploadedAt DESC")
+	private List<MaterialFile> materials = new ArrayList<>();
 }

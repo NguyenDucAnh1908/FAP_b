@@ -18,7 +18,7 @@ Most `/api/v1/**` endpoints require JWT Bearer authentication. Use Swagger UI **
 Bearer <access-token>
 ```
 
-## Endpoint Inventory (114 operations)
+## Endpoint Inventory (115 operations)
 
 ### Audit Logs
 
@@ -157,8 +157,12 @@ Bearer <access-token>
 |---|---|---|---|
 | GET | `/api/v1/syllabuses` | List syllabus | 200, 400, 401, 403, 404, 409 |
 | POST | `/api/v1/syllabuses` | Create syllabus | 201, 400, 401, 403, 404, 409 |
+| POST | `/api/v1/syllabuses/quick-create` | Quick create syllabus draft | 201, 400, 401, 403, 404, 409 |
+| POST | `/api/v1/syllabuses/full` | Create full syllabus with outline | 201, 400, 401, 403, 404, 409 |
+| PUT | `/api/v1/syllabuses/{id}/full` | Update full syllabus with outline | 200, 400, 401, 403, 404, 409 |
 | DELETE | `/api/v1/syllabuses/{id}` | Delete syllabus | 204, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/syllabuses/{id}` | Get syllabus detail | 200, 400, 401, 403, 404, 409 |
+| GET | `/api/v1/syllabuses/{id}/full` | Get full syllabus detail | 200, 400, 401, 403, 404, 409 |
 | PUT | `/api/v1/syllabuses/{id}` | Update syllabus | 200, 400, 401, 403, 404, 409 |
 | POST | `/api/v1/syllabuses/{id}/days` | Create day | 201, 400, 401, 403, 404, 409 |
 | DELETE | `/api/v1/syllabuses/{id}/days/{dayId}` | Delete day | 204, 400, 401, 403, 404, 409 |
