@@ -6,6 +6,7 @@ import com.fap.clazz.mapper.ClassMapper;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
 import com.fap.common.exception.BadRequestException;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.training.dto.MyAttendanceResponse;
 import com.fap.training.dto.MyClassAdminDashboardResponse;
 import com.fap.training.dto.MyTrainerDashboardResponse;
@@ -71,7 +72,29 @@ public class MyTrainingService {
 			String keyword,
 			int page,
 			int limit) {
+		return registrations(currentUserId, registrationStatus, sessionStatus, fromDate, toDate, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<MyTrainingRegistrationResponse> registrations(
+			Long currentUserId,
+			TrainingRegistrationStatus registrationStatus,
+			TrainingSessionStatus sessionStatus,
+			LocalDate fromDate,
+			LocalDate toDate,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
 		validateDateFilter(fromDate, toDate);
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "registeredAt"),
+				"id", "registeredAt", "cancelledAt", "completedAt", "status");
 		return trainingRegistrationRepository
 				.searchMine(
 						currentUserId,
@@ -80,7 +103,7 @@ public class MyTrainingService {
 						fromDate,
 						toDate,
 						normalize(keyword),
-						PageRequest.of(page, limit))
+						pageRequest)
 				.map(myTrainingMapper::toRegistrationResponse);
 	}
 
@@ -94,7 +117,29 @@ public class MyTrainingService {
 			String keyword,
 			int page,
 			int limit) {
+		return sessions(currentUserId, registrationStatus, sessionStatus, fromDate, toDate, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<MyTrainingSessionResponse> sessions(
+			Long currentUserId,
+			TrainingRegistrationStatus registrationStatus,
+			TrainingSessionStatus sessionStatus,
+			LocalDate fromDate,
+			LocalDate toDate,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
 		validateDateFilter(fromDate, toDate);
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.ASC, "registeredAt"),
+				"id", "registeredAt", "cancelledAt", "completedAt", "status");
 		return trainingRegistrationRepository
 				.searchMine(
 						currentUserId,
@@ -103,7 +148,7 @@ public class MyTrainingService {
 						fromDate,
 						toDate,
 						normalize(keyword),
-						PageRequest.of(page, limit))
+						pageRequest)
 				.map(myTrainingMapper::toSessionResponse);
 	}
 
@@ -116,7 +161,28 @@ public class MyTrainingService {
 			String keyword,
 			int page,
 			int limit) {
+		return attendance(currentUserId, status, fromDate, toDate, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<MyAttendanceResponse> attendance(
+			Long currentUserId,
+			AttendanceStatus status,
+			LocalDate fromDate,
+			LocalDate toDate,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
 		validateDateFilter(fromDate, toDate);
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "updatedAt", "checkedInAt", "status");
 		return attendanceRecordRepository
 				.searchMine(
 						currentUserId,
@@ -124,7 +190,7 @@ public class MyTrainingService {
 						fromDate,
 						toDate,
 						normalize(keyword),
-						PageRequest.of(page, limit))
+						pageRequest)
 				.map(myTrainingMapper::toAttendanceResponse);
 	}
 

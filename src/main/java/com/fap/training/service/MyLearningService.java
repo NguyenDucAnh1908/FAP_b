@@ -5,6 +5,7 @@ import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.mapper.ClassMapper;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.program.entity.TrainingProgramSyllabus;
 import com.fap.program.repository.TrainingProgramSyllabusRepository;
 import com.fap.quiz.dto.AssignedQuizResponse;
@@ -34,6 +35,7 @@ import com.fap.training.repository.AttendanceRecordRepository;
 import com.fap.training.repository.TrainingRegistrationRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -91,8 +93,26 @@ public class MyLearningService {
 
 	@Transactional(readOnly = true)
 	public Page<ClassResponse> classes(Long currentUserId, String keyword, int page, int limit) {
+		return classes(currentUserId, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<ClassResponse> classes(
+			Long currentUserId,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "name", "classCode", "startDate", "endDate", "status");
 		return classRepository
-				.searchMine(currentUserId, ELIGIBLE_REGISTRATION_STATUSES, normalize(keyword), PageRequest.of(page, limit))
+				.searchMine(currentUserId, ELIGIBLE_REGISTRATION_STATUSES, normalize(keyword), pageRequest)
 				.map(classMapper::toResponse);
 	}
 

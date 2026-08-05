@@ -5,6 +5,7 @@ import com.fap.clazz.enums.ClassStatus;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
@@ -75,7 +76,7 @@ public class TrainingSessionService {
 			String keyword,
 			int page,
 			int limit) {
-		return listScoped(null, status, classId, trainerId, fromDate, toDate, keyword, page, limit);
+		return listScoped(null, status, classId, trainerId, fromDate, toDate, keyword, page, limit, null, null);
 	}
 
 	@Transactional(readOnly = true)
@@ -89,8 +90,30 @@ public class TrainingSessionService {
 			String keyword,
 			int page,
 			int limit) {
+		return listScoped(principal, status, classId, trainerId, fromDate, toDate, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<TrainingSessionResponse> listScoped(
+			FapUserPrincipal principal,
+			TrainingSessionStatus status,
+			Long classId,
+			Long trainerId,
+			LocalDate fromDate,
+			LocalDate toDate,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
 		validateDateFilter(fromDate, toDate);
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.ASC, "sessionDate", "startTime"));
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.ASC, "sessionDate", "startTime"),
+				"id", "sessionDate", "startTime", "endTime", "status", "createdAt");
 		return trainingSessionRepository.searchScoped(scopeUserId(principal), status, classId, trainerId, fromDate, toDate, normalize(keyword), pageRequest)
 				.map(trainingSessionMapper::toResponse);
 	}

@@ -94,8 +94,10 @@ public class TrainingFeedbackController {
 	public PageResponse<TrainingFeedbackResponse> myFeedback(
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<TrainingFeedbackResponse> feedback = trainingFeedbackService.listMine(principal.id(), page - 1, limit);
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
+		Page<TrainingFeedbackResponse> feedback = trainingFeedbackService.listMine(principal.id(), page - 1, limit, sortBy, order);
 		return PageResponse.of(feedback.getContent(), page, limit, feedback.getTotalElements());
 	}
 }

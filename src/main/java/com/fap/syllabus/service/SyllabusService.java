@@ -2,6 +2,7 @@ package com.fap.syllabus.service;
 
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.syllabus.dto.CreateFullSyllabusRequest;
@@ -63,8 +64,26 @@ public class SyllabusService {
 
 	@Transactional(readOnly = true)
 	public Page<SyllabusResponse> list(SyllabusStatus status, String levelName, String keyword, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-		return syllabusRepository.search(status, normalize(levelName), normalize(keyword), pageRequest)
+		return list(status, levelName, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<SyllabusResponse> list(
+			SyllabusStatus status,
+			String levelName,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "name", "code", "version", "status", "levelName");
+		return syllabusRepository.search(status, normalizeLevelName(levelName), normalize(keyword), pageRequest)
 				.map(syllabusMapper::toResponse);
 	}
 
@@ -483,5 +502,15 @@ public class SyllabusService {
 
 	private String normalize(String value) {
 		return value == null || value.isBlank() ? null : value.trim();
+	}
+
+	private String normalizeLevelName(String levelName) {
+		String normalized = normalize(levelName);
+		if (normalized == null
+				|| normalized.equalsIgnoreCase("all")
+				|| normalized.equalsIgnoreCase("all levels")) {
+			return null;
+		}
+		return normalized.toLowerCase();
 	}
 }

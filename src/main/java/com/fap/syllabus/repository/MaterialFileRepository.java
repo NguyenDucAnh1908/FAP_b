@@ -118,4 +118,26 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 			@Param("classId") Long classId,
 			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
 			@Param("keyword") String keyword);
+
+	/**
+	 * Ownership probe for downloads. Trainees hold {@code learning_material:view} globally, so the
+	 * method-level permission check alone would expose every material to every trainee; this walks
+	 * the same eligibility chain as {@link #searchAssignedToUser} to confirm the user is actually
+	 * registered for a session that teaches the material.
+	 */
+	@Query("""
+			select count(m) > 0
+			from MaterialFile m
+			join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
+			join FapClass c on c.trainingProgram = tps.program
+			join TrainingSession s on s.fapClass = c
+			join TrainingRegistration r on r.trainingSession = s
+			where m.id = :materialId
+			  and r.user.id = :userId
+			  and r.status in :eligibleStatuses
+			""")
+	boolean existsAssignedToUser(
+			@Param("materialId") Long materialId,
+			@Param("userId") Long userId,
+			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses);
 }

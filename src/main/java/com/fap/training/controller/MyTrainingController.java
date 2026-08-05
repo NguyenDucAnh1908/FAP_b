@@ -104,7 +104,9 @@ public class MyTrainingController {
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
 		Page<MyTrainingRegistrationResponse> registrations = myTrainingService.registrations(
 				principal.id(),
 				registrationStatus,
@@ -113,7 +115,9 @@ public class MyTrainingController {
 				toDate,
 				keyword,
 				page - 1,
-				limit);
+				limit,
+				sortBy,
+				order);
 		return PageResponse.of(registrations.getContent(), page, limit, registrations.getTotalElements());
 	}
 
@@ -135,7 +139,9 @@ public class MyTrainingController {
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
 		Page<MyTrainingSessionResponse> sessions = myTrainingService.sessions(
 				principal.id(),
 				registrationStatus,
@@ -144,7 +150,9 @@ public class MyTrainingController {
 				toDate,
 				keyword,
 				page - 1,
-				limit);
+				limit,
+				sortBy,
+				order);
 		return PageResponse.of(sessions.getContent(), page, limit, sessions.getTotalElements());
 	}
 
@@ -165,7 +173,9 @@ public class MyTrainingController {
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
 		Page<MyAttendanceResponse> attendance = myTrainingService.attendance(
 				principal.id(),
 				status,
@@ -173,7 +183,9 @@ public class MyTrainingController {
 				toDate,
 				keyword,
 				page - 1,
-				limit);
+				limit,
+				sortBy,
+				order);
 		return PageResponse.of(attendance.getContent(), page, limit, attendance.getTotalElements());
 	}
 }

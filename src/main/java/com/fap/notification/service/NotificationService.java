@@ -1,5 +1,6 @@
 package com.fap.notification.service;
 
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.NotFoundException;
 import com.fap.notification.dto.NotificationResponse;
 import com.fap.notification.entity.Notification;
@@ -33,8 +34,24 @@ public class NotificationService {
 
 	@Transactional(readOnly = true)
 	public Page<NotificationResponse> listMyNotifications(Long userId, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-		return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageRequest)
+		return listMyNotifications(userId, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<NotificationResponse> listMyNotifications(
+			Long userId,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "title", "read");
+		return notificationRepository.findByUserId(userId, pageRequest)
 				.map(notificationMapper::toResponse);
 	}
 

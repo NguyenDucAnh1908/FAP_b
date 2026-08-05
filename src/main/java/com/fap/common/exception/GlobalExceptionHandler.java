@@ -2,7 +2,9 @@ package com.fap.common.exception;
 
 import com.fap.common.api.ErrorResponse;
 import com.fap.common.i18n.MessageService;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -100,6 +102,19 @@ public class GlobalExceptionHandler {
 	ResponseEntity<ErrorResponse> handleBusiness(BusinessException exception) {
 		return ResponseEntity.status(HttpStatus.CONFLICT)
 				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
+	}
+
+	/**
+	 * Lost-update protection surfaces here. Two concurrent writers to the same optimistically
+	 * locked row (for example two {@code submit} calls on one quiz attempt) mean the loser's
+	 * version check fails, which is a business conflict rather than a server fault.
+	 */
+	@ExceptionHandler({OptimisticLockingFailureException.class, OptimisticLockException.class})
+	ResponseEntity<ErrorResponse> handleOptimisticLock(Exception exception) {
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+				.body(ErrorResponse.of(
+						"CONCURRENT_MODIFICATION",
+						messageService.get("error.CONCURRENT_MODIFICATION")));
 	}
 
 	@ExceptionHandler(Exception.class)

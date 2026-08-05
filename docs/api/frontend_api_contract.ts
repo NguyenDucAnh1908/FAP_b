@@ -1125,7 +1125,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/audit-logs",
     auth: true,
-    query: [{"name":"userId","type":"number","required":false},{"name":"entityType","type":"string","required":false},{"name":"entityId","type":"number","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"userId","type":"number","required":false},{"name":"entityType","type":"string","required":false},{"name":"entityId","type":"number","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<AuditLogResponse>",
   },
   {
@@ -1289,7 +1289,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/classes",
     auth: true,
-    query: [{"name":"status","type":"ClassStatus","required":false},{"name":"trainingProgramId","type":"number","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"status","type":"ClassStatus","required":false},{"name":"trainingProgramId","type":"number","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<ClassResponse>",
   },
   {
@@ -1340,7 +1340,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/materials",
     auth: true,
-    query: [{"name":"syllabusId","type":"number","required":false},{"name":"topicId","type":"number","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"syllabusId","type":"number","required":false},{"name":"topicId","type":"number","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<MaterialFileResponse>",
   },
   {
@@ -1360,7 +1360,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/me/materials",
     auth: true,
-    query: [{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<AssignedMaterialFileResponse>",
   },
   {
@@ -1401,7 +1401,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/me/classes",
     auth: true,
-    query: [{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<ClassResponse>",
   },
   {
@@ -1411,7 +1411,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/me/attendance",
     auth: true,
-    query: [{"name":"status","type":"AttendanceStatus","required":false},{"name":"fromDate","type":"ISODate","required":false},{"name":"toDate","type":"ISODate","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"status","type":"AttendanceStatus","required":false},{"name":"fromDate","type":"ISODate","required":false},{"name":"toDate","type":"ISODate","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<MyAttendanceResponse>",
   },
   {
@@ -1448,7 +1448,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/me/training-registrations",
     auth: true,
-    query: [{"name":"registrationStatus","type":"TrainingRegistrationStatus","required":false},{"name":"sessionStatus","type":"TrainingSessionStatus","required":false},{"name":"fromDate","type":"ISODate","required":false},{"name":"toDate","type":"ISODate","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"registrationStatus","type":"TrainingRegistrationStatus","required":false},{"name":"sessionStatus","type":"TrainingSessionStatus","required":false},{"name":"fromDate","type":"ISODate","required":false},{"name":"toDate","type":"ISODate","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<MyTrainingRegistrationResponse>",
   },
   {
@@ -1458,7 +1458,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/me/training-sessions",
     auth: true,
-    query: [{"name":"registrationStatus","type":"TrainingRegistrationStatus","required":false},{"name":"sessionStatus","type":"TrainingSessionStatus","required":false},{"name":"fromDate","type":"ISODate","required":false},{"name":"toDate","type":"ISODate","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"registrationStatus","type":"TrainingRegistrationStatus","required":false},{"name":"sessionStatus","type":"TrainingSessionStatus","required":false},{"name":"fromDate","type":"ISODate","required":false},{"name":"toDate","type":"ISODate","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<MyTrainingSessionResponse>",
   },
   {
@@ -1478,7 +1478,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/notifications",
     auth: true,
-    query: [{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<NotificationResponse>",
   },
   {
@@ -1519,7 +1519,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/questions",
     auth: true,
-    query: [{"name":"questionType","type":"QuestionType","required":false},{"name":"difficulty","type":"QuestionDifficulty","required":false},{"name":"category","type":"string","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"questionType","type":"QuestionType","required":false},{"name":"difficulty","type":"QuestionDifficulty","required":false},{"name":"category","type":"string","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<QuestionResponse>",
   },
   {
@@ -1590,7 +1590,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/quizzes/assigned",
     auth: true,
-    query: [{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<AssignedQuizResponse>",
   },
   {
@@ -1622,7 +1622,7 @@ export const API_ENDPOINTS = [
     path: "/api/v1/quizzes/{quizId}/attempts",
     auth: true,
     pathParams: [{"name":"quizId","type":"number"}],
-    query: [{"name":"status","type":"QuizAttemptStatus","required":false},{"name":"passed","type":"boolean","required":false},{"name":"userId","type":"number","required":false},{"name":"classId","type":"number","required":false},{"name":"trainingSessionId","type":"number","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"status","type":"QuizAttemptStatus","required":false},{"name":"passed","type":"boolean","required":false},{"name":"userId","type":"number","required":false},{"name":"classId","type":"number","required":false},{"name":"trainingSessionId","type":"number","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<QuizAttemptResultResponse>",
   },
   {
@@ -1726,7 +1726,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/quizzes",
     auth: true,
-    query: [{"name":"status","type":"QuizStatus","required":false},{"name":"category","type":"string","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"status","type":"QuizStatus","required":false},{"name":"category","type":"string","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<QuizResponse>",
   },
   {
@@ -2005,7 +2005,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/syllabuses",
     auth: true,
-    query: [{"name":"status","type":"SyllabusStatus","required":false},{"name":"levelName","type":"string","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"status","type":"SyllabusStatus","required":false},{"name":"levelName","type":"string","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<SyllabusResponse>",
   },
   {
@@ -2025,7 +2025,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/me/feedback",
     auth: true,
-    query: [{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<TrainingFeedbackResponse>",
   },
   {
@@ -2119,7 +2119,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/training-programs",
     auth: true,
-    query: [{"name":"status","type":"TrainingProgramStatus","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"status","type":"TrainingProgramStatus","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<TrainingProgramResponse>",
   },
   {
@@ -2222,7 +2222,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/training-sessions",
     auth: true,
-    query: [{"name":"status","type":"TrainingSessionStatus","required":false},{"name":"classId","type":"number","required":false},{"name":"trainerId","type":"number","required":false},{"name":"fromDate","type":"ISODate","required":false},{"name":"toDate","type":"ISODate","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"status","type":"TrainingSessionStatus","required":false},{"name":"classId","type":"number","required":false},{"name":"trainerId","type":"number","required":false},{"name":"fromDate","type":"ISODate","required":false},{"name":"toDate","type":"ISODate","required":false},{"name":"keyword","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<TrainingSessionResponse>",
   },
   {
@@ -2274,7 +2274,7 @@ export const API_ENDPOINTS = [
     method: "GET",
     path: "/api/v1/users",
     auth: true,
-    query: [{"name":"status","type":"UserStatus","required":false},{"name":"keyword","type":"string","required":false},{"name":"email","type":"string","required":false},{"name":"fullName","type":"string","required":false},{"name":"roleId","type":"number","required":false},{"name":"roleName","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"}],
+    query: [{"name":"status","type":"UserStatus","required":false},{"name":"keyword","type":"string","required":false},{"name":"email","type":"string","required":false},{"name":"fullName","type":"string","required":false},{"name":"roleId","type":"number","required":false},{"name":"roleName","type":"string","required":false},{"name":"page","type":"number","required":false,"default":"1"},{"name":"limit","type":"number","required":false,"default":"20"},{"name":"sortBy","type":"string","required":false},{"name":"order","type":"string","required":false}],
     response: "PageResponse<UserResponse>",
   },
   {

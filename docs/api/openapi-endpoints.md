@@ -18,6 +18,27 @@ Most `/api/v1/**` endpoints require JWT Bearer authentication. Use Swagger UI **
 Bearer <access-token>
 ```
 
+## Pagination and sorting
+
+All paginated GET list endpoints accept these common parameters:
+
+| Parameter | Meaning | Default |
+|---|---|---|
+| `page` | Page number, starting from 1 | `1` |
+| `limit` | Number of records per page | `20` |
+| `sortBy` | Entity field used for sorting | Endpoint default |
+| `order` | `asc` or `desc` | `asc` when `sortBy` is provided |
+
+Example:
+
+```text
+GET /api/v1/syllabuses?page=1&limit=20&sortBy=name&order=asc
+```
+
+If `sortBy` is omitted, the endpoint keeps its existing default order. Unsupported
+fields or values other than `asc` and `desc` return `400 INVALID_SORT_FIELD` or
+`400 INVALID_SORT_ORDER`.
+
 ## Endpoint Inventory (115 operations)
 
 ### Audit Logs

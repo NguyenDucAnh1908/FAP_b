@@ -85,7 +85,9 @@ public class TrainingSessionController {
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
 		Page<TrainingSessionResponse> sessions = trainingSessionService.listScoped(
 				principal,
 				status,
@@ -95,7 +97,9 @@ public class TrainingSessionController {
 				toDate,
 				keyword,
 				page - 1,
-				limit);
+				limit,
+				sortBy,
+				order);
 		return PageResponse.of(sessions.getContent(), page, limit, sessions.getTotalElements());
 	}
 

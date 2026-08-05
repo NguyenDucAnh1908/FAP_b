@@ -42,11 +42,13 @@ public class NotificationController {
 		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
 	})
 	@GetMapping
-	public PageResponse<NotificationResponse> list(
+		public PageResponse<NotificationResponse> list(
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<NotificationResponse> notifications = notificationService.listMyNotifications(principal.id(), page - 1, limit);
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
+		Page<NotificationResponse> notifications = notificationService.listMyNotifications(principal.id(), page - 1, limit, sortBy, order);
 		return PageResponse.of(notifications.getContent(), page, limit, notifications.getTotalElements());
 	}
 

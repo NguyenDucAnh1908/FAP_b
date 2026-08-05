@@ -3,6 +3,7 @@ package com.fap.user.service;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.role.entity.Role;
 import com.fap.role.repository.RoleRepository;
 import com.fap.user.dto.CreateUserRequest;
@@ -57,7 +58,28 @@ public class UserService {
 			String roleName,
 			int page,
 			int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+		return list(status, keyword, email, fullName, roleId, roleName, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<UserResponse> list(
+			UserStatus status,
+			String keyword,
+			String email,
+			String fullName,
+			Long roleId,
+			String roleName,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "fullName", "email", "status");
 		Page<User> users = userRepository.search(
 				status,
 				normalizeLikeFilter(keyword),

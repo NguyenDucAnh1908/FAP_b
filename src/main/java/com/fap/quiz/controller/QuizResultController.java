@@ -55,7 +55,9 @@ public class QuizResultController {
 			@RequestParam(required = false) Long classId,
 			@RequestParam(required = false) Long trainingSessionId,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
 		Page<QuizAttemptResultResponse> attempts = quizResultService.listAttempts(
 				quizId,
 				status,
@@ -65,7 +67,9 @@ public class QuizResultController {
 				trainingSessionId,
 				principal,
 				page - 1,
-				limit);
+				limit,
+				sortBy,
+				order);
 		return PageResponse.of(attempts.getContent(), page, limit, attempts.getTotalElements());
 	}
 

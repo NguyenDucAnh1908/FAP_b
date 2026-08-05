@@ -18,7 +18,7 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
 			select s
 			from Syllabus s
 			where (:status is null or s.status = :status)
-			  and (:levelName is null or lower(s.levelName) = lower(:levelName))
+			  and (:levelName is null or lower(trim(s.levelName)) = lower(:levelName))
 			  and (:keyword is null
 			       or lower(s.name) like concat(concat('%', lower(:keyword)), '%')
 			       or lower(s.code) like concat(concat('%', lower(:keyword)), '%')

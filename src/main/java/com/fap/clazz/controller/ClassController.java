@@ -84,8 +84,10 @@ public class ClassController {
 			@RequestParam(required = false) Long trainingProgramId,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<ClassResponse> classes = classService.listScoped(principal, status, trainingProgramId, keyword, page - 1, limit);
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
+		Page<ClassResponse> classes = classService.listScoped(principal, status, trainingProgramId, keyword, page - 1, limit, sortBy, order);
 		return PageResponse.of(classes.getContent(), page, limit, classes.getTotalElements());
 	}
 

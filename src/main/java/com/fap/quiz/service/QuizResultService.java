@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fap.clazz.service.ClassAccessService;
 import com.fap.common.exception.ConflictException;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.ForbiddenException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.security.FapUserPrincipal;
@@ -79,9 +80,31 @@ public class QuizResultService {
 			FapUserPrincipal principal,
 			int page,
 			int limit) {
+		return listAttempts(quizId, status, passed, userId, classId, trainingSessionId, principal, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<QuizAttemptResultResponse> listAttempts(
+			Long quizId,
+			QuizAttemptStatus status,
+			Boolean passed,
+			Long userId,
+			Long classId,
+			Long trainingSessionId,
+			FapUserPrincipal principal,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
 		ensureQuizExists(quizId);
 		assertCanViewResults(principal, classId, trainingSessionId);
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "id"));
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "id"),
+				"id", "startedAt", "submittedAt", "score", "passed", "status");
 		return quizAttemptRepository.searchQuizResults(
 						quizId,
 						status,

@@ -2,6 +2,7 @@ package com.fap.quiz.service;
 
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.quiz.dto.CreateQuizRequest;
@@ -59,7 +60,25 @@ public class QuizService {
 
 	@Transactional(readOnly = true)
 	public Page<QuizResponse> list(QuizStatus status, String category, String keyword, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "id"));
+		return list(status, category, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<QuizResponse> list(
+			QuizStatus status,
+			String category,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "id"),
+				"id", "title", "category", "status", "openDate", "closeDate", "createdAt");
 		return quizRepository.search(enumName(status), normalize(category), normalize(keyword), pageRequest)
 				.map(this::toResponse);
 	}

@@ -48,8 +48,10 @@ public class MyLearningController {
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<ClassResponse> classes = myLearningService.classes(principal.id(), keyword, page - 1, limit);
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
+		Page<ClassResponse> classes = myLearningService.classes(principal.id(), keyword, page - 1, limit, sortBy, order);
 		return PageResponse.of(classes.getContent(), page, limit, classes.getTotalElements());
 	}
 

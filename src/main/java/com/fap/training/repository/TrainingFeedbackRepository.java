@@ -15,7 +15,7 @@ public interface TrainingFeedbackRepository extends JpaRepository<TrainingFeedba
 	boolean existsByTrainingSessionIdAndUserId(Long trainingSessionId, Long userId);
 
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
-	Page<TrainingFeedback> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+	Page<TrainingFeedback> findByUserId(Long userId, Pageable pageable);
 
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
 	Page<TrainingFeedback> findByTrainingSessionIdOrderByCreatedAtDesc(Long trainingSessionId, Pageable pageable);

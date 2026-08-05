@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.quiz.dto.AssignedQuizResponse;
@@ -87,10 +88,23 @@ public class QuizAttemptService {
 
 	@Transactional(readOnly = true)
 	public Page<AssignedQuizResponse> assigned(Long currentUserId, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(
+		return assigned(currentUserId, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<AssignedQuizResponse> assigned(
+			Long currentUserId,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
 				page,
 				limit,
-				Sort.by(Sort.Direction.ASC, "closeDate").and(Sort.by(Sort.Direction.DESC, "id")));
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.ASC, "closeDate").and(Sort.by(Sort.Direction.DESC, "id")),
+				"id", "closeDate", "openDate", "title", "durationMinutes", "status");
 		return quizRepository.searchAssignedToUser(
 						currentUserId,
 						QuizStatus.Published,

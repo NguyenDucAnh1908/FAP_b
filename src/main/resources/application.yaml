@@ -25,6 +25,12 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+  servlet:
+    multipart:
+      # Container-level guard. FileValidator re-checks the size so clients get a documented
+      # error code instead of a generic multipart failure.
+      max-file-size: ${MAX_UPLOAD_SIZE:20MB}
+      max-request-size: ${MAX_UPLOAD_REQUEST_SIZE:25MB}
 
 server:
   port: ${SERVER_PORT:8080}

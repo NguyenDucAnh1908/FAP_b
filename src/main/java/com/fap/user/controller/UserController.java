@@ -65,7 +65,9 @@ public class UserController {
 			@RequestParam(required = false) Long roleId,
 			@RequestParam(required = false) String roleName,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
 		Page<UserResponse> users = userService.list(
 				status,
 				keyword,
@@ -74,7 +76,9 @@ public class UserController {
 				roleId,
 				roleName,
 				page - 1,
-				limit);
+				limit,
+				sortBy,
+				order);
 		return PageResponse.of(users.getContent(), page, limit, users.getTotalElements());
 	}
 

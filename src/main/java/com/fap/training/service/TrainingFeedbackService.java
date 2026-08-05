@@ -1,5 +1,6 @@
 package com.fap.training.service;
 
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
@@ -18,6 +19,7 @@ import com.fap.training.repository.TrainingSessionRepository;
 import com.fap.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -104,8 +106,25 @@ public class TrainingFeedbackService {
 
 	@Transactional(readOnly = true)
 	public Page<TrainingFeedbackResponse> listMine(Long currentUserId, int page, int limit) {
+		return listMine(currentUserId, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<TrainingFeedbackResponse> listMine(
+			Long currentUserId,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "ratingContent", "ratingTrainer", "ratingOrganization");
 		return trainingFeedbackRepository
-				.findByUserIdOrderByCreatedAtDesc(currentUserId, PageRequest.of(page, limit))
+				.findByUserId(currentUserId, pageRequest)
 				.map(trainingFeedbackMapper::toResponse);
 	}
 

@@ -66,8 +66,10 @@ public class TrainingProgramController {
 			@RequestParam(required = false) TrainingProgramStatus status,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<TrainingProgramResponse> programs = trainingProgramService.list(status, keyword, page - 1, limit);
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
+		Page<TrainingProgramResponse> programs = trainingProgramService.list(status, keyword, page - 1, limit, sortBy, order);
 		return PageResponse.of(programs.getContent(), page, limit, programs.getTotalElements());
 	}
 

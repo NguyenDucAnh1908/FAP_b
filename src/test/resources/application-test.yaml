@@ -1,0 +1,27 @@
+# Test-only profile: boots the FULL Spring context with NO database connection.
+#
+# ddl-auto=none here is not a policy breach: src/main/resources/application.yaml keeps
+# 'validate' for every real runtime. This profile exists only so the context can load
+# offline, which is what makes the context-load smoke test possible without Oracle.
+spring:
+  datasource:
+    url: jdbc:oracle:thin:@//localhost:1521/XEPDB1
+    driver-class-name: oracle.jdbc.OracleDriver
+    username: test
+    password: test
+    hikari:
+      initialization-fail-timeout: -1   # start the pool without acquiring an initial connection
+  jpa:
+    database-platform: org.hibernate.dialect.OracleDialect
+    open-in-view: false
+    hibernate:
+      ddl-auto: none                    # must be none: 'validate' reads JDBC metadata, which needs a connection
+    properties:
+      hibernate.boot.allow_jdbc_metadata_access: false   # Hibernate 6.5+: resolve the dialect without connecting
+  flyway:
+    enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.fap: DEBUG

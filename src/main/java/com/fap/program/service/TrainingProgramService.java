@@ -1,6 +1,7 @@
 package com.fap.program.service;
 
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
@@ -55,7 +56,24 @@ public class TrainingProgramService {
 
 	@Transactional(readOnly = true)
 	public Page<TrainingProgramResponse> list(TrainingProgramStatus status, String keyword, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+		return list(status, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<TrainingProgramResponse> list(
+			TrainingProgramStatus status,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "name", "duration", "totalHours", "version", "status");
 		return programRepository.search(status, normalize(keyword), pageRequest)
 				.map(trainingProgramMapper::toResponse);
 	}

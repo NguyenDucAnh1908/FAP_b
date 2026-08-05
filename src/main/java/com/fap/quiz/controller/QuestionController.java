@@ -60,8 +60,10 @@ public class QuestionController {
 			@RequestParam(required = false) String category,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<QuestionResponse> questions = questionService.list(questionType, difficulty, category, keyword, page - 1, limit);
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
+		Page<QuestionResponse> questions = questionService.list(questionType, difficulty, category, keyword, page - 1, limit, sortBy, order);
 		return PageResponse.of(questions.getContent(), page, limit, questions.getTotalElements());
 	}
 

@@ -41,8 +41,10 @@ public class AuditLogController {
 			@RequestParam(required = false) String entityType,
 			@RequestParam(required = false) Long entityId,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) int limit) {
-		Page<AuditLogResponse> result = auditLogService.search(userId, entityType, entityId, page - 1, limit);
+			@RequestParam(defaultValue = "20") @Min(1) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
+		Page<AuditLogResponse> result = auditLogService.search(userId, entityType, entityId, page - 1, limit, sortBy, order);
 		return PageResponse.of(result.getContent(), page, limit, result.getTotalElements());
 	}
 }

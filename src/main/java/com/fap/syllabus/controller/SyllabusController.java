@@ -98,8 +98,10 @@ public class SyllabusController {
 			@RequestParam(required = false) String levelName,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<SyllabusResponse> syllabuses = syllabusService.list(status, levelName, keyword, page - 1, limit);
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
+		Page<SyllabusResponse> syllabuses = syllabusService.list(status, levelName, keyword, page - 1, limit, sortBy, order);
 		return PageResponse.of(syllabuses.getContent(), page, limit, syllabuses.getTotalElements());
 	}
 

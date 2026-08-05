@@ -1,5 +1,6 @@
 package com.fap.common.audit;
 
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.security.FapUserPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
@@ -40,7 +41,25 @@ public class AuditLogService {
 
 	@Transactional(readOnly = true)
 	public Page<AuditLogResponse> search(Long userId, String entityType, Long entityId, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+		return search(userId, entityType, entityId, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<AuditLogResponse> search(
+			Long userId,
+			String entityType,
+			Long entityId,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "action", "entityType", "entityId", "userId");
 		return auditLogRepository.search(userId, normalizeBlank(entityType), entityId, pageRequest)
 				.map(auditLogMapper::toResponse);
 	}

@@ -1,0 +1,9 @@
+BEGIN
+    EXECUTE IMMEDIATE 'ALTER TABLE quiz_attempts ADD version_no NUMBER(19) DEFAULT 0 NOT NULL';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -1430 THEN
+            RAISE;
+        END IF;
+END;
+/

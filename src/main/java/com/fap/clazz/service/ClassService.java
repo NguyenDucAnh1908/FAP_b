@@ -10,6 +10,7 @@ import com.fap.clazz.repository.ClassAdminRepository;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
@@ -57,7 +58,7 @@ public class ClassService {
 			String keyword,
 			int page,
 			int limit) {
-		return listScoped(null, status, trainingProgramId, keyword, page, limit);
+		return listScoped(null, status, trainingProgramId, keyword, page, limit, null, null);
 	}
 
 	@Transactional(readOnly = true)
@@ -68,7 +69,26 @@ public class ClassService {
 			String keyword,
 			int page,
 			int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+		return listScoped(principal, status, trainingProgramId, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<ClassResponse> listScoped(
+			FapUserPrincipal principal,
+			ClassStatus status,
+			Long trainingProgramId,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "name", "classCode", "startDate", "endDate", "status");
 		return classRepository.searchScoped(scopeUserId(principal), status, trainingProgramId, normalize(keyword), pageRequest)
 				.map(classMapper::toResponse);
 	}

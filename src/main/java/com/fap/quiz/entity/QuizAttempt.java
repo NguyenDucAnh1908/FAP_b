@@ -15,6 +15,7 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -70,4 +71,8 @@ public class QuizAttempt {
 
 	@Column(name = "submitted_at")
 	private LocalDateTime submittedAt;
+
+	@Version
+	@Column(name = "version_no", nullable = false)
+	private Long versionNo;
 }

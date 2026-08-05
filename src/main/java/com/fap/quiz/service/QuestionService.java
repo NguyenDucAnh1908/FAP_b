@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.NotFoundException;
 import com.fap.quiz.dto.CreateQuestionRequest;
 import com.fap.quiz.dto.QuestionResponse;
@@ -49,7 +50,26 @@ public class QuestionService {
 			String keyword,
 			int page,
 			int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "id"));
+		return list(questionType, difficulty, category, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<QuestionResponse> list(
+			QuestionType questionType,
+			QuestionDifficulty difficulty,
+			String category,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "id"),
+				"id", "category", "questionType", "difficulty", "createdAt");
 		return questionRepository.search(
 						enumName(questionType),
 						enumName(difficulty),
