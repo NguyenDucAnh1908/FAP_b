@@ -6,6 +6,7 @@
 - Runtime migrations: Flyway
 - ORM: Spring Data JPA + Hibernate
 - Canonical migration path: `src/main/resources/db/migration`
+- Sample/demo seed path: `src/main/resources/db/seed` (local profile only)
 - Generated DB references: `docs/database`
 
 ## Migration Rules
@@ -15,6 +16,13 @@
 - Do not manually change the database outside migrations.
 - Do not use `spring.jpa.hibernate.ddl-auto=update`.
 - Runtime JPA DDL mode must be `validate`.
+- `db/migration` holds schema and production-required reference data only.
+- Sample data, demo accounts, and fake settings go in `db/seed`, which only the
+  `local` profile adds to `spring.flyway.locations`. Non-local profiles scan
+  `classpath:db/migration` alone, so seed data can never reach a real environment.
+- `baseline-on-migrate` is enabled only for local convenience. Non-local profiles
+  set it to `false` so an existing schema without history fails loudly instead of
+  silently skipping migrations.
 
 ## JPA Rules
 

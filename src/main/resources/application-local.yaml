@@ -4,6 +4,12 @@ spring:
       on-profile: local
   datasource:
     password: ${DB_PASSWORD:12345}
+  flyway:
+    # db/seed holds V22/V23 (sample accounts, demo classes, fake system_settings). They live
+    # outside db/migration so a production deploy, which only scans db/migration, can never
+    # apply them. Local development keeps them so the existing schema history still resolves
+    # and a fresh local database comes up with data to click through.
+    locations: classpath:db/migration,classpath:db/seed
   mail:
     host: ${MAIL_HOST:}
     port: ${MAIL_PORT:587}
