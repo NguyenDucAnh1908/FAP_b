@@ -10,7 +10,9 @@ spring:
   datasource:
     url: jdbc:oracle:thin:@//${DB_HOST:localhost}:${DB_PORT:1521}/${DB_SERVICE:XEPDB1}
     username: ${DB_USERNAME:fap}
-    password: ${DB_PASSWORD:12345}
+    # No default: a fallback password would let a misconfigured deployment start and fail later
+    # at connection time instead of immediately. application-local.yaml supplies the dev default.
+    password: ${DB_PASSWORD}
     driver-class-name: oracle.jdbc.OracleDriver
     hikari:
       maximum-pool-size: ${DB_POOL_MAX:20}
@@ -58,6 +60,10 @@ springdoc:
     display-request-duration: true
 
 app:
+  jwt:
+    # Required. Generate with: openssl rand -base64 48
+    secret: ${JWT_SECRET}
+    access-ttl-minutes: ${JWT_ACCESS_TTL_MINUTES:15}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   mail:

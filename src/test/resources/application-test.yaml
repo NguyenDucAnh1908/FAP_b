@@ -21,6 +21,13 @@ spring:
   flyway:
     enabled: false
 
+app:
+  # app.jwt.secret has no default in application.yaml on purpose (a source-baked fallback would
+  # let a misconfigured deployment sign tokens with a publicly known key). Tests must supply
+  # their own throwaway value, long enough to pass the startup length check.
+  jwt:
+    secret: test_only_jwt_secret_not_used_outside_tests
+
 logging:
   level:
     root: WARN

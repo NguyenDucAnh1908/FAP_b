@@ -2,6 +2,8 @@ spring:
   config:
     activate:
       on-profile: local
+  datasource:
+    password: ${DB_PASSWORD:12345}
   mail:
     host: ${MAIL_HOST:}
     port: ${MAIL_PORT:587}
@@ -13,6 +15,12 @@ spring:
           auth: ${MAIL_SMTP_AUTH:true}
           starttls:
             enable: ${MAIL_SMTP_STARTTLS:true}
+
+app:
+  # Local-only fallback so developers do not have to export JWT_SECRET. Every other profile
+  # inherits the no-default ${JWT_SECRET} from application.yaml and fails fast when it is missing.
+  jwt:
+    secret: ${JWT_SECRET:local_dev_only_secret_do_not_use_in_production}
 
 logging:
   file:
