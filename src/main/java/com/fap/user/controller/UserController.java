@@ -4,17 +4,25 @@ import com.fap.common.api.ApiResponse;
 import com.fap.common.api.PageResponse;
 import com.fap.common.i18n.MessageService;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.user.dto.AvatarDownload;
 import com.fap.user.dto.CreateUserRequest;
 import com.fap.user.dto.UpdateUserRequest;
 import com.fap.user.dto.UpdateUserStatusRequest;
 import com.fap.user.dto.UserResponse;
 import com.fap.user.enums.UserStatus;
+import com.fap.user.service.UserAvatarService;
 import com.fap.user.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -28,9 +36,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "Users")
 @Validated
@@ -39,10 +45,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class UserController {
 
 	private final UserService userService;
+	private final UserAvatarService userAvatarService;
 	private final MessageService messageService;
 
-	public UserController(UserService userService, MessageService messageService) {
+	public UserController(UserService userService, UserAvatarService userAvatarService, MessageService messageService) {
 		this.userService = userService;
+		this.userAvatarService = userAvatarService;
 		this.messageService = messageService;
 	}
 
@@ -149,5 +157,36 @@ public class UserController {
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateUserStatusRequest request) {
 		return ApiResponse.ok(userService.updateStatus(id, request.status(), principal.id()));
+	}
+
+	@Operation(summary = "Upload own avatar (JPEG / PNG / WebP, max 2 MB)")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Avatar updated"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid file"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+	})
+	@PostMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	@PreAuthorize("isAuthenticated()")
+	public void uploadAvatar(
+			@AuthenticationPrincipal FapUserPrincipal principal,
+			@RequestParam("file") MultipartFile file) {
+		userAvatarService.upload(principal.id(), file);
+	}
+
+	@Operation(summary = "Get user avatar image")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Avatar bytes"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Avatar not found")
+	})
+	@GetMapping("/{id}/avatar")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<ByteArrayResource> downloadAvatar(@PathVariable Long id) {
+		AvatarDownload avatar = userAvatarService.download(id);
+		return ResponseEntity.ok()
+				.contentType(MediaType.parseMediaType(avatar.contentType()))
+				.contentLength(avatar.data().length)
+				.body(new ByteArrayResource(avatar.data()));
 	}
 }

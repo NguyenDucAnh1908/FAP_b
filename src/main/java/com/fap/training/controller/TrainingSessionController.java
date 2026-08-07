@@ -266,4 +266,20 @@ public class TrainingSessionController {
 		classAccessService.assertCanManageSession(principal, id);
 		return ApiResponse.ok(attendanceService.upsert(id, request, principal.id()));
 	}
+
+	@Operation(summary = "QR self check-in — trainees scan to mark themselves present")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Checked in"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not registered for this session"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Session already completed or canceled")
+	})
+	@PostMapping("/{id}/check-in")
+	@PreAuthorize("isAuthenticated()")
+	public ApiResponse<AttendanceRecordResponse> checkIn(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		return ApiResponse.ok(attendanceService.checkIn(id, principal.id()));
+	}
 }

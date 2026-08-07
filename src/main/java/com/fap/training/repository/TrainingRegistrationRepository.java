@@ -21,6 +21,10 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 	Optional<TrainingRegistration> findByTrainingSessionIdAndUserId(Long trainingSessionId, Long userId);
 
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
+	Optional<TrainingRegistration> findByTrainingSessionIdAndUserIdAndStatus(
+			Long trainingSessionId, Long userId, TrainingRegistrationStatus status);
+
+	@EntityGraph(attributePaths = {"trainingSession", "user"})
 	List<TrainingRegistration> findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
 			Long trainingSessionId,
 			Collection<TrainingRegistrationStatus> statuses);

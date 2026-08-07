@@ -14,6 +14,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -50,4 +51,8 @@ public class TrainingRegistration {
 
 	@Column(name = "completed_at")
 	private LocalDateTime completedAt;
+
+	@Version
+	@Column(name = "version_no", nullable = false)
+	private Long versionNo;
 }

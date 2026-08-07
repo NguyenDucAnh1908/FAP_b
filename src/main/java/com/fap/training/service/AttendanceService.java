@@ -3,6 +3,7 @@ package com.fap.training.service;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
+import com.fap.common.exception.ForbiddenException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.training.dto.AttendanceItemRequest;
 import com.fap.training.dto.AttendanceRecordResponse;
@@ -71,13 +72,19 @@ public class AttendanceService {
 		if (session.getStatus() == TrainingSessionStatus.Canceled) {
 			throw new ConflictException("ATTENDANCE_SESSION_CANCELED", "Attendance cannot be updated for canceled training session");
 		}
+		// Post-completion corrections require an explanation on every record for audit trail (§6.5/§7.5)
+		boolean isPostCompletion = session.getStatus() == TrainingSessionStatus.Completed;
+		if (isPostCompletion) {
+			validateCorrectionReasons(request.records());
+		}
 		validateNoDuplicateUsers(request.records());
 		Map<Long, TrainingRegistration> registeredUsers = loadRegisteredUsers(trainingSessionId);
 		List<AttendanceRecord> records = request.records().stream()
 				.map(item -> upsertRecord(session, item, registeredUsers, currentUserId))
 				.toList();
 		attendanceRecordRepository.saveAll(records);
-		auditLogService.record("UPSERT_ATTENDANCE", "training_session", trainingSessionId);
+		String auditAction = isPostCompletion ? "UPSERT_ATTENDANCE_CORRECTION" : "UPSERT_ATTENDANCE";
+		auditLogService.record(auditAction, "training_session", trainingSessionId);
 		return records.stream()
 				.map(attendanceRecordMapper::toResponse)
 				.toList();
@@ -123,6 +130,52 @@ public class AttendanceService {
 						List.of(TrainingRegistrationStatus.Registered))
 				.stream()
 				.collect(Collectors.toMap(registration -> registration.getUser().getId(), Function.identity()));
+	}
+
+	/**
+	 * Self-service QR check-in for a trainee. Only trainees whose registration is in {@code Registered}
+	 * status are allowed — {@code Completed} and {@code Canceled} are explicitly rejected so a former
+	 * participant cannot scan in after the fact.
+	 *
+	 * <p>The operation is idempotent: scanning twice simply keeps the existing {@code Present} record.
+	 */
+	@Transactional
+	public AttendanceRecordResponse checkIn(Long trainingSessionId, Long currentUserId) {
+		TrainingSession session = trainingSessionRepository.findWithClassAndTrainerById(trainingSessionId)
+				.orElseThrow(() -> new NotFoundException("Training session not found"));
+		if (session.getStatus() == TrainingSessionStatus.Canceled) {
+			throw new ConflictException("ATTENDANCE_SESSION_CANCELED", "Cannot check in to a canceled training session");
+		}
+		if (session.getStatus() == TrainingSessionStatus.Completed) {
+			throw new ConflictException("ATTENDANCE_SESSION_COMPLETED", "Cannot check in to a completed training session");
+		}
+		TrainingRegistration registration = trainingRegistrationRepository
+				.findByTrainingSessionIdAndUserIdAndStatus(
+						trainingSessionId, currentUserId, TrainingRegistrationStatus.Registered)
+				.orElseThrow(() -> new ForbiddenException("You are not registered for this training session"));
+		User user = registration.getUser();
+		LocalDateTime now = LocalDateTime.now();
+		AttendanceRecord record = attendanceRecordRepository
+				.findByTrainingSessionIdAndUserId(trainingSessionId, currentUserId)
+				.orElseGet(() -> createRecord(session, user, now));
+		record.setStatus(AttendanceStatus.Present);
+		record.setCheckInMethod(AttendanceCheckInMethod.QR);
+		record.setCheckedInAt(now);
+		record.setUpdatedBy(currentUserId);
+		record.setUpdatedAt(now);
+		attendanceRecordRepository.save(record);
+		auditLogService.record("QR_CHECK_IN", "training_session", trainingSessionId);
+		return attendanceRecordMapper.toResponse(record);
+	}
+
+	private void validateCorrectionReasons(List<AttendanceItemRequest> records) {
+		// Every record in a post-completion correction must carry an explanation (§6.5/§7.5)
+		boolean anyMissingReason = records.stream()
+				.anyMatch(item -> item.correctionReason() == null || item.correctionReason().isBlank());
+		if (anyMissingReason) {
+			throw new BadRequestException("ATTENDANCE_CORRECTION_REASON_REQUIRED",
+					"A correction reason is required for every attendance record when the session is completed");
+		}
 	}
 
 	private void validateNoDuplicateUsers(List<AttendanceItemRequest> records) {
