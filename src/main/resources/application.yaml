@@ -71,3 +71,40 @@ app:
     from: ${MAIL_FROM:no-reply@fap.local}
   password-reset:
     ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:15}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    # Bounded so a source rotating addresses cannot grow the bucket map without limit.
+    max-tracked-keys: ${RATE_LIMIT_MAX_KEYS:50000}
+    # Must be >= the longest refill-period below, or a bucket is evicted while still drained
+    # and the caller silently gets a fresh allowance.
+    key-idle-ttl: ${RATE_LIMIT_KEY_IDLE_TTL:30m}
+    # Only enable behind a reverse proxy that overwrites X-Forwarded-For. When the app is
+    # reachable directly, a client can forge the header and get a fresh bucket per request.
+    trust-forward-headers: ${RATE_LIMIT_TRUST_PROXY:false}
+    # Matched in order, most specific path first.
+    rules:
+      # Credential guessing. BCrypt verification is deliberately expensive, so this also caps
+      # the CPU an unauthenticated caller can consume.
+      - path: /api/v1/auth/login
+        method: POST
+        capacity: ${RATE_LIMIT_LOGIN_CAPACITY:10}
+        refill-period: ${RATE_LIMIT_LOGIN_PERIOD:1m}
+      - path: /api/v1/auth/google
+        method: POST
+        capacity: ${RATE_LIMIT_LOGIN_CAPACITY:10}
+        refill-period: ${RATE_LIMIT_LOGIN_PERIOD:1m}
+      # OTP brute force: the reset token space is small, so this is the control that keeps it
+      # from being enumerated.
+      - path: /api/v1/auth/reset-password
+        method: POST
+        capacity: ${RATE_LIMIT_RESET_CAPACITY:5}
+        refill-period: ${RATE_LIMIT_RESET_PERIOD:10m}
+      # Mail sending is the cost here, plus user-visible spam to a third party's inbox.
+      - path: /api/v1/auth/forgot-password
+        method: POST
+        capacity: ${RATE_LIMIT_FORGOT_CAPACITY:3}
+        refill-period: ${RATE_LIMIT_FORGOT_PERIOD:10m}
+      - path: /api/v1/auth/refresh
+        method: POST
+        capacity: ${RATE_LIMIT_REFRESH_CAPACITY:30}
+        refill-period: ${RATE_LIMIT_REFRESH_PERIOD:1m}

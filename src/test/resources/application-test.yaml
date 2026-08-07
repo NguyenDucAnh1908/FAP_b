@@ -27,6 +27,11 @@ app:
   # their own throwaway value, long enough to pass the startup length check.
   jwt:
     secret: test_only_jwt_secret_not_used_outside_tests
+  rate-limit:
+    # Off for the shared context: MockMvc suites replay the same auth paths from one client
+    # address and would throttle each other, making failures depend on test execution order.
+    # RateLimitFilterTest builds its own properties instance instead.
+    enabled: false
 
 logging:
   level:

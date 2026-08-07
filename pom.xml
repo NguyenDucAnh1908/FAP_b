@@ -32,6 +32,7 @@
 		<jjwt.version>0.12.6</jjwt.version>
 		<springdoc.version>2.8.6</springdoc.version>
 		<lombok.version>1.18.38</lombok.version>
+		<bucket4j.version>8.14.0</bucket4j.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -97,6 +98,21 @@
 			<artifactId>jjwt-jackson</artifactId>
 			<version>${jjwt.version}</version>
 			<scope>runtime</scope>
+		</dependency>
+		<!--
+		  In-memory token buckets for authentication rate limiting. Caffeine supplies the bounded,
+		  expiring key store so abandoned client keys cannot grow the heap without limit. No Redis:
+		  tech-stack.md keeps it out until a module needs shared state, and per-instance limits are
+		  sufficient for the current single-instance deployment.
+		-->
+		<dependency>
+			<groupId>com.bucket4j</groupId>
+			<artifactId>bucket4j_jdk17-core</artifactId>
+			<version>${bucket4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>
