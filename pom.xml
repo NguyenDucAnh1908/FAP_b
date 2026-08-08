@@ -33,6 +33,7 @@
 		<springdoc.version>2.8.6</springdoc.version>
 		<lombok.version>1.18.38</lombok.version>
 		<bucket4j.version>8.14.0</bucket4j.version>
+		<logstash-logback.version>8.1</logstash-logback.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -113,6 +114,16 @@
 		<dependency>
 			<groupId>com.github.ben-manes.caffeine</groupId>
 			<artifactId>caffeine</artifactId>
+		</dependency>
+		<!--
+		  JSON log encoder. Log aggregators cannot reliably parse the default multi-line text
+		  layout, so a stack trace arrives as a dozen unrelated entries with no correlation id
+		  attached. Only non-local profiles use it; local development keeps the readable layout.
+		-->
+		<dependency>
+			<groupId>net.logstash.logback</groupId>
+			<artifactId>logstash-logback-encoder</artifactId>
+			<version>${logstash-logback.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>

@@ -31,9 +31,10 @@ app:
 logging:
   file:
     name: ${LOG_FILE:logs/fap-backend-local.log}
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{64} - %msg%n"
+  # logging.pattern.console / logging.pattern.file are intentionally NOT set here.
+  # logback-spring.xml defines the console/file patterns inline (with %X{requestId}); if this
+  # profile overrode logging.pattern.*, Boot would map it onto CONSOLE_LOG_PATTERN /
+  # FILE_LOG_PATTERN and silently drop the correlation id from local logs.
   logback:
     rollingpolicy:
       file-name-pattern: ${LOG_FILE_PATTERN:logs/fap-backend-local.%d{yyyy-MM-dd}.%i.log}

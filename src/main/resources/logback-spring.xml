@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logging is split by profile on purpose. Local and test keep the human-readable multi-line
+  layout a developer scans in a terminal. Every other profile (the ones that run in a
+  container) emits one JSON object per line so a log aggregator indexes each event and keeps
+  the stack trace attached to its correlation id, instead of scattering a single failure
+  across a dozen unparsed lines.
+
+  Patterns are defined inline rather than through Boot's CONSOLE_LOG_PATTERN / FILE_LOG_PATTERN
+  so that a profile's logging.pattern.* override cannot silently drop %X{requestId}. That is
+  why application-local.yaml no longer sets logging.pattern.console / logging.pattern.file.
+
+  This file is named logback-spring.xml (not logback.xml) so Boot's LogbackLoggingSystem loads
+  it and <springProfile> works. Plain (non-Spring) unit tests never load it, so their logging
+  is unchanged; Boot still applies logging.level.* on top of whatever <root> level is set here.
+-->
+<configuration>
+	<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+	<springProfile name="local,test">
+		<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+			<encoder>
+				<pattern>%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %-5level [%thread] %clr([%X{requestId:-}]){magenta} %clr(%logger{36}){cyan} %clr(:){faint} %msg%n%wEx</pattern>
+			</encoder>
+		</appender>
+
+		<appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+			<file>${LOG_FILE:-logs/fap-backend.log}</file>
+			<encoder>
+				<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{requestId:-}] %logger{64} - %msg%n%wEx</pattern>
+			</encoder>
+			<rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+				<fileNamePattern>${LOGBACK_ROLLINGPOLICY_FILE_NAME_PATTERN:-${LOG_FILE:-logs/fap-backend.log}.%d{yyyy-MM-dd}.%i.gz}</fileNamePattern>
+				<maxFileSize>${LOGBACK_ROLLINGPOLICY_MAX_FILE_SIZE:-10MB}</maxFileSize>
+				<maxHistory>${LOGBACK_ROLLINGPOLICY_MAX_HISTORY:-14}</maxHistory>
+				<totalSizeCap>${LOGBACK_ROLLINGPOLICY_TOTAL_SIZE_CAP:-200MB}</totalSizeCap>
+			</rollingPolicy>
+		</appender>
+
+		<root level="INFO">
+			<appender-ref ref="CONSOLE"/>
+			<appender-ref ref="FILE"/>
+		</root>
+	</springProfile>
+
+	<springProfile name="!local &amp; !test">
+		<appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+			<encoder class="net.logstash.logback.encoder.LogstashEncoder">
+				<!--
+				  A String mask means replaceAll (substring) semantics with back-reference support,
+				  so the capture-group masks keep the readable key (password=****, Bearer ****) and
+				  drop only the secret. The plain JWT value has no key to keep, so it is replaced
+				  whole with the default mask. These run over the rendered message and MDC, so a
+				  credential accidentally interpolated into a log line never reaches the aggregator.
+				-->
+				<jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+					<defaultMask>****</defaultMask>
+					<value>eyJ[A-Za-z0-9_=-]+\.[A-Za-z0-9_=-]+\.[A-Za-z0-9_=-]+</value>
+					<valueMask>
+						<value>(?i)(bearer\s+)\S+</value>
+						<mask>$1****</mask>
+					</valueMask>
+					<valueMask>
+						<value>(?i)((?:password|pwd|secret|token|authorization|refresh[_-]?token)"?\s*[:=]\s*"?)[^"\s,}]+</value>
+						<mask>$1****</mask>
+					</valueMask>
+				</jsonGeneratorDecorator>
+			</encoder>
+		</appender>
+
+		<root level="INFO">
+			<appender-ref ref="JSON_CONSOLE"/>
+		</root>
+	</springProfile>
+</configuration>
