@@ -4,6 +4,8 @@ import com.fap.common.api.ErrorResponse;
 import com.fap.common.i18n.MessageService;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,8 @@ import java.util.List;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+	private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
 	private final MessageService messageService;
 
@@ -117,8 +121,15 @@ public class GlobalExceptionHandler {
 						messageService.get("error.CONCURRENT_MODIFICATION")));
 	}
 
+	/**
+	 * Last-resort handler. The client gets a generic message with no stack trace, so the server log
+	 * is the only place the cause survives: without this {@code log.error} an unexpected failure
+	 * would return 500 and leave nothing to diagnose. The MDC correlation id set by
+	 * {@code RequestIdFilter} ties the entry back to the request the caller reports.
+	 */
 	@ExceptionHandler(Exception.class)
 	ResponseEntity<ErrorResponse> handleUnexpected(Exception exception) {
+		log.error("Unhandled exception", exception);
 		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 				.body(ErrorResponse.of("INTERNAL_ERROR", messageService.get("error.INTERNAL_ERROR")));
 	}

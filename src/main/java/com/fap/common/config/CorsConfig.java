@@ -20,6 +20,15 @@ public class CorsConfig {
 		configuration.setAllowedOrigins(split(allowedOrigins));
 		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 		configuration.setAllowedHeaders(List.of("*"));
+		// Browser JS cannot read a response header unless it is explicitly exposed, so without this
+		// the correlation id set by RequestIdFilter would be invisible to the SPA and a user could
+		// not quote it in a bug report. Rate limit headers are exposed for the same reason: the
+		// client needs Retry-After to back off correctly.
+		configuration.setExposedHeaders(List.of(
+				"X-Request-Id",
+				"Retry-After",
+				"X-RateLimit-Limit",
+				"X-RateLimit-Remaining"));
 		configuration.setAllowCredentials(true);
 
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
