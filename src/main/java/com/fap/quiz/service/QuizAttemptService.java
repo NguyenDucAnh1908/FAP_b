@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.metrics.DomainMetrics;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.ConflictException;
@@ -66,6 +67,7 @@ public class QuizAttemptService {
 	private final QuizAttemptMapper quizAttemptMapper;
 	private final ObjectMapper objectMapper;
 	private final AuditLogService auditLogService;
+	private final DomainMetrics domainMetrics;
 
 	public QuizAttemptService(
 			QuizRepository quizRepository,
@@ -75,7 +77,8 @@ public class QuizAttemptService {
 			UserRepository userRepository,
 			QuizAttemptMapper quizAttemptMapper,
 			ObjectMapper objectMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			DomainMetrics domainMetrics) {
 		this.quizRepository = quizRepository;
 		this.quizAssignmentRepository = quizAssignmentRepository;
 		this.quizQuestionRepository = quizQuestionRepository;
@@ -84,6 +87,7 @@ public class QuizAttemptService {
 		this.quizAttemptMapper = quizAttemptMapper;
 		this.objectMapper = objectMapper;
 		this.auditLogService = auditLogService;
+		this.domainMetrics = domainMetrics;
 	}
 
 	@Transactional(readOnly = true)
@@ -163,14 +167,16 @@ public class QuizAttemptService {
 
 	@Transactional
 	public QuizAttemptResponse submit(Long attemptId, Long currentUserId) {
-		QuizAttempt attempt = findOwnAttempt(attemptId, currentUserId);
-		ensureInProgress(attempt);
-		List<QuizQuestion> quizQuestions = quizQuestions(attempt);
-		if (autoSubmitIfExpired(attempt, quizQuestions)) {
+		return domainMetrics.recordQuizSubmit(() -> {
+			QuizAttempt attempt = findOwnAttempt(attemptId, currentUserId);
+			ensureInProgress(attempt);
+			List<QuizQuestion> quizQuestions = quizQuestions(attempt);
+			if (autoSubmitIfExpired(attempt, quizQuestions)) {
+				return quizAttemptMapper.toResponse(attempt, orderedQuestions(attempt, quizQuestions));
+			}
+			submitAttempt(attempt, quizQuestions, LocalDateTime.now(), "SUBMIT_QUIZ_ATTEMPT");
 			return quizAttemptMapper.toResponse(attempt, orderedQuestions(attempt, quizQuestions));
-		}
-		submitAttempt(attempt, quizQuestions, LocalDateTime.now(), "SUBMIT_QUIZ_ATTEMPT");
-		return quizAttemptMapper.toResponse(attempt, orderedQuestions(attempt, quizQuestions));
+		});
 	}
 
 	@Transactional

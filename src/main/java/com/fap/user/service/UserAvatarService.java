@@ -3,6 +3,7 @@ package com.fap.user.service;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.metrics.DomainMetrics;
 import com.fap.user.dto.AvatarDownload;
 import com.fap.user.entity.User;
 import com.fap.user.entity.UserAvatarContent;
@@ -33,14 +34,17 @@ public class UserAvatarService {
 	private final UserRepository userRepository;
 	private final UserAvatarContentRepository avatarContentRepository;
 	private final AuditLogService auditLogService;
+	private final DomainMetrics domainMetrics;
 
 	public UserAvatarService(
 			UserRepository userRepository,
 			UserAvatarContentRepository avatarContentRepository,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			DomainMetrics domainMetrics) {
 		this.userRepository = userRepository;
 		this.avatarContentRepository = avatarContentRepository;
 		this.auditLogService = auditLogService;
+		this.domainMetrics = domainMetrics;
 	}
 
 	/**
@@ -49,29 +53,42 @@ public class UserAvatarService {
 	 */
 	@Transactional
 	public void upload(Long currentUserId, MultipartFile file) {
-		validateAvatarFile(file);
-		User user = userRepository.findById(currentUserId)
-				.orElseThrow(() -> new NotFoundException("User not found"));
-		byte[] data;
+		boolean counted = false;
 		try {
-			data = file.getBytes();
-		} catch (IOException e) {
-			throw new BadRequestException("FILE_READ_ERROR", "Failed to read uploaded file");
+			validateAvatarFile(file);
+			User user = userRepository.findById(currentUserId)
+					.orElseThrow(() -> new NotFoundException("User not found"));
+			byte[] data;
+			try {
+				data = file.getBytes();
+			} catch (IOException e) {
+				domainMetrics.recordUpload(false);
+				counted = true;
+				throw new BadRequestException("FILE_READ_ERROR", "Failed to read uploaded file");
+			}
+			String contentType = file.getContentType().toLowerCase();
+			// Upsert: reuse the existing row if present, create a new one otherwise
+			UserAvatarContent content = avatarContentRepository.findById(currentUserId)
+					.orElseGet(() -> {
+						UserAvatarContent c = new UserAvatarContent();
+						c.setUser(user);
+						return c;
+					});
+			content.setFileData(data);
+			content.setContentType(contentType);
+			avatarContentRepository.save(content);
+			user.setAvatarUrl(avatarPath(currentUserId));
+			user.setUpdatedAt(LocalDateTime.now());
+			auditLogService.record("UPLOAD_AVATAR", "user", currentUserId);
+			domainMetrics.recordUpload(true);
+			counted = true;
+		} finally {
+			// Validation failures, user-not-found, and persistence errors land here;
+			// the IOException path above already counted before rethrowing.
+			if (!counted) {
+				domainMetrics.recordUpload(false);
+			}
 		}
-		String contentType = file.getContentType().toLowerCase();
-		// Upsert: reuse the existing row if present, create a new one otherwise
-		UserAvatarContent content = avatarContentRepository.findById(currentUserId)
-				.orElseGet(() -> {
-					UserAvatarContent c = new UserAvatarContent();
-					c.setUser(user);
-					return c;
-				});
-		content.setFileData(data);
-		content.setContentType(contentType);
-		avatarContentRepository.save(content);
-		user.setAvatarUrl(avatarPath(currentUserId));
-		user.setUpdatedAt(LocalDateTime.now());
-		auditLogService.record("UPLOAD_AVATAR", "user", currentUserId);
 	}
 
 	@Transactional(readOnly = true)

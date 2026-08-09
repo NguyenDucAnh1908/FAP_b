@@ -56,6 +56,17 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
+		<!--
+		  Prometheus scrape format for /actuator/prometheus. Actuator already pulls in micrometer-core;
+		  this only adds the registry that renders the meters. monitoring.md mandates HTTP rate/error/
+		  duration, DB pool, auth-failure, quiz-submit latency, registration conflict/waitlist, and
+		  upload success/failure. HTTP and DB pool metrics come from Boot auto-config once a registry
+		  exists; Flyway startup status stays in Flyway logs; domain signals use DomainMetrics.
+		-->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-mail</artifactId>

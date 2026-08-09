@@ -12,6 +12,7 @@ import com.fap.auth.repository.RefreshTokenRepository;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.BusinessException;
 import com.fap.common.exception.UnauthorizedException;
+import com.fap.common.metrics.DomainMetrics;
 import com.fap.common.security.FapUserPrincipal;
 import com.fap.common.security.JwtService;
 import com.fap.user.entity.User;
@@ -45,6 +46,7 @@ public class AuthService {
 	private final PasswordResetMailService passwordResetMailService;
 	private final UserMapper userMapper;
 	private final PasswordEncoder passwordEncoder;
+	private final DomainMetrics domainMetrics;
 	private final long refreshTtlDays;
 	private final long passwordResetTtlMinutes;
 	private final SecureRandom secureRandom = new SecureRandom();
@@ -58,6 +60,7 @@ public class AuthService {
 			PasswordResetMailService passwordResetMailService,
 			UserMapper userMapper,
 			PasswordEncoder passwordEncoder,
+			DomainMetrics domainMetrics,
 			@Value("${app.jwt.refresh-ttl-days:${JWT_REFRESH_TTL_DAYS:7}}") long refreshTtlDays,
 			@Value("${app.password-reset.ttl-minutes:${PASSWORD_RESET_TTL_MINUTES:15}}") long passwordResetTtlMinutes) {
 		this.authenticationManager = authenticationManager;
@@ -68,6 +71,7 @@ public class AuthService {
 		this.passwordResetMailService = passwordResetMailService;
 		this.userMapper = userMapper;
 		this.passwordEncoder = passwordEncoder;
+		this.domainMetrics = domainMetrics;
 		this.refreshTtlDays = refreshTtlDays;
 		this.passwordResetTtlMinutes = passwordResetTtlMinutes;
 	}
@@ -79,6 +83,7 @@ public class AuthService {
 			authentication = authenticationManager.authenticate(
 					new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 		} catch (AuthenticationException exception) {
+			domainMetrics.recordLoginFailure();
 			throw new UnauthorizedException("Invalid credentials");
 		}
 		FapUserPrincipal principal = (FapUserPrincipal) authentication.getPrincipal();

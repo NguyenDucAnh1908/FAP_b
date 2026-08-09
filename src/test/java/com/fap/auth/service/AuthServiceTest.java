@@ -8,6 +8,7 @@ import com.fap.auth.repository.PasswordResetTokenRepository;
 import com.fap.auth.repository.RefreshTokenRepository;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.UnauthorizedException;
+import com.fap.common.metrics.DomainMetrics;
 import com.fap.common.security.JwtService;
 import com.fap.user.entity.User;
 import com.fap.user.mapper.UserMapper;
@@ -36,6 +37,7 @@ class AuthServiceTest {
 	private final PasswordResetMailService passwordResetMailService = mock(PasswordResetMailService.class);
 	private final UserMapper userMapper = mock(UserMapper.class);
 	private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+	private final DomainMetrics domainMetrics = mock(DomainMetrics.class);
 	private final AuthService authService = new AuthService(
 			authenticationManager,
 			jwtService,
@@ -45,6 +47,7 @@ class AuthServiceTest {
 			passwordResetMailService,
 			userMapper,
 			passwordEncoder,
+			domainMetrics,
 			7,
 			15);
 

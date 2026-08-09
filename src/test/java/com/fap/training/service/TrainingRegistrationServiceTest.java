@@ -3,6 +3,7 @@ package com.fap.training.service;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.metrics.DomainMetrics;
 import com.fap.notification.service.NotificationService;
 import com.fap.training.entity.TrainingRegistration;
 import com.fap.training.entity.TrainingSession;
@@ -52,6 +53,7 @@ class TrainingRegistrationServiceTest {
 	private final TrainingRegistrationMapper trainingRegistrationMapper = mock(TrainingRegistrationMapper.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
 	private final NotificationService notificationService = mock(NotificationService.class);
+	private final DomainMetrics domainMetrics = mock(DomainMetrics.class);
 
 	private final TrainingRegistrationService service = new TrainingRegistrationService(
 			trainingSessionRepository,
@@ -59,7 +61,8 @@ class TrainingRegistrationServiceTest {
 			userRepository,
 			trainingRegistrationMapper,
 			auditLogService,
-			notificationService);
+			notificationService,
+			domainMetrics);
 
 	@BeforeEach
 	void returnSavedEntity() {

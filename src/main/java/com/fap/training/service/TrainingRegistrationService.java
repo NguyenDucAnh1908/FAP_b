@@ -3,6 +3,7 @@ package com.fap.training.service;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.metrics.DomainMetrics;
 import com.fap.notification.service.NotificationService;
 import com.fap.training.dto.TrainingParticipantsResponse;
 import com.fap.training.dto.TrainingRegistrationResponse;
@@ -31,6 +32,7 @@ public class TrainingRegistrationService {
 	private final TrainingRegistrationMapper trainingRegistrationMapper;
 	private final AuditLogService auditLogService;
 	private final NotificationService notificationService;
+	private final DomainMetrics domainMetrics;
 
 	public TrainingRegistrationService(
 			TrainingSessionRepository trainingSessionRepository,
@@ -38,13 +40,15 @@ public class TrainingRegistrationService {
 			UserRepository userRepository,
 			TrainingRegistrationMapper trainingRegistrationMapper,
 			AuditLogService auditLogService,
-			NotificationService notificationService) {
+			NotificationService notificationService,
+			DomainMetrics domainMetrics) {
 		this.trainingSessionRepository = trainingSessionRepository;
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
 		this.userRepository = userRepository;
 		this.trainingRegistrationMapper = trainingRegistrationMapper;
 		this.auditLogService = auditLogService;
 		this.notificationService = notificationService;
+		this.domainMetrics = domainMetrics;
 	}
 
 	@Transactional
@@ -127,6 +131,7 @@ public class TrainingRegistrationService {
 
 	private TrainingRegistration reactivateRegistration(TrainingRegistration registration, TrainingSession session, LocalDateTime now) {
 		if (registration.getStatus() != TrainingRegistrationStatus.Cancelled) {
+			domainMetrics.recordRegistrationOutcome(DomainMetrics.RegistrationOutcome.CONFLICT);
 			throw new ConflictException("TRAINING_REGISTRATION_EXISTS", "User already registered for this training session");
 		}
 		registration.setRegisteredAt(now);
@@ -140,9 +145,11 @@ public class TrainingRegistrationService {
 		if (session.getEnrolledCount() < session.getCapacity()) {
 			registration.setStatus(TrainingRegistrationStatus.Registered);
 			session.setEnrolledCount(session.getEnrolledCount() + 1);
+			domainMetrics.recordRegistrationOutcome(DomainMetrics.RegistrationOutcome.REGISTERED);
 		}
 		else {
 			registration.setStatus(TrainingRegistrationStatus.Waitlist);
+			domainMetrics.recordRegistrationOutcome(DomainMetrics.RegistrationOutcome.WAITLISTED);
 		}
 	}
 
@@ -159,6 +166,7 @@ public class TrainingRegistrationService {
 					waitlisted.setCancelledAt(null);
 					waitlisted.setCompletedAt(null);
 					session.setEnrolledCount(session.getEnrolledCount() + 1);
+					domainMetrics.recordRegistrationOutcome(DomainMetrics.RegistrationOutcome.PROMOTED);
 					notificationService.create(
 							waitlisted.getUser().getId(),
 							"Waitlist promoted",

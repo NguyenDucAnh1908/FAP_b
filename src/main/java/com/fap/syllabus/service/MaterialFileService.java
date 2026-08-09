@@ -5,6 +5,7 @@ import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.ForbiddenException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.metrics.DomainMetrics;
 import com.fap.common.api.PageRequestFactory;
 import com.fap.common.util.FileValidator;
 import com.fap.syllabus.dto.AssignedMaterialFileResponse;
@@ -59,6 +60,7 @@ public class MaterialFileService {
 	private final MaterialFileMapper materialFileMapper;
 	private final FileValidator fileValidator;
 	private final AuditLogService auditLogService;
+	private final DomainMetrics domainMetrics;
 
 	public MaterialFileService(
 			SyllabusRepository syllabusRepository,
@@ -67,7 +69,8 @@ public class MaterialFileService {
 			MaterialFileContentRepository materialFileContentRepository,
 			MaterialFileMapper materialFileMapper,
 			FileValidator fileValidator,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			DomainMetrics domainMetrics) {
 		this.syllabusRepository = syllabusRepository;
 		this.topicRepository = topicRepository;
 		this.materialFileRepository = materialFileRepository;
@@ -75,6 +78,7 @@ public class MaterialFileService {
 		this.materialFileMapper = materialFileMapper;
 		this.fileValidator = fileValidator;
 		this.auditLogService = auditLogService;
+		this.domainMetrics = domainMetrics;
 	}
 
 	@Transactional(readOnly = true)
@@ -177,37 +181,50 @@ public class MaterialFileService {
 	 */
 	@Transactional
 	public MaterialFileResponse upload(Long syllabusId, Long topicId, MultipartFile file, Long currentUserId) {
-		findEditableSyllabus(syllabusId);
-		SyllabusTopic topic = findTopic(syllabusId, topicId);
-		fileValidator.validateUpload(file);
-		String fileName = fileValidator.sanitizeFileName(file.getOriginalFilename());
-
-		byte[] data;
+		boolean counted = false;
 		try {
-			data = file.getBytes();
-		} catch (IOException exception) {
-			throw new BadRequestException("FILE_UNREADABLE", "Uploaded file could not be read");
+			findEditableSyllabus(syllabusId);
+			SyllabusTopic topic = findTopic(syllabusId, topicId);
+			fileValidator.validateUpload(file);
+			String fileName = fileValidator.sanitizeFileName(file.getOriginalFilename());
+
+			byte[] data;
+			try {
+				data = file.getBytes();
+			} catch (IOException exception) {
+				domainMetrics.recordUpload(false);
+				counted = true;
+				throw new BadRequestException("FILE_UNREADABLE", "Uploaded file could not be read");
+			}
+
+			MaterialFile materialFile = new MaterialFile();
+			materialFile.setTopic(topic);
+			materialFile.setFileName(fileName);
+			materialFile.setFileSize((long) data.length);
+			materialFile.setContentType(normalize(file.getContentType()));
+			materialFile.setUploadedBy(currentUserId);
+			materialFile.setUploadedAt(LocalDateTime.now());
+			// file_url is NOT NULL, and the download path needs the generated id — save first, then set it.
+			materialFile.setFileUrl(PENDING_FILE_URL);
+			MaterialFile saved = materialFileRepository.save(materialFile);
+			saved.setFileUrl(downloadPath(saved.getId()));
+
+			MaterialFileContent content = new MaterialFileContent();
+			content.setMaterialFile(saved);
+			content.setFileData(data);
+			materialFileContentRepository.save(content);
+
+			auditLogService.record("UPLOAD_MATERIAL_FILE", "syllabus", syllabusId);
+			domainMetrics.recordUpload(true);
+			counted = true;
+			return materialFileMapper.toResponse(saved);
+		} finally {
+			// Any early-return failure (validation, unreadable file, persistence error) is observed
+			// exactly once; the IOException path above already counted before rethrowing.
+			if (!counted) {
+				domainMetrics.recordUpload(false);
+			}
 		}
-
-		MaterialFile materialFile = new MaterialFile();
-		materialFile.setTopic(topic);
-		materialFile.setFileName(fileName);
-		materialFile.setFileSize((long) data.length);
-		materialFile.setContentType(normalize(file.getContentType()));
-		materialFile.setUploadedBy(currentUserId);
-		materialFile.setUploadedAt(LocalDateTime.now());
-		// file_url is NOT NULL, and the download path needs the generated id — save first, then set it.
-		materialFile.setFileUrl(PENDING_FILE_URL);
-		MaterialFile saved = materialFileRepository.save(materialFile);
-		saved.setFileUrl(downloadPath(saved.getId()));
-
-		MaterialFileContent content = new MaterialFileContent();
-		content.setMaterialFile(saved);
-		content.setFileData(data);
-		materialFileContentRepository.save(content);
-
-		auditLogService.record("UPLOAD_MATERIAL_FILE", "syllabus", syllabusId);
-		return materialFileMapper.toResponse(saved);
 	}
 
 	/**

@@ -3,6 +3,7 @@ package com.fap.syllabus.service;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ForbiddenException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.metrics.DomainMetrics;
 import com.fap.common.util.FileValidator;
 import com.fap.syllabus.dto.MaterialFileDownload;
 import com.fap.syllabus.entity.MaterialFile;
@@ -52,6 +53,7 @@ class MaterialDownloadAuthorizationTest {
 	private final MaterialFileMapper materialFileMapper = mock(MaterialFileMapper.class);
 	private final FileValidator fileValidator = mock(FileValidator.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
+	private final DomainMetrics domainMetrics = mock(DomainMetrics.class);
 
 	private final MaterialFileService service = new MaterialFileService(
 			syllabusRepository,
@@ -60,7 +62,8 @@ class MaterialDownloadAuthorizationTest {
 			materialFileContentRepository,
 			materialFileMapper,
 			fileValidator,
-			auditLogService);
+			auditLogService,
+			domainMetrics);
 
 	private MaterialFile givenMaterial(String contentType) {
 		MaterialFile materialFile = new MaterialFile();

@@ -44,11 +44,20 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # prometheus is added for scraping. It is NOT public: SecurityConfig requires
+        # authentication for /actuator/** except health. env/beans/heapdump/threaddump stay
+        # unexposed per monitoring.md. A deployment behind a proxy should also restrict the
+        # path at the network edge, or move actuator to a separate management port.
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      # Low-cardinality identity tags so scraped series are attributable per service/env.
+      application: ${spring.application.name}
+      env: ${APP_ENV:local}
 
 springdoc:
   api-docs:
