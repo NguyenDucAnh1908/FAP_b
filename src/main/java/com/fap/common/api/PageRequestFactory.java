@@ -5,6 +5,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Set;
 
 public final class PageRequestFactory {
@@ -33,6 +34,15 @@ public final class PageRequestFactory {
 
 		Sort.Direction direction = parseDirection(order);
 		return PageRequest.of(page, limit, Sort.by(direction, normalizedSortBy));
+	}
+
+	public static PageRequest mapSortFields(PageRequest pageRequest, Map<String, String> fieldMappings) {
+		Sort mappedSort = Sort.by(pageRequest.getSort().stream()
+				.map(order -> new Sort.Order(
+						order.getDirection(),
+						fieldMappings.getOrDefault(order.getProperty(), order.getProperty())))
+				.toList());
+		return PageRequest.of(pageRequest.getPageNumber(), pageRequest.getPageSize(), mappedSort);
 	}
 
 	private static Sort.Direction parseDirection(String order) {

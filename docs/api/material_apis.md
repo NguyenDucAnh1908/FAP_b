@@ -13,6 +13,8 @@ All endpoints require a valid JWT access token.
 | `GET` | `/api/v1/materials/{id}` | `learning_material:view` | Get material detail. |
 | `PUT` | `/api/v1/materials/{id}` | `learning_material:modify` | Update material metadata/link. |
 | `DELETE` | `/api/v1/materials/{id}` | `learning_material:modify` | Delete material metadata. |
+| `POST` | `/api/v1/materials/upload` | `learning_material:modify` | Upload and store an internal material file. |
+| `GET` | `/api/v1/materials/{id}/download` | `learning_material:view` plus ownership | Download an internally stored file. |
 | `GET` | `/api/v1/me/materials` | `learning_material:view` | Current user's assigned materials. |
 | `GET` | `/api/v1/syllabuses/{id}/topics/{topicId}/materials` | `syllabus:view` | List materials under a topic. |
 | `POST` | `/api/v1/syllabuses/{id}/topics/{topicId}/materials` | `syllabus:modify` | Create material under a topic. |
@@ -20,10 +22,31 @@ All endpoints require a valid JWT access token.
 
 ## Rules
 
-- Material is stored as metadata/link in `material_files`; file upload/S3 is not implemented in this step.
+- External links are stored as metadata in `material_files`. Internal uploads store metadata in `material_files` and bytes in `material_file_contents` with the same ID.
 - A material must belong to a syllabus topic.
 - Active/Inactive syllabuses cannot have materials created, updated, or deleted.
 - `/api/v1/me/materials` returns materials from syllabuses linked to training programs of classes/sessions where the current user has `Registered` or `Completed` registration.
+- Internal uploads allow the content types configured in `FileValidator`, are limited to 20 MB, and sanitize the client file name before storage.
+- A manager with the material update action may download any internal material. Other users must be assigned through an eligible registration.
+
+## Upload And Download
+
+```http
+POST /api/v1/materials/upload?syllabusId=1000&topicId=1000
+Authorization: Bearer <accessToken>
+Content-Type: multipart/form-data
+
+file=<binary file>
+```
+
+The successful response is `201` and returns the material metadata. Its `fileUrl` points to the internal endpoint below:
+
+```http
+GET /api/v1/materials/{materialId}/download
+Authorization: Bearer <accessToken>
+```
+
+The download response preserves the stored content type, sanitized file name, content length, and original bytes.
 
 ## Create Material
 
@@ -130,3 +153,8 @@ Common errors:
 |---|---|---|
 | `404` | `NOT_FOUND` | Syllabus, topic, or material was not found. |
 | `409` | `SYLLABUS_NOT_EDITABLE` | Active/Inactive syllabus material cannot be changed. |
+| `400` | `FILE_REQUIRED` | Multipart field `file` is missing or empty. |
+| `400` | `FILE_TOO_LARGE` | File exceeds the 20 MB limit. |
+| `400` | `FILE_TYPE_NOT_ALLOWED` | Content type is not in the upload whitelist. |
+| `400` | `INVALID_MULTIPART` | Multipart body cannot be parsed. |
+| `403` | `FORBIDDEN` | The caller is not assigned to the requested material. |

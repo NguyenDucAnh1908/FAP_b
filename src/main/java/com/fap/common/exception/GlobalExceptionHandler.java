@@ -9,8 +9,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -66,6 +70,12 @@ public class GlobalExceptionHandler {
 				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
 	}
 
+	@ExceptionHandler(AccessDeniedException.class)
+	ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException exception) {
+		return ResponseEntity.status(HttpStatus.FORBIDDEN)
+				.body(ErrorResponse.of("FORBIDDEN", messageService.get("error.FORBIDDEN")));
+	}
+
 	@ExceptionHandler(ConflictException.class)
 	ResponseEntity<ErrorResponse> handleConflict(ConflictException exception) {
 		return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -76,6 +86,24 @@ public class GlobalExceptionHandler {
 	ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException exception) {
 		return ResponseEntity.badRequest()
 				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
+	}
+
+	@ExceptionHandler(MissingServletRequestPartException.class)
+	ResponseEntity<ErrorResponse> handleMissingRequestPart(MissingServletRequestPartException exception) {
+		return ResponseEntity.badRequest()
+				.body(ErrorResponse.of("FILE_REQUIRED", messageService.get("error.FILE_REQUIRED")));
+	}
+
+	@ExceptionHandler(MaxUploadSizeExceededException.class)
+	ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException exception) {
+		return ResponseEntity.badRequest()
+				.body(ErrorResponse.of("FILE_TOO_LARGE", messageService.get("error.FILE_TOO_LARGE")));
+	}
+
+	@ExceptionHandler(MultipartException.class)
+	ResponseEntity<ErrorResponse> handleMultipart(MultipartException exception) {
+		return ResponseEntity.badRequest()
+				.body(ErrorResponse.of("INVALID_MULTIPART", messageService.get("error.INVALID_MULTIPART")));
 	}
 
 	@ExceptionHandler(BadCredentialsException.class)

@@ -29,15 +29,15 @@ without adding scope outside `docs/07_scope_freeze.md`.
 | C3 | `83da00b` | Sample seed data moved to `db/seed` (local profile only) | prod scans `db/migration` alone |
 | C4 | `f90cde5` | Rate-limit auth endpoints (bucket4j, bounded key map) | login/google/reset/forgot/refresh |
 | C5 | `157f165`+`eb0ec47` | Request correlation id + structured JSON logging | per-profile logback, secret masking |
-| P3 | (working tree) | Metrics: Micrometer + Prometheus | see P3 detail below |
+| P3 | `b1b70ba` | Metrics: Micrometer + Prometheus | see P3 detail below |
 
-Test baseline at end of P3: **237 tests, 0 failures / 0 errors / 0 skipped**.
+Test baseline at end of Round 3: **244 tests, 0 failures / 0 errors / 0 skipped**.
 
-## Remaining Backlog (prioritized)
+## Delivery Status
 
 ### P3 — Metrics (Micrometer + Prometheus)  ✅
 
-Delivered in working tree (branch `feature/production-readiness-round3`):
+Delivered in commit `b1b70ba` (branch `feature/production-readiness-round3`):
 
 | File | Change |
 |------|--------|
@@ -62,24 +62,56 @@ Signals covered:
 - ✅ Registration outcomes — `fap.training.registration{outcome=registered|waitlisted|conflict|promoted}`
 - ✅ File upload success/failure — `file.upload{result=success|failure}`
 
-### P4 — Deployment ergonomics  🔜
-- `server.shutdown: graceful` + `spring.lifecycle.timeout-per-shutdown-phase`.
-- Confirm liveness/readiness health groups (probes flag is already on) and document probe URLs.
-- HikariCP pool sizing / timeout review for prod.
+### P4 — Deployment ergonomics  ✅
 
-### P5 — HTTP security headers  ⬜
-`SecurityConfig` currently relies on Spring Security defaults with no explicit `.headers(...)`.
-Add an explicit, reviewed posture (HSTS for TLS deployments, frame options, content-type
-options, referrer policy). Keep it compatible with Swagger UI.
+Delivered in working tree (branch `feature/production-readiness-round3`):
 
-### P6 — Supply-chain / CI  ⬜
-No `.github` workflows exist. Add dependency vulnerability scanning + build/test gate
-(`monitoring.md` / `security.md` both call for dependency checks in CI when configured).
+| File | Change |
+|------|--------|
+| `application.yaml` | Enabled graceful shutdown with a 30-second phase timeout; added bounded, environment-tunable Hikari pool settings |
+| `.env.example` | Documented shutdown and Hikari environment variables with production defaults |
+| `README.md` | Documented liveness/readiness URLs, shutdown behavior, pool sizing rule, and timeout guidance |
+| `DeploymentReadinessIntegrationTest.java` | 4 integration tests for graceful shutdown, Hikari binding, and public liveness/readiness probes |
+
+Verified configuration and behavior:
+- ✅ Spring Boot binds graceful shutdown with `SERVER_SHUTDOWN_TIMEOUT` as the per-phase limit; an external `SIGTERM` lifecycle test is still deployment-level validation.
+- ✅ `GET /actuator/health/liveness` and `GET /actuator/health/readiness` are public and return `UP` in a healthy context.
+- ✅ Hikari keeps 5 idle connections and caps each instance at 20 by default; all reviewed timeout values are externally configurable.
+
+### P5 — HTTP security headers  ✅
+
+Delivered in working tree:
+
+| File | Change |
+|------|--------|
+| `SecurityConfig.java` | Explicitly configured HSTS for HTTPS, frame denial, content-type protection, and strict-origin referrer policy |
+| `SecurityHeadersIntegrationTest.java` | 3 integration tests for HTTP/HTTPS headers and Swagger UI compatibility |
+
+Verified behavior:
+- ✅ HTTPS responses include one-year, host-only HSTS; plain HTTP does not emit HSTS. Subdomains/preload stay disabled until the production domain topology is verified.
+- ✅ Responses include `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
+- ✅ Swagger's public redirect and final HTML resource remain accessible with the explicit headers.
+
+### P6 — Supply-chain / CI  ✅
+
+Delivered in working tree:
+
+| File | Change |
+|------|--------|
+| `.github/workflows/backend-ci.yml` | Java 21 `clean verify` gate on pushes/PRs plus high-severity dependency review on PRs |
+| `.github/dependabot.yml` | Weekly Maven and GitHub Actions update PRs |
+| `README.md` | Documented the CI and dependency update policy |
+
+Security posture:
+- ✅ Workflow permissions are read-only and checkout credentials are not persisted.
+- ✅ Third-party actions are pinned to immutable commit SHAs with release versions documented inline.
+- ✅ Both workflow files parse as valid YAML; the same `clean verify` command is verified locally.
+- ⚠️ The dependency-review API job can only be runtime-verified after pushing the workflow and opening a GitHub pull request.
 
 ## Working Order
 
-Do P3 first (biggest requirement gap, self-contained). P4–P6 are independent and can follow
-in any order; re-confirm priority with the user before starting each.
+P3 through P6 are implemented. Before merge, confirm the first GitHub Actions run and perform
+the deployment-level `SIGTERM` check noted under P4.
 
 ## Verification Rule
 

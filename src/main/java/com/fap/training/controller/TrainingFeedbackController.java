@@ -44,7 +44,7 @@ public class TrainingFeedbackController {
 		this.classAccessService = classAccessService;
 	}
 
-	@Operation(summary = "Submit quiz attempt")
+	@Operation(summary = "Submit training feedback")
 	@ApiResponses(value = {
 		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created"),
 		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),

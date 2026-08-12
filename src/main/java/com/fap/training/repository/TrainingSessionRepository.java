@@ -53,11 +53,14 @@ public interface TrainingSessionRepository extends JpaRepository<TrainingSession
 
 	@EntityGraph(attributePaths = {"fapClass", "trainer"})
 	@Query("""
-			select distinct s
+			select s
 			from TrainingSession s
-			left join ClassAdmin ca on ca.fapClass = s.fapClass and ca.user.id = :scopeUserId
-			left join ClassTrainer ct on ct.fapClass = s.fapClass and ct.user.id = :scopeUserId
-			where (:scopeUserId is null or ca.id is not null or ct.id is not null or s.trainer.id = :scopeUserId)
+			where (:scopeUserId is null
+			       or exists (select ca.id from ClassAdmin ca
+			                  where ca.fapClass = s.fapClass and ca.user.id = :scopeUserId)
+			       or exists (select ct.id from ClassTrainer ct
+			                  where ct.fapClass = s.fapClass and ct.user.id = :scopeUserId)
+			       or s.trainer.id = :scopeUserId)
 			  and (:status is null or s.status = :status)
 			  and (:classId is null or s.fapClass.id = :classId)
 			  and (:trainerId is null or s.trainer.id = :trainerId)
@@ -146,10 +149,10 @@ public interface TrainingSessionRepository extends JpaRepository<TrainingSession
 
 	@EntityGraph(attributePaths = {"fapClass", "trainer"})
 	@Query("""
-			select distinct s
+			select s
 			from TrainingSession s
-			join ClassAdmin ca on ca.fapClass = s.fapClass
-			where ca.user.id = :adminId
+			where exists (select ca.id from ClassAdmin ca
+			              where ca.fapClass = s.fapClass and ca.user.id = :adminId)
 			  and (:status is null or s.status = :status)
 			  and (:fromDate is null or s.sessionDate >= :fromDate)
 			  and (:toDate is null or s.sessionDate <= :toDate)

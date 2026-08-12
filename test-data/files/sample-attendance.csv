@@ -1,0 +1,4 @@
+email,status,checkInMethod,correctionReason
+e2e.trainee01@fap.local,Present,QR,
+e2e.trainee02@fap.local,Late,Manual,Traffic delay confirmed by trainer
+e2e.trainee03@fap.local,Absent,Manual,

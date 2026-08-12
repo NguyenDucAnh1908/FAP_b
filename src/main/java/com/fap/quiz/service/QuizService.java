@@ -79,7 +79,11 @@ public class QuizService {
 				order,
 				Sort.by(Sort.Direction.DESC, "id"),
 				"id", "title", "category", "status", "openDate", "closeDate", "createdAt");
-		return quizRepository.search(enumName(status), normalize(category), normalize(keyword), pageRequest)
+		PageRequest nativePageRequest = PageRequestFactory.mapSortFields(pageRequest, Map.of(
+				"openDate", "open_date",
+				"closeDate", "close_date",
+				"createdAt", "created_at"));
+		return quizRepository.search(enumName(status), normalize(category), normalize(keyword), nativePageRequest)
 				.map(this::toResponse);
 	}
 

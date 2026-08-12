@@ -1,0 +1,7 @@
+FAP E2E learning material
+
+Course: Java Backend Development
+Topic: REST API integration
+Purpose: Verify multipart upload, authorized download, file name, MIME type, and content integrity.
+
+This file contains local development data only.

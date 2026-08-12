@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Service
 public class QuestionService {
@@ -70,12 +71,15 @@ public class QuestionService {
 				order,
 				Sort.by(Sort.Direction.DESC, "id"),
 				"id", "category", "questionType", "difficulty", "createdAt");
+		PageRequest nativePageRequest = PageRequestFactory.mapSortFields(pageRequest, Map.of(
+				"questionType", "question_type",
+				"createdAt", "created_at"));
 		return questionRepository.search(
 						enumName(questionType),
 						enumName(difficulty),
 						normalize(category),
 						normalize(keyword),
-						pageRequest)
+						nativePageRequest)
 				.map(questionMapper::toResponse);
 	}
 

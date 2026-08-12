@@ -23,8 +23,11 @@ public class CorsConfig {
 		// Browser JS cannot read a response header unless it is explicitly exposed, so without this
 		// the correlation id set by RequestIdFilter would be invisible to the SPA and a user could
 		// not quote it in a bug report. Rate limit headers are exposed for the same reason: the
-		// client needs Retry-After to back off correctly.
+		// client needs Retry-After to back off correctly. Download metadata is exposed so the
+		// SPA can preserve the server-provided file name and size.
 		configuration.setExposedHeaders(List.of(
+				"Content-Disposition",
+				"Content-Length",
 				"X-Request-Id",
 				"Retry-After",
 				"X-RateLimit-Limit",
