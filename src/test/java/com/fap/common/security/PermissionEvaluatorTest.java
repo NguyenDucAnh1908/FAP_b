@@ -13,6 +13,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class PermissionEvaluatorTest {
@@ -35,6 +36,11 @@ class PermissionEvaluatorTest {
 				List.of());
 
 		assertThat(evaluator.hasAction(authentication, "syllabus", "delete")).isTrue();
+		assertThat(evaluator.hasPermission(authentication, "user", "view")).isTrue();
+		assertThat(evaluator.hasPermission(authentication, "class", "create")).isTrue();
+		assertThat(evaluator.hasPermission(authentication, "quiz", "modify")).isTrue();
+		assertThat(evaluator.hasPermission(authentication, "learning_material", "full_access")).isTrue();
+		verifyNoInteractions(permissionRepository);
 	}
 
 	@Test

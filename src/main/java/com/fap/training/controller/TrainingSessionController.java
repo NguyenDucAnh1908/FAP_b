@@ -118,7 +118,7 @@ public class TrainingSessionController {
 	public ApiResponse<TrainingSessionResponse> create(
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody CreateTrainingSessionRequest request) {
-		classAccessService.assertCanManageClass(principal, request.classId());
+		classAccessService.assertCanCreateSession(principal, request.classId(), request.trainerId());
 		return ApiResponse.ok(trainingSessionService.create(request, principal.id()));
 	}
 

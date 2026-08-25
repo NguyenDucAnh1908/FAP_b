@@ -9,6 +9,7 @@ import com.fap.role.dto.UpdatePermissionRequest;
 import com.fap.role.dto.UpdatePermissionMatrixRequest;
 import com.fap.role.entity.Permission;
 import com.fap.role.entity.Role;
+import com.fap.role.enums.PermissionLevel;
 import com.fap.role.mapper.RoleMapper;
 import com.fap.role.repository.PermissionRepository;
 import com.fap.role.repository.RoleRepository;
@@ -22,6 +23,7 @@ import java.util.Set;
 
 @Service
 public class RoleService {
+	private static final String SUPER_ADMIN_ROLE = "Super Admin";
 
 	private static final Set<String> SUPPORTED_PERMISSION_RESOURCES = Set.of(
 			"user",
@@ -58,6 +60,7 @@ public class RoleService {
 	public List<PermissionResponse> permissionMatrix() {
 		return permissionRepository.findAll().stream()
 				.map(roleMapper::toResponse)
+				.map(this::enforceSuperAdminFullAccess)
 				.toList();
 	}
 
@@ -75,7 +78,9 @@ public class RoleService {
 						created.setResource(resource);
 						return created;
 					});
-			permission.setPermissionLevel(item.permissionLevel());
+			permission.setPermissionLevel(isSuperAdmin(role)
+					? PermissionLevel.full_access
+					: item.permissionLevel());
 			permissionRepository.save(permission);
 		});
 		auditLogService.record("UPDATE_PERMISSION_MATRIX", "permission", null);
@@ -98,5 +103,20 @@ public class RoleService {
 
 	private String normalizeResource(String resource) {
 		return resource.trim().toLowerCase(Locale.ROOT);
+	}
+
+	private PermissionResponse enforceSuperAdminFullAccess(PermissionResponse permission) {
+		if (!SUPER_ADMIN_ROLE.equalsIgnoreCase(permission.roleName())) {
+			return permission;
+		}
+		return new PermissionResponse(
+				permission.roleId(),
+				permission.roleName(),
+				permission.resource(),
+				PermissionLevel.full_access);
+	}
+
+	private boolean isSuperAdmin(Role role) {
+		return SUPER_ADMIN_ROLE.equalsIgnoreCase(role.getName());
 	}
 }

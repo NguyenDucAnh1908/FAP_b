@@ -22,6 +22,12 @@ CREATE INDEX idx_classes_dates ON classes(start_date, end_date);
 CREATE INDEX idx_classes_deleted ON classes(is_deleted);
 CREATE INDEX idx_class_trainers_user ON class_trainers(user_id);
 CREATE INDEX idx_class_admins_user ON class_admins(user_id);
+CREATE INDEX idx_class_enrollments_class_status ON class_enrollments(class_id, status);
+CREATE INDEX idx_class_enrollments_user_status ON class_enrollments(user_id, status);
+CREATE INDEX idx_completion_quizzes_class ON class_completion_quizzes(class_id);
+CREATE INDEX idx_course_results_class_status ON course_results(class_id, calculated_status);
+CREATE INDEX idx_course_results_publish ON course_results(class_id, published_at);
+CREATE INDEX idx_result_adjustments_result ON course_result_adjustments(course_result_id, adjusted_at);
 
 CREATE INDEX idx_questions_category ON questions(category);
 CREATE INDEX idx_questions_diff ON questions(difficulty);

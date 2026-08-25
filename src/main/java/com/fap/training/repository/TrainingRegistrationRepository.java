@@ -17,6 +17,45 @@ import java.util.Optional;
 
 public interface TrainingRegistrationRepository extends JpaRepository<TrainingRegistration, Long> {
 
+	@Query("""
+			select r.status as status, count(r) as total
+			from TrainingRegistration r
+			where (:classAdminId is null
+			       or exists (select ca.id from ClassAdmin ca
+			                  where ca.fapClass = r.trainingSession.fapClass
+			                    and ca.user.id = :classAdminId))
+			  and (:fromDate is null or r.trainingSession.sessionDate >= :fromDate)
+			  and (:toDate is null or r.trainingSession.sessionDate <= :toDate)
+			group by r.status
+			""")
+	List<AnalyticsRegistrationStatusCount> countStatusesForAnalytics(
+			@Param("classAdminId") Long classAdminId,
+			@Param("fromDate") LocalDate fromDate,
+			@Param("toDate") LocalDate toDate);
+
+	@Query("""
+			select count(distinct r.user.id)
+			from TrainingRegistration r
+			where r.status in :statuses
+			  and (:classAdminId is null
+			       or exists (select ca.id from ClassAdmin ca
+			                  where ca.fapClass = r.trainingSession.fapClass
+			                    and ca.user.id = :classAdminId))
+			  and (:fromDate is null or r.trainingSession.sessionDate >= :fromDate)
+			  and (:toDate is null or r.trainingSession.sessionDate <= :toDate)
+			""")
+	long countDistinctParticipantsForAnalytics(
+			@Param("classAdminId") Long classAdminId,
+			@Param("statuses") Collection<TrainingRegistrationStatus> statuses,
+			@Param("fromDate") LocalDate fromDate,
+			@Param("toDate") LocalDate toDate);
+
+	interface AnalyticsRegistrationStatusCount {
+		TrainingRegistrationStatus getStatus();
+
+		Long getTotal();
+	}
+
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
 	Optional<TrainingRegistration> findByTrainingSessionIdAndUserId(Long trainingSessionId, Long userId);
 
@@ -90,6 +129,16 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 
 	long countByTrainingSessionIdAndStatus(Long trainingSessionId, TrainingRegistrationStatus status);
 
+	@Query("""
+			select r.user.id
+			from TrainingRegistration r
+			where r.trainingSession.id = :trainingSessionId
+			  and r.status = :status
+			""")
+	List<Long> findUserIdsByTrainingSessionIdAndStatus(
+			@Param("trainingSessionId") Long trainingSessionId,
+			@Param("status") TrainingRegistrationStatus status);
+
 	@EntityGraph(attributePaths = {"trainingSession", "trainingSession.fapClass", "trainingSession.trainer", "user"})
 	@Query("""
 			select r
@@ -103,4 +152,20 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 			@Param("userId") Long userId,
 			@Param("classId") Long classId,
 			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses);
+
+	@EntityGraph(attributePaths = {"trainingSession", "trainingSession.fapClass", "trainingSession.trainer", "user"})
+	@Query("""
+			select r
+			from TrainingRegistration r
+			where r.user.id = :userId
+			  and r.trainingSession.fapClass.id = :classId
+			  and r.trainingSession.status = :sessionStatus
+			  and r.status in :registrationStatuses
+			order by r.trainingSession.sessionDate asc, r.trainingSession.startTime asc, r.id asc
+			""")
+	List<TrainingRegistration> findFutureByClassAndUser(
+			@Param("classId") Long classId,
+			@Param("userId") Long userId,
+			@Param("sessionStatus") TrainingSessionStatus sessionStatus,
+			@Param("registrationStatuses") Collection<TrainingRegistrationStatus> registrationStatuses);
 }

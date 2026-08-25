@@ -15,6 +15,8 @@ import java.util.List;
 
 public interface QuizRepository extends JpaRepository<Quiz, Long> {
 
+	long countByStatus(QuizStatus status);
+
 	@Query(
 			value = """
 					select *
@@ -61,10 +63,11 @@ public interface QuizRepository extends JpaRepository<Quiz, Long> {
 					             and r.status in :eligibleStatuses
 					       )
 					       or qa.fapClass.id in (
-					           select r.trainingSession.fapClass.id
-					           from TrainingRegistration r
-					           where r.user.id = :userId
-					             and r.status in :eligibleStatuses
+					           select e.fapClass.id
+					           from ClassEnrollment e
+					           where e.user.id = :userId
+					             and e.status in (com.fap.clazz.enums.ClassEnrollmentStatus.Enrolled,
+					                              com.fap.clazz.enums.ClassEnrollmentStatus.Completed)
 					       )
 					  )
 					""",
@@ -83,10 +86,11 @@ public interface QuizRepository extends JpaRepository<Quiz, Long> {
 					             and r.status in :eligibleStatuses
 					       )
 					       or qa.fapClass.id in (
-					           select r.trainingSession.fapClass.id
-					           from TrainingRegistration r
-					           where r.user.id = :userId
-					             and r.status in :eligibleStatuses
+					           select e.fapClass.id
+					           from ClassEnrollment e
+					           where e.user.id = :userId
+					             and e.status in (com.fap.clazz.enums.ClassEnrollmentStatus.Enrolled,
+					                              com.fap.clazz.enums.ClassEnrollmentStatus.Completed)
 					       )
 					  )
 					""")
@@ -115,11 +119,12 @@ public interface QuizRepository extends JpaRepository<Quiz, Long> {
 			       )
 			  )
 			  and exists (
-			      select r.id
-			      from TrainingRegistration r
-			      where r.user.id = :userId
-			        and r.trainingSession.fapClass.id = :classId
-			        and r.status in :eligibleStatuses
+			      select e.id
+			      from ClassEnrollment e
+			      where e.user.id = :userId
+			        and e.fapClass.id = :classId
+			        and e.status in (com.fap.clazz.enums.ClassEnrollmentStatus.Enrolled,
+			                         com.fap.clazz.enums.ClassEnrollmentStatus.Completed)
 			  )
 			""")
 	List<Quiz> findAssignedToUserByClass(

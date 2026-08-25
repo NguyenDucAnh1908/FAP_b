@@ -12,6 +12,7 @@ import com.fap.common.exception.ConflictException;
 import com.fap.program.entity.TrainingProgram;
 import com.fap.program.enums.TrainingProgramStatus;
 import com.fap.program.repository.TrainingProgramRepository;
+import com.fap.result.service.CourseResultService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -44,6 +45,8 @@ class ClassStateMachineTest {
 	private final TrainingProgramRepository trainingProgramRepository = mock(TrainingProgramRepository.class);
 	private final ClassMapper classMapper = mock(ClassMapper.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
+	private final ClassEnrollmentService classEnrollmentService = mock(ClassEnrollmentService.class);
+	private final CourseResultService courseResultService = mock(CourseResultService.class);
 
 	private final ClassService service = new ClassService(
 			classRepository,
@@ -51,7 +54,9 @@ class ClassStateMachineTest {
 			classTrainerRepository,
 			trainingProgramRepository,
 			classMapper,
-			auditLogService);
+			auditLogService,
+			classEnrollmentService,
+			courseResultService);
 
 	@ParameterizedTest(name = "{0} -> {1} is allowed")
 	@CsvSource({
@@ -67,6 +72,9 @@ class ClassStateMachineTest {
 		assertThat(fapClass.getStatus()).isEqualTo(target);
 		assertThat(fapClass.getUpdatedBy()).isEqualTo(CURRENT_USER_ID);
 		verify(auditLogService).record("UPDATE_CLASS_STATUS:" + target.name(), "class", CLASS_ID);
+		if (target == ClassStatus.Closed) {
+			verify(courseResultService).finalizeForClosure(fapClass, CURRENT_USER_ID);
+		}
 	}
 
 	@ParameterizedTest(name = "{0} -> {1} is rejected")
@@ -201,6 +209,7 @@ class ClassStateMachineTest {
 		fapClass.setStartDate(LocalDate.of(2026, 3, 1));
 		fapClass.setEndDate(LocalDate.of(2026, 3, 31));
 		when(classRepository.findWithTrainingProgramById(CLASS_ID)).thenReturn(Optional.of(fapClass));
+		when(classRepository.findWithTrainingProgramByIdForUpdate(CLASS_ID)).thenReturn(Optional.of(fapClass));
 		return fapClass;
 	}
 

@@ -15,6 +15,28 @@ import java.util.Optional;
 
 public interface AttendanceRecordRepository extends JpaRepository<AttendanceRecord, Long> {
 
+	@Query("""
+			select a.status as status, count(a) as total
+			from AttendanceRecord a
+			where (:classAdminId is null
+			       or exists (select ca.id from ClassAdmin ca
+			                  where ca.fapClass = a.trainingSession.fapClass
+			                    and ca.user.id = :classAdminId))
+			  and (:fromDate is null or a.trainingSession.sessionDate >= :fromDate)
+			  and (:toDate is null or a.trainingSession.sessionDate <= :toDate)
+			group by a.status
+			""")
+	List<AnalyticsAttendanceStatusCount> countStatusesForAnalytics(
+			@Param("classAdminId") Long classAdminId,
+			@Param("fromDate") LocalDate fromDate,
+			@Param("toDate") LocalDate toDate);
+
+	interface AnalyticsAttendanceStatusCount {
+		AttendanceStatus getStatus();
+
+		Long getTotal();
+	}
+
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
 	Optional<AttendanceRecord> findByTrainingSessionIdAndUserId(Long trainingSessionId, Long userId);
 
@@ -63,6 +85,13 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
 	long countByTrainingSessionId(Long trainingSessionId);
 
 	@Query("""
+			select a.user.id
+			from AttendanceRecord a
+			where a.trainingSession.id = :trainingSessionId
+			""")
+	List<Long> findUserIdsByTrainingSessionId(@Param("trainingSessionId") Long trainingSessionId);
+
+	@Query("""
 			select count(a)
 			from AttendanceRecord a
 			where a.user.id = :userId
@@ -73,4 +102,7 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
 			@Param("userId") Long userId,
 			@Param("classId") Long classId,
 			@Param("status") AttendanceStatus status);
+
+	@EntityGraph(attributePaths = {"trainingSession", "user"})
+	List<AttendanceRecord> findByTrainingSessionFapClassIdAndUserId(Long classId, Long userId);
 }

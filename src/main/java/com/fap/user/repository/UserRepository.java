@@ -22,6 +22,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	boolean existsByEmailIgnoreCase(String email);
 
+	long countByStatus(UserStatus status);
+
 	@EntityGraph(attributePaths = "roles")
 	@Query("""
 			select distinct u

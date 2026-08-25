@@ -35,10 +35,11 @@ public interface QuizAssignmentRepository extends JpaRepository<QuizAssignment, 
 			             and r.status in :eligibleStatuses
 			       )
 			       or qa.fapClass.id in (
-			           select r.trainingSession.fapClass.id
-			           from TrainingRegistration r
-			           where r.user.id = :userId
-			             and r.status in :eligibleStatuses
+			           select e.fapClass.id
+			           from ClassEnrollment e
+			           where e.user.id = :userId
+			             and e.status in (com.fap.clazz.enums.ClassEnrollmentStatus.Enrolled,
+			                              com.fap.clazz.enums.ClassEnrollmentStatus.Completed)
 			       )
 			  )
 			""")

@@ -78,7 +78,7 @@ public class AttendanceService {
 			validateCorrectionReasons(request.records());
 		}
 		validateNoDuplicateUsers(request.records());
-		Map<Long, TrainingRegistration> registeredUsers = loadRegisteredUsers(trainingSessionId);
+		Map<Long, TrainingRegistration> registeredUsers = loadEligibleUsers(trainingSessionId, isPostCompletion);
 		List<AttendanceRecord> records = request.records().stream()
 				.map(item -> upsertRecord(session, item, registeredUsers, currentUserId))
 				.toList();
@@ -123,11 +123,14 @@ public class AttendanceService {
 		return record;
 	}
 
-	private Map<Long, TrainingRegistration> loadRegisteredUsers(Long trainingSessionId) {
+	private Map<Long, TrainingRegistration> loadEligibleUsers(Long trainingSessionId, boolean isPostCompletion) {
+		TrainingRegistrationStatus eligibleStatus = isPostCompletion
+				? TrainingRegistrationStatus.Completed
+				: TrainingRegistrationStatus.Registered;
 		return trainingRegistrationRepository
 				.findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
 						trainingSessionId,
-						List.of(TrainingRegistrationStatus.Registered))
+						List.of(eligibleStatus))
 				.stream()
 				.collect(Collectors.toMap(registration -> registration.getUser().getId(), Function.identity()));
 	}

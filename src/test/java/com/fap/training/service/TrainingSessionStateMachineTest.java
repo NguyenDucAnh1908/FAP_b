@@ -2,6 +2,7 @@ package com.fap.training.service;
 
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
+import com.fap.clazz.service.ClassEnrollmentService;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.notification.service.NotificationService;
@@ -54,6 +55,7 @@ class TrainingSessionStateMachineTest {
 	private final TrainingSessionMapper trainingSessionMapper = mock(TrainingSessionMapper.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
 	private final NotificationService notificationService = mock(NotificationService.class);
+	private final ClassEnrollmentService classEnrollmentService = mock(ClassEnrollmentService.class);
 
 	private final TrainingSessionService service = new TrainingSessionService(
 			trainingSessionRepository,
@@ -64,7 +66,8 @@ class TrainingSessionStateMachineTest {
 			userRepository,
 			trainingSessionMapper,
 			auditLogService,
-			notificationService);
+			notificationService,
+			classEnrollmentService);
 
 	@ParameterizedTest(name = "Upcoming -> {0} is allowed")
 	@CsvSource({"Completed", "Canceled"})
@@ -115,9 +118,9 @@ class TrainingSessionStateMachineTest {
 	@Test
 	void rejectsCompletionWhenAttendanceIsMissingForSomeRegistrations() {
 		TrainingSession session = givenSession(TrainingSessionStatus.Upcoming);
-		when(trainingRegistrationRepository.countByTrainingSessionIdAndStatus(
-				SESSION_ID, TrainingRegistrationStatus.Registered)).thenReturn(3L);
-		when(attendanceRecordRepository.countByTrainingSessionId(SESSION_ID)).thenReturn(2L);
+		when(trainingRegistrationRepository.findUserIdsByTrainingSessionIdAndStatus(
+				SESSION_ID, TrainingRegistrationStatus.Registered)).thenReturn(List.of(101L, 102L, 103L));
+		when(attendanceRecordRepository.findUserIdsByTrainingSessionId(SESSION_ID)).thenReturn(List.of(101L, 102L));
 
 		assertThatThrownBy(() ->
 				service.updateStatus(SESSION_ID, TrainingSessionStatus.Completed, CURRENT_USER_ID))
@@ -135,9 +138,8 @@ class TrainingSessionStateMachineTest {
 	@Test
 	void allowsCompletionWhenNobodyIsRegistered() {
 		TrainingSession session = givenSession(TrainingSessionStatus.Upcoming);
-		when(trainingRegistrationRepository.countByTrainingSessionIdAndStatus(
-				SESSION_ID, TrainingRegistrationStatus.Registered)).thenReturn(0L);
-		when(attendanceRecordRepository.countByTrainingSessionId(SESSION_ID)).thenReturn(0L);
+		when(trainingRegistrationRepository.findUserIdsByTrainingSessionIdAndStatus(
+				SESSION_ID, TrainingRegistrationStatus.Registered)).thenReturn(List.of());
 
 		service.updateStatus(SESSION_ID, TrainingSessionStatus.Completed, CURRENT_USER_ID);
 
@@ -160,23 +162,25 @@ class TrainingSessionStateMachineTest {
 		verify(notificationService).create(eq(101L), anyString(), anyString());
 	}
 
-	/**
-	 * Cancellation must not touch registration statuses — a canceled session was never delivered,
-	 * so nobody completed it.
-	 */
 	@Test
-	void cancellationNotifiesParticipantsWithoutCompletingRegistrations() {
-		givenSession(TrainingSessionStatus.Upcoming);
-		TrainingRegistration registration = registration(102L, TrainingRegistrationStatus.Registered);
+	void cancellationCancelsRegisteredAndWaitlistedParticipants() {
+		TrainingSession session = givenSession(TrainingSessionStatus.Upcoming);
+		session.setEnrolledCount(1);
+		TrainingRegistration registered = registration(102L, TrainingRegistrationStatus.Registered);
+		TrainingRegistration waitlisted = registration(103L, TrainingRegistrationStatus.Waitlist);
 		when(trainingRegistrationRepository.findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
 				eq(SESSION_ID), any()))
-				.thenReturn(List.of(registration));
+				.thenReturn(List.of(registered, waitlisted));
 
 		service.updateStatus(SESSION_ID, TrainingSessionStatus.Canceled, CURRENT_USER_ID);
 
-		assertThat(registration.getStatus()).isEqualTo(TrainingRegistrationStatus.Registered);
-		assertThat(registration.getCompletedAt()).isNull();
+		assertThat(registered.getStatus()).isEqualTo(TrainingRegistrationStatus.Cancelled);
+		assertThat(waitlisted.getStatus()).isEqualTo(TrainingRegistrationStatus.Cancelled);
+		assertThat(registered.getCancelledAt()).isNotNull();
+		assertThat(waitlisted.getCancelledAt()).isNotNull();
+		assertThat(session.getEnrolledCount()).isZero();
 		verify(notificationService).create(eq(102L), anyString(), anyString());
+		verify(notificationService).create(eq(103L), anyString(), anyString());
 	}
 
 	private TrainingSession givenSession(TrainingSessionStatus status) {
@@ -189,9 +193,9 @@ class TrainingSessionStateMachineTest {
 	}
 
 	private void givenAttendanceIsComplete() {
-		when(trainingRegistrationRepository.countByTrainingSessionIdAndStatus(
-				SESSION_ID, TrainingRegistrationStatus.Registered)).thenReturn(2L);
-		when(attendanceRecordRepository.countByTrainingSessionId(SESSION_ID)).thenReturn(2L);
+		when(trainingRegistrationRepository.findUserIdsByTrainingSessionIdAndStatus(
+				SESSION_ID, TrainingRegistrationStatus.Registered)).thenReturn(List.of(101L, 102L));
+		when(attendanceRecordRepository.findUserIdsByTrainingSessionId(SESSION_ID)).thenReturn(List.of(101L, 102L));
 	}
 
 	private TrainingRegistration registration(Long userId, TrainingRegistrationStatus status) {

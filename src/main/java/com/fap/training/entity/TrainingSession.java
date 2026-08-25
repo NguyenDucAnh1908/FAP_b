@@ -3,6 +3,7 @@ package com.fap.training.entity;
 import com.fap.clazz.entity.FapClass;
 import com.fap.training.enums.TrainingSessionStatus;
 import com.fap.training.enums.TrainingSessionType;
+import com.fap.training.enums.TrainingRegistrationMode;
 import com.fap.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -76,6 +77,10 @@ public class TrainingSession {
 
 	@Column(name = "enrolled_count", nullable = false)
 	private Integer enrolledCount = 0;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "registration_mode", nullable = false, length = 20)
+	private TrainingRegistrationMode registrationMode = TrainingRegistrationMode.SelfEnroll;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)

@@ -1,5 +1,7 @@
 package com.fap.training.service;
 
+import com.fap.clazz.enums.ClassEnrollmentStatus;
+import com.fap.clazz.repository.ClassEnrollmentRepository;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
@@ -10,6 +12,7 @@ import com.fap.training.dto.TrainingRegistrationResponse;
 import com.fap.training.entity.TrainingRegistration;
 import com.fap.training.entity.TrainingSession;
 import com.fap.training.enums.TrainingRegistrationStatus;
+import com.fap.training.enums.TrainingRegistrationMode;
 import com.fap.training.enums.TrainingSessionStatus;
 import com.fap.training.mapper.TrainingRegistrationMapper;
 import com.fap.training.repository.TrainingRegistrationRepository;
@@ -33,6 +36,7 @@ public class TrainingRegistrationService {
 	private final AuditLogService auditLogService;
 	private final NotificationService notificationService;
 	private final DomainMetrics domainMetrics;
+	private final ClassEnrollmentRepository classEnrollmentRepository;
 
 	public TrainingRegistrationService(
 			TrainingSessionRepository trainingSessionRepository,
@@ -41,7 +45,8 @@ public class TrainingRegistrationService {
 			TrainingRegistrationMapper trainingRegistrationMapper,
 			AuditLogService auditLogService,
 			NotificationService notificationService,
-			DomainMetrics domainMetrics) {
+			DomainMetrics domainMetrics,
+			ClassEnrollmentRepository classEnrollmentRepository) {
 		this.trainingSessionRepository = trainingSessionRepository;
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
 		this.userRepository = userRepository;
@@ -49,12 +54,14 @@ public class TrainingRegistrationService {
 		this.auditLogService = auditLogService;
 		this.notificationService = notificationService;
 		this.domainMetrics = domainMetrics;
+		this.classEnrollmentRepository = classEnrollmentRepository;
 	}
 
 	@Transactional
 	public TrainingRegistrationResponse register(Long trainingSessionId, Long currentUserId) {
 		TrainingSession session = findUpcomingSessionForUpdate(trainingSessionId);
 		User user = findActiveUser(currentUserId);
+		validateSelfRegistrationEligibility(session, user);
 		LocalDateTime now = LocalDateTime.now();
 		TrainingRegistration registration = trainingRegistrationRepository
 				.findByTrainingSessionIdAndUserId(trainingSessionId, currentUserId)
@@ -72,6 +79,9 @@ public class TrainingRegistrationService {
 	@Transactional
 	public TrainingRegistrationResponse cancelSelf(Long trainingSessionId, Long currentUserId) {
 		TrainingSession session = findUpcomingSessionForUpdate(trainingSessionId);
+		if (session.getRegistrationMode() == TrainingRegistrationMode.AutoEnroll) {
+			throw new ConflictException("TRAINING_SESSION_AUTO_ENROLL", "Leave the class to cancel an auto-enrolled session");
+		}
 		TrainingRegistration registration = trainingRegistrationRepository
 				.findByTrainingSessionIdAndUserId(trainingSessionId, currentUserId)
 				.orElseThrow(() -> new NotFoundException("Training registration not found"));
@@ -103,7 +113,10 @@ public class TrainingRegistrationService {
 		List<TrainingRegistration> registrations = trainingRegistrationRepository
 				.findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
 						trainingSessionId,
-						List.of(TrainingRegistrationStatus.Registered, TrainingRegistrationStatus.Waitlist));
+						List.of(
+								TrainingRegistrationStatus.Registered,
+								TrainingRegistrationStatus.Waitlist,
+								TrainingRegistrationStatus.Completed));
 		List<TrainingRegistrationResponse> registered = registrations.stream()
 				.filter(registration -> registration.getStatus() == TrainingRegistrationStatus.Registered)
 				.map(trainingRegistrationMapper::toResponse)
@@ -112,12 +125,17 @@ public class TrainingRegistrationService {
 				.filter(registration -> registration.getStatus() == TrainingRegistrationStatus.Waitlist)
 				.map(trainingRegistrationMapper::toResponse)
 				.toList();
+		List<TrainingRegistrationResponse> completed = registrations.stream()
+				.filter(registration -> registration.getStatus() == TrainingRegistrationStatus.Completed)
+				.map(trainingRegistrationMapper::toResponse)
+				.toList();
 		return new TrainingParticipantsResponse(
 				session.getId(),
 				session.getCapacity(),
 				session.getEnrolledCount(),
 				registered,
-				waitlist);
+				waitlist,
+				completed);
 	}
 
 	private TrainingRegistration createRegistration(TrainingSession session, User user, LocalDateTime now) {
@@ -184,11 +202,26 @@ public class TrainingRegistrationService {
 	}
 
 	private User findActiveUser(Long userId) {
-		User user = userRepository.findById(userId)
+		User user = userRepository.findWithRolesById(userId)
 				.orElseThrow(() -> new NotFoundException("User not found"));
 		if (user.getStatus() != UserStatus.Active) {
 			throw new ConflictException("USER_NOT_ACTIVE", "Only active user can register for training session");
 		}
 		return user;
+	}
+
+	private void validateSelfRegistrationEligibility(TrainingSession session, User user) {
+		if (user.getRoles().stream().noneMatch(role -> "Trainee".equals(role.getName()))) {
+			throw new ConflictException("TRAINING_REGISTRATION_TRAINEE_REQUIRED", "Only trainee can register for a training session");
+		}
+		if (session.getRegistrationMode() != TrainingRegistrationMode.SelfEnroll) {
+			throw new ConflictException("TRAINING_SESSION_AUTO_ENROLL", "This training session is managed from the class roster");
+		}
+		if (!classEnrollmentRepository.existsByFapClassIdAndUserIdAndStatusIn(
+				session.getFapClass().getId(),
+				user.getId(),
+				List.of(ClassEnrollmentStatus.Enrolled))) {
+			throw new ConflictException("CLASS_ENROLLMENT_REQUIRED", "Trainee must be enrolled in the class first");
+		}
 	}
 }

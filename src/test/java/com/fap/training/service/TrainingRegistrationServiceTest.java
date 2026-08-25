@@ -1,13 +1,20 @@
 package com.fap.training.service;
 
+import com.fap.clazz.entity.FapClass;
+import com.fap.clazz.enums.ClassEnrollmentStatus;
+import com.fap.clazz.repository.ClassEnrollmentRepository;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.metrics.DomainMetrics;
 import com.fap.notification.service.NotificationService;
+import com.fap.role.entity.Role;
 import com.fap.training.entity.TrainingRegistration;
 import com.fap.training.entity.TrainingSession;
+import com.fap.training.dto.TrainingParticipantsResponse;
+import com.fap.training.dto.TrainingRegistrationResponse;
 import com.fap.training.enums.TrainingRegistrationStatus;
+import com.fap.training.enums.TrainingRegistrationMode;
 import com.fap.training.enums.TrainingSessionStatus;
 import com.fap.training.mapper.TrainingRegistrationMapper;
 import com.fap.training.repository.TrainingRegistrationRepository;
@@ -21,6 +28,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,6 +62,7 @@ class TrainingRegistrationServiceTest {
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
 	private final NotificationService notificationService = mock(NotificationService.class);
 	private final DomainMetrics domainMetrics = mock(DomainMetrics.class);
+	private final ClassEnrollmentRepository classEnrollmentRepository = mock(ClassEnrollmentRepository.class);
 
 	private final TrainingRegistrationService service = new TrainingRegistrationService(
 			trainingSessionRepository,
@@ -62,7 +71,8 @@ class TrainingRegistrationServiceTest {
 			trainingRegistrationMapper,
 			auditLogService,
 			notificationService,
-			domainMetrics);
+			domainMetrics,
+			classEnrollmentRepository);
 
 	@BeforeEach
 	void returnSavedEntity() {
@@ -170,7 +180,7 @@ class TrainingRegistrationServiceTest {
 		User user = new User();
 		user.setId(USER_ID);
 		user.setStatus(status);
-		when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+		when(userRepository.findWithRolesById(USER_ID)).thenReturn(Optional.of(user));
 
 		assertThatThrownBy(() -> service.register(SESSION_ID, USER_ID))
 				.isInstanceOf(ConflictException.class)
@@ -274,10 +284,14 @@ class TrainingRegistrationServiceTest {
 	}
 
 	private TrainingSession givenUpcomingSession(int capacity, int enrolledCount) {
+		FapClass fapClass = new FapClass();
+		fapClass.setId(91L);
 		TrainingSession session = new TrainingSession();
 		session.setId(SESSION_ID);
 		session.setTitle("Kubernetes basics");
 		session.setStatus(TrainingSessionStatus.Upcoming);
+		session.setRegistrationMode(TrainingRegistrationMode.SelfEnroll);
+		session.setFapClass(fapClass);
 		session.setCapacity(capacity);
 		session.setEnrolledCount(enrolledCount);
 		when(trainingSessionRepository.findWithClassAndTrainerByIdForUpdate(SESSION_ID))
@@ -290,7 +304,38 @@ class TrainingRegistrationServiceTest {
 		user.setId(USER_ID);
 		user.setFullName("Trainee");
 		user.setStatus(UserStatus.Active);
-		when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+		Role traineeRole = new Role();
+		traineeRole.setName("Trainee");
+		user.getRoles().add(traineeRole);
+		when(userRepository.findWithRolesById(USER_ID)).thenReturn(Optional.of(user));
+		when(classEnrollmentRepository.existsByFapClassIdAndUserIdAndStatusIn(
+				91L, USER_ID, java.util.List.of(ClassEnrollmentStatus.Enrolled))).thenReturn(true);
+	}
+
+	@Test
+	void participantsKeepsCompletedLearnersVisible() {
+		TrainingSession session = new TrainingSession();
+		session.setId(SESSION_ID);
+		session.setCapacity(30);
+		session.setEnrolledCount(2);
+		TrainingRegistration registered = registration(TrainingRegistrationStatus.Registered);
+		TrainingRegistration waitlisted = registration(TrainingRegistrationStatus.Waitlist);
+		TrainingRegistration completed = registration(TrainingRegistrationStatus.Completed);
+		when(trainingSessionRepository.findWithClassAndTrainerById(SESSION_ID)).thenReturn(Optional.of(session));
+		when(trainingRegistrationRepository.findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
+				eq(SESSION_ID), any())).thenReturn(List.of(registered, waitlisted, completed));
+		when(trainingRegistrationMapper.toResponse(any())).thenAnswer(invocation -> {
+			TrainingRegistration item = invocation.getArgument(0);
+			return new TrainingRegistrationResponse(
+					item.getId(), SESSION_ID, item.getUser().getId(), item.getUser().getFullName(),
+					null, item.getStatus(), item.getRegisteredAt(), item.getCancelledAt(), item.getCompletedAt());
+		});
+
+		TrainingParticipantsResponse response = service.participants(SESSION_ID);
+
+		assertThat(response.registered()).hasSize(1);
+		assertThat(response.waitlist()).hasSize(1);
+		assertThat(response.completed()).hasSize(1);
 	}
 
 	private TrainingRegistration registration(TrainingRegistrationStatus status) {

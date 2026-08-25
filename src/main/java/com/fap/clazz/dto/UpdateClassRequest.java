@@ -1,6 +1,7 @@
 package com.fap.clazz.dto;
 
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Min;
 
 import java.time.LocalDate;
 
@@ -12,6 +13,10 @@ public record UpdateClassRequest(
 		@Size(max = 50) String classTime,
 		LocalDate startDate,
 		LocalDate endDate,
-		@Size(max = 50) String duration
+		@Size(max = 50) String duration,
+		@Min(1) Integer capacity,
+		Boolean selfEnrollmentEnabled,
+		LocalDate enrollmentStartDate,
+		LocalDate enrollmentEndDate
 ) {
 }

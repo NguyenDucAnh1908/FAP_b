@@ -7,6 +7,7 @@ public record TrainingParticipantsResponse(
 		Integer capacity,
 		Integer enrolledCount,
 		List<TrainingRegistrationResponse> registered,
-		List<TrainingRegistrationResponse> waitlist
+		List<TrainingRegistrationResponse> waitlist,
+		List<TrainingRegistrationResponse> completed
 ) {
 }

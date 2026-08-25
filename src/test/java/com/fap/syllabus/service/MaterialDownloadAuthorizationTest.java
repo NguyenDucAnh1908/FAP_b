@@ -13,7 +13,7 @@ import com.fap.syllabus.repository.MaterialFileContentRepository;
 import com.fap.syllabus.repository.MaterialFileRepository;
 import com.fap.syllabus.repository.SyllabusRepository;
 import com.fap.syllabus.repository.SyllabusTopicRepository;
-import com.fap.training.enums.TrainingRegistrationStatus;
+import com.fap.clazz.enums.ClassEnrollmentStatus;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -159,13 +159,13 @@ class MaterialDownloadAuthorizationTest {
 		service.download(MATERIAL_ID, TRAINEE_ID, CANNOT_MANAGE);
 
 		@SuppressWarnings("unchecked")
-		ArgumentCaptor<Collection<TrainingRegistrationStatus>> statusesCaptor =
+		ArgumentCaptor<Collection<ClassEnrollmentStatus>> statusesCaptor =
 				ArgumentCaptor.forClass(Collection.class);
 		verify(materialFileRepository).existsAssignedToUser(
 				eq(MATERIAL_ID), eq(TRAINEE_ID), statusesCaptor.capture());
 		assertThat(statusesCaptor.getValue()).containsExactlyInAnyOrder(
-				TrainingRegistrationStatus.Registered,
-				TrainingRegistrationStatus.Completed);
+				ClassEnrollmentStatus.Enrolled,
+				ClassEnrollmentStatus.Completed);
 	}
 
 	@Test

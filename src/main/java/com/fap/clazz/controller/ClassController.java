@@ -3,16 +3,20 @@ package com.fap.clazz.controller;
 import com.fap.clazz.dto.ClassAdminResponse;
 import com.fap.clazz.dto.ClassResponse;
 import com.fap.clazz.dto.ClassTrainerResponse;
+import com.fap.clazz.dto.ClassEnrollmentResponse;
+import com.fap.clazz.dto.AddClassEnrollmentsRequest;
 import com.fap.clazz.dto.CreateClassRequest;
 import com.fap.clazz.dto.UpdateClassAdminsRequest;
 import com.fap.clazz.dto.UpdateClassTrainersRequest;
 import com.fap.clazz.dto.UpdateClassRequest;
 import com.fap.clazz.dto.UpdateClassStatusRequest;
 import com.fap.clazz.enums.ClassStatus;
+import com.fap.clazz.enums.ClassEnrollmentStatus;
 import com.fap.clazz.service.ClassAccessService;
 import com.fap.clazz.service.ClassAdminService;
 import com.fap.clazz.service.ClassService;
 import com.fap.clazz.service.ClassTrainerService;
+import com.fap.clazz.service.ClassEnrollmentService;
 import com.fap.common.api.ApiResponse;
 import com.fap.common.api.PageResponse;
 import com.fap.common.i18n.MessageService;
@@ -53,18 +57,21 @@ public class ClassController {
 	private final ClassAdminService classAdminService;
 	private final ClassTrainerService classTrainerService;
 	private final MessageService messageService;
+	private final ClassEnrollmentService classEnrollmentService;
 
 	public ClassController(
 			ClassService classService,
 			ClassAccessService classAccessService,
 			ClassAdminService classAdminService,
 			ClassTrainerService classTrainerService,
-			MessageService messageService) {
+			MessageService messageService,
+			ClassEnrollmentService classEnrollmentService) {
 		this.classService = classService;
 		this.classAccessService = classAccessService;
 		this.classAdminService = classAdminService;
 		this.classTrainerService = classTrainerService;
 		this.messageService = messageService;
+		this.classEnrollmentService = classEnrollmentService;
 	}
 
 	@Operation(summary = "List classes")
@@ -258,5 +265,86 @@ public class ClassController {
 			@Valid @RequestBody UpdateClassAdminsRequest request) {
 		classAccessService.assertCanManageClass(principal, id);
 		return ApiResponse.ok(classAdminService.replace(id, request));
+	}
+
+	@Operation(summary = "List class enrollments")
+	@GetMapping("/{id}/enrollments")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
+	public PageResponse<ClassEnrollmentResponse> listEnrollments(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal,
+			@RequestParam(required = false) ClassEnrollmentStatus status,
+			@RequestParam(required = false) String keyword,
+			@RequestParam(defaultValue = "1") @Min(1) int page,
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
+		classAccessService.assertCanViewEnrollmentRoster(principal, id);
+		Page<ClassEnrollmentResponse> enrollments = classEnrollmentService.list(
+				id, status, keyword, page - 1, limit, sortBy, order);
+		return PageResponse.of(enrollments.getContent(), page, limit, enrollments.getTotalElements());
+	}
+
+	@Operation(summary = "Add trainees to class")
+	@PostMapping("/{id}/enrollments")
+	@ResponseStatus(HttpStatus.CREATED)
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
+	public ApiResponse<List<ClassEnrollmentResponse>> addEnrollments(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal,
+			@Valid @RequestBody AddClassEnrollmentsRequest request) {
+		classAccessService.assertCanManageEnrollmentRoster(principal, id);
+		return ApiResponse.ok(classEnrollmentService.add(id, request.userIds(), principal.id()));
+	}
+
+	@Operation(summary = "Withdraw trainee from class")
+	@DeleteMapping("/{id}/enrollments/{userId}")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
+	public ApiResponse<ClassEnrollmentResponse> withdrawEnrollment(
+			@PathVariable Long id,
+			@PathVariable Long userId,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		classAccessService.assertCanManageEnrollmentRoster(principal, id);
+		return ApiResponse.ok(classEnrollmentService.withdraw(id, userId, principal.id()));
+	}
+
+	@Operation(summary = "Approve trainee class enrollment request")
+	@PatchMapping("/{id}/enrollments/{userId}/approve")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
+	public ApiResponse<ClassEnrollmentResponse> approveEnrollment(
+			@PathVariable Long id,
+			@PathVariable Long userId,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		classAccessService.assertCanManageEnrollmentRoster(principal, id);
+		return ApiResponse.ok(classEnrollmentService.approve(id, userId, principal.id()));
+	}
+
+	@Operation(summary = "Reject trainee class enrollment request")
+	@PatchMapping("/{id}/enrollments/{userId}/reject")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'modify')")
+	public ApiResponse<ClassEnrollmentResponse> rejectEnrollment(
+			@PathVariable Long id,
+			@PathVariable Long userId,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		classAccessService.assertCanManageEnrollmentRoster(principal, id);
+		return ApiResponse.ok(classEnrollmentService.reject(id, userId, principal.id()));
+	}
+
+	@Operation(summary = "Submit current trainee class enrollment request")
+	@PostMapping("/{id}/enrollments/me")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
+	public ApiResponse<ClassEnrollmentResponse> selfEnroll(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		return ApiResponse.ok(classEnrollmentService.selfEnroll(id, principal.id()));
+	}
+
+	@Operation(summary = "Withdraw current trainee from class")
+	@DeleteMapping("/{id}/enrollments/me")
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'class', 'view')")
+	public ApiResponse<ClassEnrollmentResponse> withdrawSelf(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		return ApiResponse.ok(classEnrollmentService.withdraw(id, principal.id(), principal.id()));
 	}
 }

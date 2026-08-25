@@ -2,6 +2,7 @@ package com.fap.training.service;
 
 import com.fap.clazz.dto.ClassResponse;
 import com.fap.clazz.entity.FapClass;
+import com.fap.clazz.enums.ClassEnrollmentStatus;
 import com.fap.clazz.mapper.ClassMapper;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.exception.NotFoundException;
@@ -47,6 +48,9 @@ import java.util.List;
 @Service
 public class MyLearningService {
 
+	private static final Collection<ClassEnrollmentStatus> ELIGIBLE_CLASS_ENROLLMENT_STATUSES = List.of(
+			ClassEnrollmentStatus.Enrolled,
+			ClassEnrollmentStatus.Completed);
 	private static final Collection<TrainingRegistrationStatus> ELIGIBLE_REGISTRATION_STATUSES = List.of(
 			TrainingRegistrationStatus.Registered,
 			TrainingRegistrationStatus.Completed);
@@ -112,7 +116,7 @@ public class MyLearningService {
 				Sort.by(Sort.Direction.DESC, "createdAt"),
 				"id", "createdAt", "name", "classCode", "startDate", "endDate", "status");
 		return classRepository
-				.searchMine(currentUserId, ELIGIBLE_REGISTRATION_STATUSES, normalize(keyword), pageRequest)
+				.searchMine(currentUserId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES, normalize(keyword), pageRequest)
 				.map(classMapper::toResponse);
 	}
 
@@ -137,7 +141,7 @@ public class MyLearningService {
 				.map(myTrainingMapper::toSessionResponse)
 				.toList();
 		List<AssignedMaterialFileResponse> materials = materialFileRepository
-				.findAssignedToUserByClass(currentUserId, classId, ELIGIBLE_REGISTRATION_STATUSES, normalizedKeyword)
+				.findAssignedToUserByClass(currentUserId, classId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES, normalizedKeyword)
 				.stream()
 				.sorted(Comparator
 						.comparing(MaterialFile::getUploadedAt, Comparator.nullsLast(Comparator.reverseOrder()))
@@ -162,7 +166,7 @@ public class MyLearningService {
 		List<TrainingRegistration> registrations = trainingRegistrationRepository
 				.findMineByClassId(currentUserId, classId, ELIGIBLE_REGISTRATION_STATUSES);
 		List<MaterialFile> materials = materialFileRepository
-				.findAssignedToUserByClass(currentUserId, classId, ELIGIBLE_REGISTRATION_STATUSES, null);
+				.findAssignedToUserByClass(currentUserId, classId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES, null);
 		List<Quiz> quizzes = assignedQuizzes(currentUserId, classId);
 		QuizAttempt latestAttempt = latestAttempt(currentUserId, quizzes);
 
@@ -175,7 +179,7 @@ public class MyLearningService {
 	}
 
 	private FapClass findMyClass(Long classId, Long currentUserId) {
-		return classRepository.findMineById(classId, currentUserId, ELIGIBLE_REGISTRATION_STATUSES)
+		return classRepository.findMineById(classId, currentUserId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES)
 				.orElseThrow(() -> new NotFoundException("Class not found"));
 	}
 

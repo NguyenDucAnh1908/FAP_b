@@ -12,6 +12,34 @@ import java.util.Optional;
 
 public interface TrainingFeedbackRepository extends JpaRepository<TrainingFeedback, Long> {
 
+	@Query("""
+			select count(f) as feedbackCount,
+			       avg(f.ratingContent) as averageContentRating,
+			       avg(f.ratingTrainer) as averageTrainerRating,
+			       avg(f.ratingOrganization) as averageOrganizationRating
+			from TrainingFeedback f
+			where (:classAdminId is null
+			       or exists (select ca.id from ClassAdmin ca
+			                  where ca.fapClass = f.trainingSession.fapClass
+			                    and ca.user.id = :classAdminId))
+			  and (:fromDate is null or f.trainingSession.sessionDate >= :fromDate)
+			  and (:toDate is null or f.trainingSession.sessionDate <= :toDate)
+			""")
+	AnalyticsFeedbackSummary summarizeForAnalytics(
+			@Param("classAdminId") Long classAdminId,
+			@Param("fromDate") java.time.LocalDate fromDate,
+			@Param("toDate") java.time.LocalDate toDate);
+
+	interface AnalyticsFeedbackSummary {
+		Long getFeedbackCount();
+
+		Double getAverageContentRating();
+
+		Double getAverageTrainerRating();
+
+		Double getAverageOrganizationRating();
+	}
+
 	boolean existsByTrainingSessionIdAndUserId(Long trainingSessionId, Long userId);
 
 	@EntityGraph(attributePaths = {"trainingSession", "user"})

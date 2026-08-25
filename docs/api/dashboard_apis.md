@@ -27,11 +27,42 @@ Accept-Language: vi
 | Trainee / any user with registrations | `GET /api/v1/me/training-dashboard` | View own learning registration and attendance summary. |
 | Trainer | `GET /api/v1/me/trainer-dashboard` | View own teaching workload and pending attendance work. |
 | Class Admin | `GET /api/v1/me/class-admin-dashboard` | View classes managed by the current class admin. |
+| Super Admin | `GET /api/v1/me/admin-dashboard` | View global users, content, training, assessment, upcoming session and audit summaries. |
+| Super Admin / Class Admin | `GET /api/v1/me/training-analytics` | View date-filtered training analytics; Class Admin data is limited to assigned classes. |
 
 Important scope rule:
 - These are personal dashboard endpoints.
 - The client must not send `userId`, `trainerId`, or `adminId`.
 - The backend always uses the authenticated user's principal id.
+- `/me/admin-dashboard` is available to Super Admin only.
+- `/me/training-analytics` accepts optional `fromDate` and `toDate` in `YYYY-MM-DD` format.
+- Super Admin receives whole-system analytics; Class Admin receives only assigned-class analytics.
+
+## `GET /api/v1/me/admin-dashboard`
+
+This endpoint is the single source for the Super Admin home dashboard. It replaces client-side
+aggregation across user, class, session, quiz, and audit-list endpoints.
+
+The response contains:
+
+- Active/inactive user and role counts.
+- Syllabus, training program, and class counts by important statuses.
+- Whole-system training analytics.
+- Quiz publication, submission, and pass-rate summaries.
+- The next five training sessions and the five most recent audit activities.
+
+## `GET /api/v1/me/training-analytics`
+
+Optional query parameters:
+
+| Parameter | Type | Description |
+|---|---|---|
+| `fromDate` | `date` | Include sessions on or after this date. |
+| `toDate` | `date` | Include sessions on or before this date. |
+
+The response contains session, attendance, and registration status breakdowns together with
+participant count, pending attendance, attendance rate, completion rate, and feedback average.
+`Present` and `Late` both count as attended. Canceled sessions are excluded from the completion-rate denominator.
 
 ## `GET /api/v1/me/training-dashboard`
 

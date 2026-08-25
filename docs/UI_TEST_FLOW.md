@@ -116,21 +116,33 @@ Mat khau chung cua cac tai khoan local: `Password@123`.
 8. Expected: diem do BE tra ve; refresh van giu result, khong phu thuoc localStorage.
 9. Login Admin/Trainer, vao result summary; expected thay attempt da submit.
 
-## G. Settings, permission va audit
+## G. Course Result & Completion
+
+1. Login Super Admin/Class Admin, mo `/class/{id}/gradebook` cua lop `Active`.
+2. Cau hinh chuyen can toi thieu va quiz da assign truc tiep vao class; thu quiz khong assign, expected `400`.
+3. De mot session `Upcoming`, bam **Close class**; expected `409 CLASS_SESSIONS_INCOMPLETE`.
+4. Hoan tat/huy toan bo session, dong quiz bat buoc, bam **Calculate**; expected moi hoc vien co `Passed`, `Failed` hoac `Withdrawn`.
+5. Dieu chinh mot ket qua `Passed/Failed`, bat buoc nhap ly do; expected co lich su va ket qua tro lai chua publish.
+6. Dong lop; expected khong tu dong doi tat ca enrollment thanh `Completed`.
+7. Bam **Publish results** hai lan; expected lan hai khong tao notification trung.
+8. Login Trainer; expected Gradebook chi doc, khong co nut policy/calculate/close/publish/adjust.
+9. Login Trainee, mo **My Learning**; truoc publish khong thay ket qua, sau publish chi thay ket qua cua ban than.
+
+## H. Settings, permission va audit
 
 1. Login Super Admin, vao **Settings**.
 2. General/Training/Notifications/Integrations: thay doi mot gia tri, save, refresh va kiem tra gia tri van con.
 3. Role Permission: doi mot permission phu hop, save va doc lai; sau test phuc hoi gia tri cu.
 4. Audit: expected bang goi `/audit-logs`; Backup/Restore va 2FA disabled vi BE chua co API.
 
-## H. API Center
+## I. API Center
 
 1. Login Super Admin va mo `/api-workspace`.
 2. Chay cac step trong `API_CENTER_TEST_FLOW.md` theo thu tu.
 3. Sau moi create, lay `data.id` cho request tiep theo.
 4. Dung API Center cho my-learning progress va cac endpoint chua co UI rieng. Feedback da co trong Training Detail.
 
-## I. Validation va exception
+## J. Validation va exception
 
 1. Chuyen ngon ngu sang `VI`.
 2. Tao user voi email `not-an-email`, password `weak`, ngay sinh tuong lai.
@@ -142,7 +154,7 @@ Mat khau chung cua cac tai khoan local: `Password@123`.
 
 ## Phan chua the xac nhan bang UI that
 
-- **Training Reports** chi la preview vi BE chua co API bao cao tong hop.
+- **Training Reports** dung API tong hop that; Super Admin xem toan he thong, Class Admin chi xem cac lop duoc giao.
 - BE chua co API certificate, backup/restore, 2FA va create role.
 - Training detail khong co quan he material truc tiep theo session; Trainee van xem duoc material duoc gan qua `/me/materials`, con Admin/Trainer quan ly tai syllabus/topic.
 - Cac phan tren phai duoc bo qua khi danh gia du lieu DB, khong tinh mock la ket qua E2E.

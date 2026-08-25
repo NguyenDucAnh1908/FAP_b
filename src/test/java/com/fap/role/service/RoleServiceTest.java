@@ -2,6 +2,7 @@ package com.fap.role.service;
 
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.audit.AuditLogService;
+import com.fap.role.dto.PermissionResponse;
 import com.fap.role.dto.UpdatePermissionMatrixRequest;
 import com.fap.role.dto.UpdatePermissionRequest;
 import com.fap.role.entity.Permission;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,6 +35,40 @@ class RoleServiceTest {
 			permissionRepository,
 			roleMapper,
 			auditLogService);
+
+	@Test
+	void permissionMatrixAlwaysReportsFullAccessForSuperAdmin() {
+		Permission permission = new Permission();
+		when(permissionRepository.findAll()).thenReturn(List.of(permission));
+		when(roleMapper.toResponse(permission)).thenReturn(new PermissionResponse(
+				1L,
+				"Super Admin",
+				"user",
+				PermissionLevel.access_denied));
+
+		List<PermissionResponse> result = roleService.permissionMatrix();
+
+		assertThat(result).singleElement()
+				.extracting(PermissionResponse::permissionLevel)
+				.isEqualTo(PermissionLevel.full_access);
+	}
+
+	@Test
+	void updatePermissionMatrixCannotReduceSuperAdminAccess() {
+		Role role = new Role();
+		role.setId(1L);
+		role.setName("Super Admin");
+		when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
+		when(permissionRepository.findByRoleIdAndResource(1L, "user")).thenReturn(Optional.empty());
+		when(permissionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+		when(permissionRepository.findAll()).thenReturn(List.of());
+
+		roleService.updatePermissionMatrix(new UpdatePermissionMatrixRequest(List.of(
+				new UpdatePermissionRequest(1L, "user", PermissionLevel.access_denied))));
+
+		verify(permissionRepository).save(argThat(permission ->
+				permission.getPermissionLevel() == PermissionLevel.full_access));
+	}
 
 	@Test
 	void updatePermissionMatrixRejectsUnsupportedResource() {

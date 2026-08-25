@@ -27,7 +27,7 @@ Status: frozen for backend v1 implementation. Any change after this point must b
 |---|---|
 | Payment, billing, invoice | No frontend evidence and not part of FAP training flow. |
 | External LMS integration | Not required by current screens. |
-| Advanced reporting/dashboard BI | Existing dashboards are summary views only. |
+| Custom report builder and external BI integration | Operational dashboards and date-filtered training analytics are included; arbitrary report design and external BI connectors remain out of scope. |
 | Certificate generation engine | Certificate download is visible, but generation template workflow is not specified. Keep issuance metadata only unless later defined. |
 | Multi-tenant organization management | Current scope assumes one FAP deployment with roles and ownership scopes. |
 | Real-time collaborative editing | No frontend support. |
@@ -85,6 +85,11 @@ Role rules:
 | `classes` | Canonical aggregate root |
 | `class_trainers` | Canonical |
 | `class_admins` | Canonical |
+| `class_enrollments` | Canonical class roster and enrollment state |
+| `class_completion_quizzes` | Canonical per-class required quiz policy |
+| `course_results` | Canonical final course result aggregate |
+| `course_result_quizzes` | Canonical calculation snapshot for required quizzes |
+| `course_result_adjustments` | Canonical immutable manual adjustment history |
 
 ### Quiz
 
@@ -187,6 +192,14 @@ Entity rules:
 | `PUT` | `/api/v1/classes/{id}/trainers` | Assign trainers |
 | `PATCH` | `/api/v1/classes/{id}/status` | Publish/close |
 | `DELETE` | `/api/v1/classes/{id}` | Soft-delete allowed states |
+| `GET` | `/api/v1/classes/{id}/completion-policy` | View attendance and required quiz rules |
+| `PUT` | `/api/v1/classes/{id}/completion-policy` | Update completion rules (Super Admin/assigned Class Admin) |
+| `GET` | `/api/v1/classes/{id}/results` | Staff gradebook list |
+| `GET` | `/api/v1/classes/{id}/results/{userId}` | Staff learner result detail |
+| `POST` | `/api/v1/classes/{id}/results/calculate` | Preview/recalculate results for an active class |
+| `PATCH` | `/api/v1/classes/{id}/results/{userId}` | Adjust Passed/Failed with required reason |
+| `POST` | `/api/v1/classes/{id}/results/publish` | Publish closed-class results and notify trainees |
+| `GET` | `/api/v1/me/classes/{id}/result` | Current trainee's published result only |
 
 ### Quiz
 
@@ -249,6 +262,8 @@ Entity rules:
 | `GET` | `/api/v1/me/training-dashboard` | Current user's trainee learning summary |
 | `GET` | `/api/v1/me/trainer-dashboard` | Current trainer's teaching dashboard |
 | `GET` | `/api/v1/me/class-admin-dashboard` | Current class admin's managed-class dashboard |
+| `GET` | `/api/v1/me/admin-dashboard` | Super Admin's whole-system operational summary |
+| `GET` | `/api/v1/me/training-analytics` | Date-filtered system or assigned-class training analytics |
 
 ### System
 
@@ -292,7 +307,19 @@ API rules:
 2. Assign class admins and trainers.
 3. Validate schedule and required assignments.
 4. Publish `Planning -> Active`.
-5. Close `Active -> Closed` after delivery.
+5. Configure the class minimum attendance rate and any directly assigned required quizzes.
+6. Before close, every session must be `Completed` or `Canceled`, at least one session must be completed, and required quizzes must be `Closed`.
+7. Close `Active -> Closed`; the same transaction calculates each learner as `Passed`, `Failed`, or `Withdrawn`. Enrollment rows are not mass-changed to `Completed`.
+8. Super Admin/assigned Class Admin may adjust only `Passed`/`Failed` with a reason; every adjustment is retained and requires republishing.
+9. Publish results once the class is closed. Trainees can only read their own published result.
+
+### Course Result Workflow
+
+1. An enrolled learner starts with `InProgress`; waitlisted learners have no course result.
+2. `Present` and `Late` count as attended. The denominator contains the learner's registered/completed registrations for completed sessions; canceled sessions are excluded.
+3. Each required quiz uses the best submitted attempt and its configured class passing score.
+4. Closing the class recalculates results atomically and is rejected if a session or required quiz is unfinished.
+5. Publication writes an audit event and one notification per newly published learner result. Repeating publish without changes is idempotent.
 
 ### Quiz Workflow
 

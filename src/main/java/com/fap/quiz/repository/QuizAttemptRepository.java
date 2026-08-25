@@ -13,7 +13,23 @@ import org.springframework.data.repository.query.Param;
 import java.util.Collection;
 import java.util.Optional;
 
+import java.time.LocalDateTime;
+
 public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> {
+
+	@Query("""
+			select count(a)
+			from QuizAttempt a
+			where (:status is null or a.status = :status)
+			  and (:passed is null or a.passed = :passed)
+			  and (:fromDateTime is null or a.submittedAt >= :fromDateTime)
+			  and (:toDateTime is null or a.submittedAt < :toDateTime)
+			""")
+	long countForDashboard(
+			@Param("status") QuizAttemptStatus status,
+			@Param("passed") Boolean passed,
+			@Param("fromDateTime") LocalDateTime fromDateTime,
+			@Param("toDateTime") LocalDateTime toDateTime);
 
 	long countByQuizIdAndUserId(Long quizId, Long userId);
 
@@ -32,6 +48,12 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
 
 	@EntityGraph(attributePaths = {"quiz", "user"})
 	Optional<QuizAttempt> findFirstByQuizIdAndUserIdAndStatusOrderByIdDesc(
+			Long quizId,
+			Long userId,
+			QuizAttemptStatus status);
+
+	@EntityGraph(attributePaths = {"quiz", "user"})
+	Optional<QuizAttempt> findFirstByQuizIdAndUserIdAndStatusOrderByScoreDescIdDesc(
 			Long quizId,
 			Long userId,
 			QuizAttemptStatus status);

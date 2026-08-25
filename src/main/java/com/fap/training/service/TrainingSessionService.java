@@ -4,6 +4,7 @@ import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassStatus;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
+import com.fap.clazz.service.ClassEnrollmentService;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.BadRequestException;
@@ -17,6 +18,7 @@ import com.fap.training.dto.UpdateTrainingSessionRequest;
 import com.fap.training.entity.TrainingSession;
 import com.fap.training.enums.TrainingRegistrationStatus;
 import com.fap.training.enums.TrainingSessionStatus;
+import com.fap.training.enums.TrainingSessionType;
 import com.fap.training.mapper.TrainingSessionMapper;
 import com.fap.training.repository.AttendanceRecordRepository;
 import com.fap.training.repository.TrainingRegistrationRepository;
@@ -31,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Service
 public class TrainingSessionService {
@@ -44,6 +48,7 @@ public class TrainingSessionService {
 	private final TrainingSessionMapper trainingSessionMapper;
 	private final AuditLogService auditLogService;
 	private final NotificationService notificationService;
+	private final ClassEnrollmentService classEnrollmentService;
 
 	public TrainingSessionService(
 			TrainingSessionRepository trainingSessionRepository,
@@ -54,7 +59,8 @@ public class TrainingSessionService {
 			UserRepository userRepository,
 			TrainingSessionMapper trainingSessionMapper,
 			AuditLogService auditLogService,
-			NotificationService notificationService) {
+			NotificationService notificationService,
+			ClassEnrollmentService classEnrollmentService) {
 		this.trainingSessionRepository = trainingSessionRepository;
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
 		this.attendanceRecordRepository = attendanceRecordRepository;
@@ -64,6 +70,7 @@ public class TrainingSessionService {
 		this.trainingSessionMapper = trainingSessionMapper;
 		this.auditLogService = auditLogService;
 		this.notificationService = notificationService;
+		this.classEnrollmentService = classEnrollmentService;
 	}
 
 	@Transactional(readOnly = true)
@@ -124,6 +131,14 @@ public class TrainingSessionService {
 		FapClass fapClass = findActiveClass(request.classId());
 		User trainer = findAssignedTrainer(fapClass.getId(), request.trainerId());
 		validateWithinClassDates(fapClass, request.sessionDate());
+		validateScheduleConflicts(
+				null,
+				fapClass.getId(),
+				trainer.getId(),
+				request.room(),
+				request.sessionType(),
+				request.startTime(),
+				request.endTime());
 
 		LocalDateTime now = LocalDateTime.now();
 		TrainingSession session = new TrainingSession();
@@ -136,6 +151,7 @@ public class TrainingSessionService {
 		session.setCreatedBy(currentUserId);
 		session.setUpdatedBy(currentUserId);
 		TrainingSession saved = trainingSessionRepository.save(session);
+		classEnrollmentService.syncAutoEnrollSession(saved);
 		auditLogService.record("CREATE_TRAINING_SESSION", "training_session", saved.getId());
 		return trainingSessionMapper.toResponse(saved);
 	}
@@ -153,7 +169,17 @@ public class TrainingSessionService {
 		FapClass fapClass = session.getFapClass();
 		validateWithinClassDates(fapClass, request.sessionDate());
 		User trainer = findAssignedTrainer(fapClass.getId(), request.trainerId());
+		validateCapacity(session, request.capacity());
+		validateScheduleConflicts(
+				session.getId(),
+				fapClass.getId(),
+				trainer.getId(),
+				request.room(),
+				request.sessionType(),
+				request.startTime(),
+				request.endTime());
 		applyFields(session, request, trainer);
+		classEnrollmentService.syncAutoEnrollSession(session);
 		session.setUpdatedAt(LocalDateTime.now());
 		session.setUpdatedBy(currentUserId);
 		auditLogService.record("UPDATE_TRAINING_SESSION", "training_session", session.getId());
@@ -167,6 +193,9 @@ public class TrainingSessionService {
 		if (session.getStatus() == TrainingSessionStatus.Upcoming && status == TrainingSessionStatus.Completed) {
 			validateAttendanceReadyForCompletion(session.getId());
 			finalizeRegisteredParticipants(session.getId());
+		}
+		if (session.getStatus() == TrainingSessionStatus.Upcoming && status == TrainingSessionStatus.Canceled) {
+			cancelActiveRegistrations(session);
 		}
 		session.setStatus(status);
 		session.setUpdatedAt(LocalDateTime.now());
@@ -209,6 +238,7 @@ public class TrainingSessionService {
 		session.setSessionType(request.sessionType());
 		session.setMeetingLink(request.meetingLink());
 		session.setCapacity(request.capacity());
+		session.setRegistrationMode(request.registrationMode());
 	}
 
 	private void applyFields(TrainingSession session, UpdateTrainingSessionRequest request, User trainer) {
@@ -222,6 +252,7 @@ public class TrainingSessionService {
 		session.setSessionType(request.sessionType());
 		session.setMeetingLink(request.meetingLink());
 		session.setCapacity(request.capacity());
+		session.setRegistrationMode(request.registrationMode());
 	}
 
 	private void validateTransition(TrainingSessionStatus current, TrainingSessionStatus target) {
@@ -235,15 +266,57 @@ public class TrainingSessionService {
 	}
 
 	private void validateAttendanceReadyForCompletion(Long trainingSessionId) {
-		long registeredCount = trainingRegistrationRepository.countByTrainingSessionIdAndStatus(
-				trainingSessionId,
-				TrainingRegistrationStatus.Registered);
-		if (registeredCount == 0) {
+		Set<Long> registeredUserIds = new HashSet<>(trainingRegistrationRepository
+				.findUserIdsByTrainingSessionIdAndStatus(
+						trainingSessionId,
+						TrainingRegistrationStatus.Registered));
+		if (registeredUserIds.isEmpty()) {
 			return;
 		}
-		long attendanceCount = attendanceRecordRepository.countByTrainingSessionId(trainingSessionId);
-		if (attendanceCount < registeredCount) {
+		Set<Long> attendanceUserIds = new HashSet<>(attendanceRecordRepository
+				.findUserIdsByTrainingSessionId(trainingSessionId));
+		if (!attendanceUserIds.containsAll(registeredUserIds)) {
 			throw new ConflictException("TRAINING_SESSION_ATTENDANCE_REQUIRED", "Training session requires attendance for all registered participants before completion");
+		}
+	}
+
+	private void validateCapacity(TrainingSession session, Integer capacity) {
+		int enrolledCount = session.getEnrolledCount() == null ? 0 : session.getEnrolledCount();
+		if (capacity < enrolledCount) {
+			throw new ConflictException(
+					"TRAINING_SESSION_CAPACITY_BELOW_ENROLLED",
+					"Training session capacity cannot be lower than enrolled count");
+		}
+	}
+
+	private void validateScheduleConflicts(
+			Long excludedId,
+			Long classId,
+			Long trainerId,
+			String room,
+			TrainingSessionType sessionType,
+			LocalDateTime startTime,
+			LocalDateTime endTime) {
+		if (trainingSessionRepository.countClassScheduleConflicts(
+				excludedId, classId, startTime, endTime, TrainingSessionStatus.Canceled) > 0) {
+			throw new ConflictException(
+					"TRAINING_SESSION_CLASS_SCHEDULE_CONFLICT",
+					"The class already has another training session during this time");
+		}
+		if (trainingSessionRepository.countTrainerScheduleConflicts(
+				excludedId, trainerId, startTime, endTime, TrainingSessionStatus.Canceled) > 0) {
+			throw new ConflictException(
+					"TRAINING_SESSION_TRAINER_SCHEDULE_CONFLICT",
+					"The trainer already has another training session during this time");
+		}
+		String normalizedRoom = normalize(room);
+		if (sessionType != TrainingSessionType.Online
+				&& normalizedRoom != null
+				&& trainingSessionRepository.countRoomScheduleConflicts(
+						excludedId, normalizedRoom, startTime, endTime, TrainingSessionStatus.Canceled) > 0) {
+			throw new ConflictException(
+					"TRAINING_SESSION_ROOM_SCHEDULE_CONFLICT",
+					"The room already has another training session during this time");
 		}
 	}
 
@@ -259,8 +332,28 @@ public class TrainingSessionService {
 				});
 	}
 
+	private void cancelActiveRegistrations(TrainingSession session) {
+		LocalDateTime now = LocalDateTime.now();
+		trainingRegistrationRepository
+				.findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
+						session.getId(),
+						java.util.List.of(
+								TrainingRegistrationStatus.Registered,
+								TrainingRegistrationStatus.Waitlist))
+				.forEach(registration -> {
+					registration.setStatus(TrainingRegistrationStatus.Cancelled);
+					registration.setCancelledAt(now);
+					registration.setCompletedAt(null);
+					notificationService.create(
+							registration.getUser().getId(),
+							"Training session canceled",
+							session.getTitle() + " has been canceled");
+				});
+		session.setEnrolledCount(0);
+	}
+
 	private void notifyRegisteredParticipants(TrainingSession session, TrainingSessionStatus status) {
-		if (status != TrainingSessionStatus.Completed && status != TrainingSessionStatus.Canceled) {
+		if (status != TrainingSessionStatus.Completed) {
 			return;
 		}
 		trainingRegistrationRepository

@@ -18,6 +18,7 @@ import com.fap.program.entity.TrainingProgram;
 import com.fap.program.enums.TrainingProgramStatus;
 import com.fap.program.repository.TrainingProgramRepository;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.result.service.CourseResultService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -35,6 +36,8 @@ public class ClassService {
 	private final TrainingProgramRepository trainingProgramRepository;
 	private final ClassMapper classMapper;
 	private final AuditLogService auditLogService;
+	private final ClassEnrollmentService classEnrollmentService;
+	private final CourseResultService courseResultService;
 
 	public ClassService(
 			ClassRepository classRepository,
@@ -42,13 +45,17 @@ public class ClassService {
 			ClassTrainerRepository classTrainerRepository,
 			TrainingProgramRepository trainingProgramRepository,
 			ClassMapper classMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			ClassEnrollmentService classEnrollmentService,
+			CourseResultService courseResultService) {
 		this.classRepository = classRepository;
 		this.classAdminRepository = classAdminRepository;
 		this.classTrainerRepository = classTrainerRepository;
 		this.trainingProgramRepository = trainingProgramRepository;
 		this.classMapper = classMapper;
 		this.auditLogService = auditLogService;
+		this.classEnrollmentService = classEnrollmentService;
+		this.courseResultService = courseResultService;
 	}
 
 	@Transactional(readOnly = true)
@@ -99,6 +106,7 @@ public class ClassService {
 			throw new ConflictException("CLASS_CODE_EXISTS", "Class code already exists");
 		}
 		validateDateRange(request.startDate(), request.endDate());
+		validateEnrollmentDateRange(request.enrollmentStartDate(), request.enrollmentEndDate());
 		TrainingProgram program = trainingProgramRepository.findById(request.trainingProgramId())
 				.orElseThrow(() -> new NotFoundException("Training program not found"));
 		if (program.getStatus() != TrainingProgramStatus.Active) {
@@ -130,6 +138,10 @@ public class ClassService {
 		FapClass fapClass = findClass(id);
 		ensurePlanning(fapClass);
 		validateDateRange(request.startDate(), request.endDate());
+		validateEnrollmentDateRange(request.enrollmentStartDate(), request.enrollmentEndDate());
+		if (request.capacity() != null) {
+			classEnrollmentService.validateCapacity(id, request.capacity());
+		}
 		applyFields(fapClass, request);
 		fapClass.setUpdatedAt(LocalDateTime.now());
 		fapClass.setUpdatedBy(currentUserId);
@@ -139,10 +151,13 @@ public class ClassService {
 
 	@Transactional
 	public ClassResponse updateStatus(Long id, ClassStatus status, Long currentUserId) {
-		FapClass fapClass = findClass(id);
+		FapClass fapClass = findClassForUpdate(id);
 		validateTransition(fapClass.getStatus(), status);
 		if (fapClass.getStatus() == ClassStatus.Planning && status == ClassStatus.Active) {
 			validateReadyForActivation(fapClass);
+		}
+		if (fapClass.getStatus() == ClassStatus.Active && status == ClassStatus.Closed) {
+			courseResultService.finalizeForClosure(fapClass, currentUserId);
 		}
 		fapClass.setStatus(status);
 		fapClass.setUpdatedAt(LocalDateTime.now());
@@ -175,6 +190,10 @@ public class ClassService {
 		fapClass.setStartDate(request.startDate());
 		fapClass.setEndDate(request.endDate());
 		fapClass.setDuration(request.duration());
+		fapClass.setCapacity(request.capacity());
+		fapClass.setSelfEnrollmentEnabled(request.selfEnrollmentEnabled());
+		fapClass.setEnrollmentStartDate(request.enrollmentStartDate());
+		fapClass.setEnrollmentEndDate(request.enrollmentEndDate());
 	}
 
 	private void applyFields(FapClass fapClass, UpdateClassRequest request) {
@@ -188,6 +207,14 @@ public class ClassService {
 		fapClass.setStartDate(request.startDate());
 		fapClass.setEndDate(request.endDate());
 		fapClass.setDuration(request.duration());
+		if (request.capacity() != null) {
+			fapClass.setCapacity(request.capacity());
+		}
+		if (request.selfEnrollmentEnabled() != null) {
+			fapClass.setSelfEnrollmentEnabled(request.selfEnrollmentEnabled());
+		}
+		fapClass.setEnrollmentStartDate(request.enrollmentStartDate());
+		fapClass.setEnrollmentEndDate(request.enrollmentEndDate());
 	}
 
 	private void validateTransition(ClassStatus current, ClassStatus target) {
@@ -226,6 +253,17 @@ public class ClassService {
 	private void validateDateRange(java.time.LocalDate startDate, java.time.LocalDate endDate) {
 		if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
 			throw new BadRequestException("INVALID_CLASS_DATE_RANGE", "Class start date must be before or equal to end date");
+		}
+	}
+
+	private FapClass findClassForUpdate(Long id) {
+		return classRepository.findWithTrainingProgramByIdForUpdate(id)
+				.orElseThrow(() -> new NotFoundException("Class not found"));
+	}
+
+	private void validateEnrollmentDateRange(java.time.LocalDate startDate, java.time.LocalDate endDate) {
+		if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+			throw new BadRequestException("INVALID_CLASS_ENROLLMENT_DATE_RANGE", "Enrollment start date must be before or equal to end date");
 		}
 	}
 

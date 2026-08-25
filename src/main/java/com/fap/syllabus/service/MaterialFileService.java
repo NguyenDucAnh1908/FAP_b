@@ -1,6 +1,7 @@
 package com.fap.syllabus.service;
 
 import com.fap.common.audit.AuditLogService;
+import com.fap.clazz.enums.ClassEnrollmentStatus;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.ForbiddenException;
@@ -24,7 +25,6 @@ import com.fap.syllabus.repository.MaterialFileContentRepository;
 import com.fap.syllabus.repository.MaterialFileRepository;
 import com.fap.syllabus.repository.SyllabusRepository;
 import com.fap.syllabus.repository.SyllabusTopicRepository;
-import com.fap.training.enums.TrainingRegistrationStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -40,9 +40,9 @@ import java.util.List;
 @Service
 public class MaterialFileService {
 
-	private static final Collection<TrainingRegistrationStatus> ELIGIBLE_REGISTRATION_STATUSES = List.of(
-			TrainingRegistrationStatus.Registered,
-			TrainingRegistrationStatus.Completed);
+	private static final Collection<ClassEnrollmentStatus> ELIGIBLE_CLASS_ENROLLMENT_STATUSES = List.of(
+			ClassEnrollmentStatus.Enrolled,
+			ClassEnrollmentStatus.Completed);
 
 	private static final String DEFAULT_DOWNLOAD_CONTENT_TYPE = "application/octet-stream";
 
@@ -141,7 +141,7 @@ public class MaterialFileService {
 				"id", "uploadedAt", "fileName", "contentType", "fileSize");
 		return materialFileRepository.searchAssignedToUser(
 						currentUserId,
-						ELIGIBLE_REGISTRATION_STATUSES,
+						ELIGIBLE_CLASS_ENROLLMENT_STATUSES,
 						normalize(keyword),
 						pageRequest)
 				.map(materialFileMapper::toAssignedResponse);
@@ -239,7 +239,7 @@ public class MaterialFileService {
 		MaterialFile materialFile = findMaterial(materialId);
 		if (!canManageMaterials
 				&& !materialFileRepository.existsAssignedToUser(
-						materialId, currentUserId, ELIGIBLE_REGISTRATION_STATUSES)) {
+						materialId, currentUserId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES)) {
 			throw new ForbiddenException("You are not assigned to this material");
 		}
 		MaterialFileContent content = materialFileContentRepository.findById(materialId)

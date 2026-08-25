@@ -62,6 +62,27 @@ export type ClassStatus =
   | "Active"
   | "Closed";
 
+export type ClassEnrollmentStatus =
+  | "Enrolled"
+  | "Waitlisted"
+  | "Withdrawn"
+  | "Completed";
+
+export type ClassEnrollmentSource =
+  | "AdminAdded"
+  | "SelfRegistered"
+  | "Migration";
+
+export type CourseResultStatus =
+  | "InProgress"
+  | "Passed"
+  | "Failed"
+  | "Withdrawn";
+
+export type TrainingRegistrationMode =
+  | "AutoEnroll"
+  | "SelfEnroll";
+
 export type Gender =
   | "Male"
   | "Female";
@@ -139,6 +160,7 @@ export interface AssignedMaterialFileResponse {
   contentType: string;
   uploadedBy: number;
   uploadedAt: ISODateTime;
+  storedContent: boolean;
 }
 
 export interface AssignedQuizResponse {
@@ -238,6 +260,12 @@ export interface ClassResponse {
   startDate: ISODate;
   endDate: ISODate;
   duration: string;
+  capacity: number;
+  enrolledCount: number;
+  waitlistCount: number;
+  selfEnrollmentEnabled: boolean;
+  enrollmentStartDate: ISODate;
+  enrollmentEndDate: ISODate;
   createdBy: number;
   updatedBy: number;
   createdAt: ISODateTime;
@@ -270,6 +298,10 @@ export interface CreateClassRequest {
   startDate?: ISODate;
   endDate?: ISODate;
   duration?: string;
+  capacity: number;
+  selfEnrollmentEnabled: boolean;
+  enrollmentStartDate?: ISODate;
+  enrollmentEndDate?: ISODate;
 }
 
 export interface CreateMaterialFileRequest {
@@ -380,6 +412,7 @@ export interface CreateTrainingSessionRequest {
   sessionType: TrainingSessionType;
   meetingLink?: string;
   capacity: number;
+  registrationMode: TrainingRegistrationMode;
 }
 
 export interface CreateUserRequest {
@@ -436,6 +469,28 @@ export interface MaterialFileResponse {
   contentType: string;
   uploadedBy: number;
   uploadedAt: ISODateTime;
+  storedContent: boolean;
+}
+
+export interface ClassEnrollmentResponse {
+  id: number;
+  classId: number;
+  className: string;
+  classCode: string;
+  userId: number;
+  userFullName: string;
+  userEmail: string;
+  status: ClassEnrollmentStatus;
+  source: ClassEnrollmentSource;
+  enrolledAt: ISODateTime;
+  withdrawnAt: ISODateTime;
+  completedAt: ISODateTime;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+export interface AddClassEnrollmentsRequest {
+  userIds: number[];
 }
 
 export interface MaterialProgress {
@@ -947,6 +1002,7 @@ export interface TrainingSessionResponse {
   meetingLink: string;
   capacity: number;
   enrolledCount: number;
+  registrationMode: TrainingRegistrationMode;
   status: TrainingSessionStatus;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
@@ -969,6 +1025,10 @@ export interface UpdateClassRequest {
   startDate?: ISODate;
   endDate?: ISODate;
   duration?: string;
+  capacity?: number;
+  selfEnrollmentEnabled?: boolean;
+  enrollmentStartDate?: ISODate;
+  enrollmentEndDate?: ISODate;
 }
 
 export interface UpdateClassStatusRequest {
@@ -1057,6 +1117,12 @@ export interface UpdateSyllabusStatusRequest {
   status: SyllabusStatus;
 }
 
+export interface CloneSyllabusRequest {
+  name: string;
+  code: string;
+  version: string;
+}
+
 export interface UpdateTrainingProgramRequest {
   name: string;
   duration?: string;
@@ -1083,6 +1149,7 @@ export interface UpdateTrainingSessionRequest {
   sessionType: TrainingSessionType;
   meetingLink?: string;
   capacity: number;
+  registrationMode: TrainingRegistrationMode;
 }
 
 export interface UpdateTrainingSessionStatusRequest {
@@ -1873,6 +1940,17 @@ export const API_ENDPOINTS = [
     response: "ApiResponse<SyllabusResponse>",
   },
   {
+    key: "post.syllabuses.by_id.clone",
+    tag: "Syllabus",
+    summary: "Create a new syllabus version",
+    method: "POST",
+    path: "/api/v1/syllabuses/{id}/clone",
+    auth: true,
+    pathParams: [{"name":"id","type":"number"}],
+    request: "CloneSyllabusRequest",
+    response: "ApiResponse<FullSyllabusResponse>",
+  },
+  {
     key: "delete.syllabuses.by_id.topics.by_topicId.materials.by_materialId",
     tag: "Syllabus",
     summary: "Delete material",
@@ -2286,6 +2364,88 @@ export const API_ENDPOINTS = [
     auth: true,
     request: "CreateUserRequest",
     response: "ApiResponse<UserResponse>",
+  },
+  {
+    key: "get.classes.completion_policy",
+    tag: "Course Results",
+    summary: "Get class completion policy",
+    method: "GET",
+    path: "/api/v1/classes/{classId}/completion-policy",
+    auth: true,
+    pathParams: [{"name":"classId","type":"number"}],
+    response: "ApiResponse<CompletionPolicyResponse>",
+  },
+  {
+    key: "put.classes.completion_policy",
+    tag: "Course Results",
+    summary: "Update class completion policy",
+    method: "PUT",
+    path: "/api/v1/classes/{classId}/completion-policy",
+    auth: true,
+    pathParams: [{"name":"classId","type":"number"}],
+    request: "UpdateCompletionPolicyRequest",
+    response: "ApiResponse<CompletionPolicyResponse>",
+  },
+  {
+    key: "get.classes.results",
+    tag: "Course Results",
+    summary: "List class course results",
+    method: "GET",
+    path: "/api/v1/classes/{classId}/results",
+    auth: true,
+    pathParams: [{"name":"classId","type":"number"}],
+    response: "ApiResponse<ClassCourseResultsResponse>",
+  },
+  {
+    key: "get.classes.results.user",
+    tag: "Course Results",
+    summary: "Get learner course result",
+    method: "GET",
+    path: "/api/v1/classes/{classId}/results/{userId}",
+    auth: true,
+    pathParams: [{"name":"classId","type":"number"},{"name":"userId","type":"number"}],
+    response: "ApiResponse<CourseResultResponse>",
+  },
+  {
+    key: "post.classes.results.calculate",
+    tag: "Course Results",
+    summary: "Calculate class course results",
+    method: "POST",
+    path: "/api/v1/classes/{classId}/results/calculate",
+    auth: true,
+    pathParams: [{"name":"classId","type":"number"}],
+    response: "ApiResponse<ClassCourseResultsResponse>",
+  },
+  {
+    key: "patch.classes.results.user",
+    tag: "Course Results",
+    summary: "Adjust learner course result",
+    method: "PATCH",
+    path: "/api/v1/classes/{classId}/results/{userId}",
+    auth: true,
+    pathParams: [{"name":"classId","type":"number"},{"name":"userId","type":"number"}],
+    request: "UpdateCourseResultRequest",
+    response: "ApiResponse<CourseResultResponse>",
+  },
+  {
+    key: "post.classes.results.publish",
+    tag: "Course Results",
+    summary: "Publish class course results",
+    method: "POST",
+    path: "/api/v1/classes/{classId}/results/publish",
+    auth: true,
+    pathParams: [{"name":"classId","type":"number"}],
+    response: "ApiResponse<ClassCourseResultsResponse>",
+  },
+  {
+    key: "get.me.classes.result",
+    tag: "Course Results",
+    summary: "Get current trainee published result",
+    method: "GET",
+    path: "/api/v1/me/classes/{classId}/result",
+    auth: true,
+    pathParams: [{"name":"classId","type":"number"}],
+    response: "ApiResponse<CourseResultResponse>",
   },
 ] as const satisfies readonly ApiEndpoint[];
 

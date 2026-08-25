@@ -1,7 +1,7 @@
 package com.fap.syllabus.repository;
 
 import com.fap.syllabus.entity.MaterialFile;
-import com.fap.training.enums.TrainingRegistrationStatus;
+import com.fap.clazz.enums.ClassEnrollmentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -59,10 +59,9 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 					from MaterialFile m
 					join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
 					join FapClass c on c.trainingProgram = tps.program
-					join TrainingSession s on s.fapClass = c
-					join TrainingRegistration r on r.trainingSession = s
-					where r.user.id = :userId
-					  and r.status in :eligibleStatuses
+					join ClassEnrollment e on e.fapClass = c
+					where e.user.id = :userId
+					  and e.status in :eligibleStatuses
 					  and (:keyword is null
 					       or lower(m.fileName) like concat(concat('%', lower(:keyword)), '%')
 					       or lower(m.fileUrl) like concat(concat('%', lower(:keyword)), '%')
@@ -76,10 +75,9 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 					from MaterialFile m
 					join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
 					join FapClass c on c.trainingProgram = tps.program
-					join TrainingSession s on s.fapClass = c
-					join TrainingRegistration r on r.trainingSession = s
-					where r.user.id = :userId
-					  and r.status in :eligibleStatuses
+					join ClassEnrollment e on e.fapClass = c
+					where e.user.id = :userId
+					  and e.status in :eligibleStatuses
 					  and (:keyword is null
 					       or lower(m.fileName) like concat(concat('%', lower(:keyword)), '%')
 					       or lower(m.fileUrl) like concat(concat('%', lower(:keyword)), '%')
@@ -90,7 +88,7 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 					""")
 	Page<MaterialFile> searchAssignedToUser(
 			@Param("userId") Long userId,
-			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
+			@Param("eligibleStatuses") Collection<ClassEnrollmentStatus> eligibleStatuses,
 			@Param("keyword") String keyword,
 			Pageable pageable);
 
@@ -100,11 +98,10 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 			from MaterialFile m
 			join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
 			join FapClass c on c.trainingProgram = tps.program
-			join TrainingSession s on s.fapClass = c
-			join TrainingRegistration r on r.trainingSession = s
-			where r.user.id = :userId
+			join ClassEnrollment e on e.fapClass = c
+			where e.user.id = :userId
 			  and c.id = :classId
-			  and r.status in :eligibleStatuses
+			  and e.status in :eligibleStatuses
 			  and (:keyword is null
 			       or lower(m.fileName) like concat(concat('%', lower(:keyword)), '%')
 			       or lower(m.fileUrl) like concat(concat('%', lower(:keyword)), '%')
@@ -116,7 +113,7 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 	List<MaterialFile> findAssignedToUserByClass(
 			@Param("userId") Long userId,
 			@Param("classId") Long classId,
-			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
+			@Param("eligibleStatuses") Collection<ClassEnrollmentStatus> eligibleStatuses,
 			@Param("keyword") String keyword);
 
 	/**
@@ -130,14 +127,13 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 			from MaterialFile m
 			join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
 			join FapClass c on c.trainingProgram = tps.program
-			join TrainingSession s on s.fapClass = c
-			join TrainingRegistration r on r.trainingSession = s
+			join ClassEnrollment e on e.fapClass = c
 			where m.id = :materialId
-			  and r.user.id = :userId
-			  and r.status in :eligibleStatuses
+			  and e.user.id = :userId
+			  and e.status in :eligibleStatuses
 			""")
 	boolean existsAssignedToUser(
 			@Param("materialId") Long materialId,
 			@Param("userId") Long userId,
-			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses);
+			@Param("eligibleStatuses") Collection<ClassEnrollmentStatus> eligibleStatuses);
 }

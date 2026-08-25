@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface TrainingProgramRepository extends JpaRepository<TrainingProgram, Long> {
 
+	long countByStatus(TrainingProgramStatus status);
+
 	@Query("""
 			select p
 			from TrainingProgram p

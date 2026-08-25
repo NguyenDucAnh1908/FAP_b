@@ -129,6 +129,8 @@ class AttendanceCorrectionTest {
 
 		service.upsert(SESSION_ID, request(item(AttendanceStatus.Present, "Scanner was offline")), STAFF_ID);
 
+		verify(trainingRegistrationRepository).findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
+				SESSION_ID, List.of(TrainingRegistrationStatus.Completed));
 		verify(auditLogService).record("UPSERT_ATTENDANCE_CORRECTION", "training_session", SESSION_ID);
 		verify(auditLogService, never()).record("UPSERT_ATTENDANCE", "training_session", SESSION_ID);
 	}

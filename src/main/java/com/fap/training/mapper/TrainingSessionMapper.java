@@ -30,6 +30,7 @@ public class TrainingSessionMapper {
 				session.getMeetingLink(),
 				session.getCapacity(),
 				session.getEnrolledCount(),
+				session.getRegistrationMode(),
 				session.getStatus(),
 				session.getCreatedAt(),
 				session.getUpdatedAt());

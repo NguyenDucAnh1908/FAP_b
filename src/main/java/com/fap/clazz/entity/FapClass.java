@@ -21,6 +21,7 @@ import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -68,6 +69,21 @@ public class FapClass {
 
 	@Column(length = 50)
 	private String duration;
+
+	@Column(nullable = false)
+	private Integer capacity = 30;
+
+	@Column(name = "self_enrollment_enabled", nullable = false)
+	private boolean selfEnrollmentEnabled;
+
+	@Column(name = "enrollment_start_date")
+	private LocalDate enrollmentStartDate;
+
+	@Column(name = "enrollment_end_date")
+	private LocalDate enrollmentEndDate;
+
+	@Column(name = "minimum_attendance_rate", nullable = false, precision = 5, scale = 2)
+	private BigDecimal minimumAttendanceRate = BigDecimal.valueOf(80);
 
 	@Column(name = "is_deleted", nullable = false)
 	private boolean deleted;

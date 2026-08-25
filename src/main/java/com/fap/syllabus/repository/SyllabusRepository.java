@@ -14,6 +14,8 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
 
 	boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
 
+	long countByStatus(SyllabusStatus status);
+
 	@Query("""
 			select s
 			from Syllabus s

@@ -7,6 +7,7 @@ import com.fap.syllabus.enums.SyllabusStatus;
 import com.fap.syllabus.mapper.SyllabusMapper;
 import com.fap.syllabus.mapper.SyllabusOutlineMapper;
 import com.fap.syllabus.repository.SyllabusDayRepository;
+import com.fap.syllabus.repository.MaterialFileContentRepository;
 import com.fap.syllabus.repository.SyllabusOutputStandardRepository;
 import com.fap.syllabus.repository.SyllabusRepository;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,8 @@ class SyllabusStateMachineTest {
 
 	private final SyllabusRepository syllabusRepository = mock(SyllabusRepository.class);
 	private final SyllabusDayRepository dayRepository = mock(SyllabusDayRepository.class);
+	private final MaterialFileContentRepository materialFileContentRepository =
+			mock(MaterialFileContentRepository.class);
 	private final SyllabusOutputStandardRepository outputStandardRepository =
 			mock(SyllabusOutputStandardRepository.class);
 	private final SyllabusMapper syllabusMapper = mock(SyllabusMapper.class);
@@ -44,6 +47,7 @@ class SyllabusStateMachineTest {
 	private final SyllabusService service = new SyllabusService(
 			syllabusRepository,
 			dayRepository,
+			materialFileContentRepository,
 			outputStandardRepository,
 			syllabusMapper,
 			outlineMapper,

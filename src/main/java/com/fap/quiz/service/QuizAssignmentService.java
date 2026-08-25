@@ -17,6 +17,7 @@ import com.fap.quiz.repository.QuizRepository;
 import com.fap.training.entity.TrainingSession;
 import com.fap.training.repository.TrainingSessionRepository;
 import com.fap.user.repository.UserRepository;
+import com.fap.result.repository.ClassCompletionQuizRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ public class QuizAssignmentService {
 	private final UserRepository userRepository;
 	private final QuizAssignmentMapper quizAssignmentMapper;
 	private final AuditLogService auditLogService;
+	private final ClassCompletionQuizRepository completionQuizRepository;
 
 	public QuizAssignmentService(
 			QuizRepository quizRepository,
@@ -41,7 +43,8 @@ public class QuizAssignmentService {
 			TrainingSessionRepository trainingSessionRepository,
 			UserRepository userRepository,
 			QuizAssignmentMapper quizAssignmentMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			ClassCompletionQuizRepository completionQuizRepository) {
 		this.quizRepository = quizRepository;
 		this.quizAssignmentRepository = quizAssignmentRepository;
 		this.classRepository = classRepository;
@@ -49,6 +52,7 @@ public class QuizAssignmentService {
 		this.userRepository = userRepository;
 		this.quizAssignmentMapper = quizAssignmentMapper;
 		this.auditLogService = auditLogService;
+		this.completionQuizRepository = completionQuizRepository;
 	}
 
 	@Transactional(readOnly = true)
@@ -86,6 +90,10 @@ public class QuizAssignmentService {
 		QuizAssignment assignment = quizAssignmentRepository.findByQuizIdAndId(quizId, assignmentId)
 				.orElseThrow(() -> new NotFoundException("Quiz assignment not found"));
 		ensurePublished(assignment.getQuiz());
+		if (assignment.getFapClass() != null
+				&& completionQuizRepository.existsByFapClassIdAndQuizId(assignment.getFapClass().getId(), quizId)) {
+			throw new ConflictException("QUIZ_REQUIRED_FOR_COMPLETION", "Quiz is required by the class completion policy");
+		}
 		quizAssignmentRepository.delete(assignment);
 		auditLogService.record("DELETE_QUIZ_ASSIGNMENT", "quiz_assignment", assignment.getId());
 	}

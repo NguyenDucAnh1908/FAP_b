@@ -5,6 +5,7 @@ import com.fap.common.api.PageResponse;
 import com.fap.common.i18n.MessageService;
 import com.fap.common.security.FapUserPrincipal;
 import com.fap.syllabus.dto.CreateMaterialFileRequest;
+import com.fap.syllabus.dto.CloneSyllabusRequest;
 import com.fap.syllabus.dto.CreateFullSyllabusRequest;
 import com.fap.syllabus.dto.CreateSyllabusRequest;
 import com.fap.syllabus.dto.CreateSyllabusDayRequest;
@@ -163,6 +164,27 @@ public class SyllabusController {
 		return ApiResponse.ok(
 				syllabusService.createFull(request, principal.id()),
 				messageService.get("success.syllabus.created"));
+	}
+
+	@Operation(summary = "Create a new syllabus version from an active or inactive syllabus")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Business conflict")
+	})
+	@PostMapping("/{id}/clone")
+	@ResponseStatus(HttpStatus.CREATED)
+	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'syllabus', 'create')")
+	public ApiResponse<FullSyllabusResponse> cloneVersion(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal,
+			@Valid @RequestBody CloneSyllabusRequest request) {
+		return ApiResponse.ok(
+				syllabusService.cloneVersion(id, request, principal.id()),
+				messageService.get("success.syllabus.cloned"));
 	}
 
 	@Operation(summary = "Update full syllabus with outline")

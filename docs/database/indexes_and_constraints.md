@@ -35,6 +35,7 @@ Training program/class:
 - `training_program_syllabuses(program_id, sort_order)`
 - `classes.class_code`
 - `class_trainers(class_id, user_id, NVL(syllabus_id, -1))` via function-based unique index
+- `class_enrollments(class_id, user_id)`
 
 Quiz:
 - `quiz_questions(quiz_id, question_id)` via primary key
@@ -77,6 +78,12 @@ Training program/class:
 - `training_programs.total_hours IS NULL OR total_hours >= 0`
 - `classes.status IN ('Planning', 'Active', 'Closed')`
 - `classes.start_date <= classes.end_date` when both are set
+- `classes.capacity > 0`
+- `classes.self_enrollment_enabled IN (0, 1)`
+- `classes.enrollment_start_date <= classes.enrollment_end_date` when both are set
+- `class_enrollments.status IN ('PendingApproval', 'Enrolled', 'Waitlisted', 'Rejected', 'Withdrawn', 'Completed')`
+- `class_enrollments.source IN ('AdminAdded', 'SelfRegistered', 'Migration')`
+- Withdrawn/completed enrollments require their matching timestamp
 
 Quiz:
 - `questions.question_type IN ('single', 'multiple')`
@@ -98,6 +105,7 @@ Calendar:
 - `training_sessions.status IN ('Upcoming', 'Completed', 'Canceled')`
 - `training_sessions.capacity > 0`
 - `training_sessions.enrolled_count >= 0 AND enrolled_count <= capacity`
+- `training_sessions.registration_mode IN ('AutoEnroll', 'SelfEnroll')`
 - `training_sessions.end_time > training_sessions.start_time`
 - `training_registrations.status IN ('Registered', 'Waitlist', 'Completed', 'Cancelled')`
 - `Cancelled` registrations require `cancelled_at`
@@ -160,6 +168,12 @@ Program/class:
 - `idx_classes_deleted`
 - `idx_class_trainers_user`
 - `idx_class_admins_user`
+- `idx_class_enrollments_class_status`
+- `idx_class_enrollments_user_status`
+- `idx_completion_quizzes_class`
+- `idx_course_results_class_status`
+- `idx_course_results_publish`
+- `idx_result_adjustments_result`
 
 Quiz/question:
 - `idx_questions_category`
@@ -206,6 +220,11 @@ These must be implemented in service logic, triggers, or stored procedures:
 - Quiz publish requires at least one question.
 - Quiz attempt requires assignment to trainee class/session.
 - `training_sessions.enrolled_count` must equal count of `Registered` rows under concurrent registration.
+- `classes.capacity` must equal or exceed the number of `Enrolled` class enrollments.
+- `AutoEnroll` sessions synchronize registrations from the current class roster.
+- Leaving a class cancels only future session registrations and preserves learning history.
+- Closing a class requires completed/canceled sessions, closed required quizzes, and atomically finalized course results.
+- Course result adjustment accepts only `Passed`/`Failed`, requires a reason, retains history, and clears publication.
 - Waitlist FIFO promotion on cancellation.
 - Feedback is allowed only once per participant per completed session.
 - Trainer/Class Admin ownership scopes.
