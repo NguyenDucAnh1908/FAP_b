@@ -102,27 +102,24 @@ public class AdminDashboardService {
 		long submittedAttempts = attempts.getSubmitted();
 		long passedAttempts = attempts.getPassed();
 
-		List<TrainingSessionResponse> nextSessions = trainingSessionRepository.search(
+		List<TrainingSessionResponse> nextSessions = trainingSessionRepository.findForDashboard(
 				TrainingSessionStatus.Upcoming,
-				null,
-				null,
 				LocalDate.now(clock),
-				null,
-				null,
 				PageRequest.of(0, 5, Sort.by(Sort.Direction.ASC, "sessionDate", "startTime", "id")))
+				.stream()
 				.map(trainingSessionMapper::toResponse)
-				.getContent();
+				.toList();
 
 		List<AdminDashboardResponse.RecentActivity> recentActivities = auditLogRepository
-				.search(null, null, null,
-						PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt", "id")))
+				.findAllBy(PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt", "id")))
+				.stream()
 				.map(log -> new AdminDashboardResponse.RecentActivity(
 						log.getId(),
 						log.getAction(),
 						log.getEntityType(),
 						log.getEntityId(),
 						log.getCreatedAt()))
-				.getContent();
+				.toList();
 
 		Map<UserStatus, Long> users = countsBy(userRepository.countGroupedByStatus(),
 				UserRepository.StatusCount::getStatus, UserRepository.StatusCount::getTotal);
