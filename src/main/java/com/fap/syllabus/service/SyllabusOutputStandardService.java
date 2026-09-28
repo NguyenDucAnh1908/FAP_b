@@ -1,13 +1,10 @@
 package com.fap.syllabus.service;
 
 import com.fap.common.audit.AuditLogService;
-import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.syllabus.dto.UpdateSyllabusOutputStandardsRequest;
 import com.fap.syllabus.entity.Syllabus;
 import com.fap.syllabus.entity.SyllabusOutputStandard;
-import com.fap.syllabus.entity.SyllabusOutputStandardId;
-import com.fap.syllabus.enums.SyllabusStatus;
 import com.fap.syllabus.repository.SyllabusOutputStandardRepository;
 import com.fap.syllabus.repository.SyllabusRepository;
 import org.springframework.stereotype.Service;
@@ -46,20 +43,13 @@ public class SyllabusOutputStandardService {
 		outputStandardRepository.deleteByIdSyllabusId(syllabusId);
 		List<SyllabusOutputStandard> outputStandards = request.standards().stream()
 				.sorted(Comparator.naturalOrder())
-				.map(standardCode -> createOutputStandard(syllabus, standardCode))
+				.map(standardCode -> SyllabusRules.createOutputStandard(syllabus, standardCode))
 				.toList();
 		outputStandardRepository.saveAll(outputStandards);
 		auditLogService.record("UPDATE_SYLLABUS_OUTPUT_STANDARDS", "syllabus", syllabusId);
 		return outputStandards.stream()
 				.map(SyllabusOutputStandard::getStandardCode)
 				.toList();
-	}
-
-	private SyllabusOutputStandard createOutputStandard(Syllabus syllabus, String standardCode) {
-		SyllabusOutputStandard outputStandard = new SyllabusOutputStandard();
-		outputStandard.setSyllabus(syllabus);
-		outputStandard.setId(new SyllabusOutputStandardId(syllabus.getId(), standardCode));
-		return outputStandard;
 	}
 
 	private void ensureSyllabusExists(Long syllabusId) {
@@ -69,11 +59,8 @@ public class SyllabusOutputStandardService {
 	}
 
 	private Syllabus findEditableSyllabus(Long syllabusId) {
-		Syllabus syllabus = syllabusRepository.findById(syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus not found"));
-		if (syllabus.getStatus() == SyllabusStatus.Active || syllabus.getStatus() == SyllabusStatus.Inactive) {
-			throw new ConflictException("SYLLABUS_NOT_EDITABLE", "Only Drafting or Pending syllabus can be edited");
-		}
+		Syllabus syllabus = syllabusRepository.getOrThrow(syllabusId);
+		SyllabusRules.ensureEditable(syllabus);
 		return syllabus;
 	}
 }

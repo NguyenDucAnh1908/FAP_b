@@ -41,7 +41,7 @@ public class PermissionEvaluator {
 		if (!(authentication.getPrincipal() instanceof FapUserPrincipal principal)) {
 			return false;
 		}
-		if (principal.roles().contains("Super Admin")) {
+		if (principal.roles().contains(RoleNames.SUPER_ADMIN)) {
 			return true;
 		}
 

@@ -1,5 +1,6 @@
 package com.fap.syllabus.service;
 
+import com.fap.common.security.RoleNames;
 import com.fap.support.AbstractOracleIT;
 import com.fap.syllabus.dto.CloneSyllabusRequest;
 import com.fap.syllabus.dto.FullSyllabusResponse;
@@ -34,7 +35,7 @@ class MaterialContentStorageIT extends AbstractOracleIT {
 	private MaterialFileService materialFileService;
 
 	@Autowired
-	private SyllabusService syllabusService;
+	private SyllabusVersionService syllabusVersionService;
 
 	private SyllabusTopic topic;
 	private Long userId;
@@ -52,7 +53,8 @@ class MaterialContentStorageIT extends AbstractOracleIT {
 		assumeThat(topics).as("seed data has an editable syllabus topic").isNotEmpty();
 		topic = topics.get(0);
 		userId = entityManager.createQuery(
-						"select u.id from User u join u.roles r where r.name = 'Super Admin' order by u.id", Long.class)
+						"select u.id from User u join u.roles r where r.name = :roleName order by u.id", Long.class)
+				.setParameter("roleName", RoleNames.SUPER_ADMIN)
 				.setMaxResults(1)
 				.getSingleResult();
 	}
@@ -72,7 +74,7 @@ class MaterialContentStorageIT extends AbstractOracleIT {
 		source.setStatus(SyllabusStatus.Active);
 		flushAndClear();
 
-		FullSyllabusResponse clone = syllabusService.cloneVersion(
+		FullSyllabusResponse clone = syllabusVersionService.cloneVersion(
 				source.getId(),
 				new CloneSyllabusRequest("IT clone", "IT_CLONE_" + uploaded.id(), "v-it"),
 				userId);

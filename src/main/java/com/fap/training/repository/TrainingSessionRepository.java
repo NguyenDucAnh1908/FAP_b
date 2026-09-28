@@ -1,5 +1,6 @@
 package com.fap.training.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.training.entity.TrainingSession;
 import com.fap.training.enums.TrainingRegistrationStatus;
 import com.fap.training.enums.TrainingSessionStatus;
@@ -122,6 +123,18 @@ public interface TrainingSessionRepository extends JpaRepository<TrainingSession
 	@Query("select s from TrainingSession s where s.id = :id")
 	Optional<TrainingSession> findWithClassAndTrainerByIdForUpdate(@Param("id") Long id);
 
+	/** One place for the lookup so every caller fails with the same not-found message. */
+	default TrainingSession getWithClassAndTrainerOrThrow(Long id) {
+		return findWithClassAndTrainerById(id)
+				.orElseThrow(() -> new NotFoundException("Training session not found"));
+	}
+
+	/** Locking variant of {@link #getWithClassAndTrainerOrThrow(Long)}, for seat-count changes. */
+	default TrainingSession getWithClassAndTrainerForUpdateOrThrow(Long id) {
+		return findWithClassAndTrainerByIdForUpdate(id)
+				.orElseThrow(() -> new NotFoundException("Training session not found"));
+	}
+
 	@EntityGraph(attributePaths = {"fapClass", "trainer"})
 	@Query("""
 			select s
@@ -184,6 +197,19 @@ public interface TrainingSessionRepository extends JpaRepository<TrainingSession
 			@Param("fromDate") LocalDate fromDate,
 			@Param("toDate") LocalDate toDate,
 			@Param("keyword") String keyword,
+			Pageable pageable);
+
+	/** Dashboard previews need bounded rows, not the total count calculated for a Page. */
+	@Query("""
+			select s
+			from TrainingSession s
+			join fetch s.fapClass
+			join fetch s.trainer
+			where s.status = :status and s.sessionDate >= :fromDate
+			""")
+	List<TrainingSession> findForDashboard(
+			@Param("status") TrainingSessionStatus status,
+			@Param("fromDate") LocalDate fromDate,
 			Pageable pageable);
 
 	long countByTrainerIdAndStatus(Long trainerId, TrainingSessionStatus status);

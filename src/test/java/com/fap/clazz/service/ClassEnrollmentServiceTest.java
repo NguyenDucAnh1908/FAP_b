@@ -12,6 +12,7 @@ import com.fap.clazz.repository.ClassEnrollmentRepository;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
+import com.fap.common.security.RoleNames;
 import com.fap.notification.service.NotificationService;
 import com.fap.result.service.CourseResultService;
 import com.fap.role.entity.Role;
@@ -22,9 +23,13 @@ import com.fap.user.enums.UserStatus;
 import com.fap.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 
@@ -34,6 +39,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,6 +51,8 @@ class ClassEnrollmentServiceTest {
 
 	private static final Long CLASS_ID = 70L;
 	private static final Long USER_ID = 700L;
+	private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-03-15T09:00:00Z"), ZoneOffset.UTC);
+	private static final LocalDate TODAY = LocalDate.now(CLOCK);
 
 	private final ClassRepository classRepository = mock(ClassRepository.class);
 	private final ClassEnrollmentRepository classEnrollmentRepository = mock(ClassEnrollmentRepository.class);
@@ -63,7 +73,14 @@ class ClassEnrollmentServiceTest {
 			classMapper,
 			auditLogService,
 			notificationService,
-			courseResultService);
+			courseResultService,
+			CLOCK);
+
+	@BeforeEach
+	void lookupDefaultsDelegateToStubbedFinders() {
+		lenient().doCallRealMethod().when(classRepository).getWithTrainingProgramForUpdateOrThrow(any());
+		lenient().doCallRealMethod().when(classEnrollmentRepository).getByFapClassIdAndUserIdOrThrow(any(), any());
+	}
 
 	@BeforeEach
 	void saveReturnsEnrollmentWithId() {
@@ -203,7 +220,7 @@ class ClassEnrollmentServiceTest {
 	@Test
 	void rejectsSelfEnrollmentOutsideWindow() {
 		FapClass fapClass = givenOpenClass(30);
-		fapClass.setEnrollmentStartDate(LocalDate.now().plusDays(1));
+		fapClass.setEnrollmentStartDate(TODAY.plusDays(1));
 
 		assertThatThrownBy(() -> service.selfEnroll(CLASS_ID, USER_ID))
 				.isInstanceOf(ConflictException.class)
@@ -215,7 +232,7 @@ class ClassEnrollmentServiceTest {
 	@Test
 	void rejectsSelfEnrollmentAfterWindow() {
 		FapClass fapClass = givenOpenClass(30);
-		fapClass.setEnrollmentEndDate(LocalDate.now().minusDays(1));
+		fapClass.setEnrollmentEndDate(TODAY.minusDays(1));
 
 		assertThatThrownBy(() -> service.selfEnroll(CLASS_ID, USER_ID))
 				.isInstanceOf(ConflictException.class)
@@ -278,7 +295,7 @@ class ClassEnrollmentServiceTest {
 		FapClass fapClass = givenOpenClass(30);
 		User user = givenActiveTrainee();
 		ClassEnrollment withdrawn = enrollment(fapClass, user, ClassEnrollmentStatus.Withdrawn, 904L);
-		withdrawn.setWithdrawnAt(LocalDateTime.now().minusHours(1));
+		withdrawn.setWithdrawnAt(LocalDateTime.now(CLOCK).minusHours(1));
 		when(classEnrollmentRepository.findByFapClassIdAndUserId(CLASS_ID, USER_ID))
 				.thenReturn(Optional.of(withdrawn));
 		when(classEnrollmentRepository.countByFapClassIdAndStatus(CLASS_ID, ClassEnrollmentStatus.Enrolled))
@@ -330,6 +347,44 @@ class ClassEnrollmentServiceTest {
 		verify(notificationService).create(eq(701L), anyString(), anyString());
 	}
 
+	@Test
+	void selfEnrollmentIsOpenOnTheFirstAndLastDayOfTheWindow() {
+		FapClass fapClass = givenOpenClass(30);
+		fapClass.setEnrollmentStartDate(TODAY);
+		fapClass.setEnrollmentEndDate(TODAY);
+		givenActiveTrainee();
+
+		ClassEnrollmentResponse response = service.selfEnroll(CLASS_ID, USER_ID);
+
+		assertThat(response.status()).isEqualTo(ClassEnrollmentStatus.PendingApproval);
+	}
+
+	@Test
+	void approvalIsStampedWithTheClockTime() {
+		FapClass fapClass = givenOpenClass(2);
+		User user = givenActiveTrainee();
+		ClassEnrollment pending = enrollment(fapClass, user, ClassEnrollmentStatus.PendingApproval, 901L);
+		when(classEnrollmentRepository.findByFapClassIdAndUserId(CLASS_ID, USER_ID)).thenReturn(Optional.of(pending));
+		when(classEnrollmentRepository.countByFapClassIdAndStatus(CLASS_ID, ClassEnrollmentStatus.Enrolled)).thenReturn(0L);
+
+		ClassEnrollmentResponse response = service.approve(CLASS_ID, USER_ID, 1L);
+
+		LocalDateTime now = LocalDateTime.now(CLOCK);
+		assertThat(response.enrolledAt()).isEqualTo(now);
+		assertThat(response.reviewedAt()).isEqualTo(now);
+		assertThat(response.updatedAt()).isEqualTo(now);
+	}
+
+	@Test
+	void availableClassesUseTheClockDateAndIgnoreABlankKeyword() {
+		givenActiveTrainee();
+		when(classRepository.searchAvailableForUser(anyLong(), any(), any(), any())).thenReturn(Page.empty());
+
+		service.availableClasses(USER_ID, "  ", 0, 10, null, null);
+
+		verify(classRepository).searchAvailableForUser(eq(USER_ID), eq(TODAY), isNull(), any());
+	}
+
 	private FapClass givenOpenClass(int capacity) {
 		FapClass fapClass = new FapClass();
 		fapClass.setId(CLASS_ID);
@@ -338,8 +393,8 @@ class ClassEnrollmentServiceTest {
 		fapClass.setStatus(ClassStatus.Active);
 		fapClass.setCapacity(capacity);
 		fapClass.setSelfEnrollmentEnabled(true);
-		fapClass.setEnrollmentStartDate(LocalDate.now().minusDays(1));
-		fapClass.setEnrollmentEndDate(LocalDate.now().plusDays(1));
+		fapClass.setEnrollmentStartDate(TODAY.minusDays(1));
+		fapClass.setEnrollmentEndDate(TODAY.plusDays(1));
 		when(classRepository.findWithTrainingProgramByIdForUpdate(CLASS_ID)).thenReturn(Optional.of(fapClass));
 		return fapClass;
 	}
@@ -352,7 +407,7 @@ class ClassEnrollmentServiceTest {
 
 	private User trainee(UserStatus status) {
 		Role role = new Role();
-		role.setName("Trainee");
+		role.setName(RoleNames.TRAINEE);
 		User user = new User();
 		user.setId(USER_ID);
 		user.setFullName("Trainee User");
@@ -372,8 +427,8 @@ class ClassEnrollmentServiceTest {
 		enrollment.setFapClass(fapClass);
 		enrollment.setUser(user);
 		enrollment.setStatus(status);
-		enrollment.setCreatedAt(LocalDateTime.now().minusDays(1));
-		enrollment.setUpdatedAt(LocalDateTime.now().minusDays(1));
+		enrollment.setCreatedAt(LocalDateTime.now(CLOCK).minusDays(1));
+		enrollment.setUpdatedAt(LocalDateTime.now(CLOCK).minusDays(1));
 		return enrollment;
 	}
 }

@@ -1,5 +1,6 @@
 package com.fap.quiz.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.quiz.entity.QuizAssignment;
 import com.fap.training.enums.TrainingRegistrationStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -18,6 +19,12 @@ public interface QuizAssignmentRepository extends JpaRepository<QuizAssignment, 
 
 	@EntityGraph(attributePaths = {"quiz", "fapClass", "trainingSession", "assignedBy"})
 	Optional<QuizAssignment> findByQuizIdAndId(Long quizId, Long id);
+
+	/** Scoped to the quiz so an assignment id of another quiz reads as not found. */
+	default QuizAssignment getByQuizIdAndIdOrThrow(Long quizId, Long id) {
+		return findByQuizIdAndId(quizId, id)
+				.orElseThrow(() -> new NotFoundException("Quiz assignment not found"));
+	}
 
 	boolean existsByQuizIdAndFapClassId(Long quizId, Long classId);
 

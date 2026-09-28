@@ -2,6 +2,7 @@ package com.fap.clazz.repository;
 
 import com.fap.clazz.entity.ClassEnrollment;
 import com.fap.clazz.enums.ClassEnrollmentStatus;
+import com.fap.common.exception.NotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -35,6 +36,11 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
 
 	@EntityGraph(attributePaths = {"fapClass", "fapClass.trainingProgram", "user", "user.roles"})
 	Optional<ClassEnrollment> findByFapClassIdAndUserId(Long classId, Long userId);
+
+	default ClassEnrollment getByFapClassIdAndUserIdOrThrow(Long classId, Long userId) {
+		return findByFapClassIdAndUserId(classId, userId)
+				.orElseThrow(() -> new NotFoundException("Class enrollment not found"));
+	}
 
 	long countByFapClassIdAndStatus(Long classId, ClassEnrollmentStatus status);
 

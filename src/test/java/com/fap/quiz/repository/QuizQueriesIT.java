@@ -1,6 +1,7 @@
 package com.fap.quiz.repository;
 
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.common.security.RoleNames;
 import com.fap.quiz.dto.QuizAttemptResultResponse;
 import com.fap.quiz.dto.QuizAttemptSummaryResponse;
 import com.fap.quiz.entity.QuizAttempt;
@@ -57,7 +58,8 @@ class QuizQueriesIT extends AbstractOracleIT {
 		assumeThat(quizIds).as("seed data contains quiz attempts").isNotEmpty();
 		quizId = quizIds.get(0);
 		Long adminId = entityManager.createQuery(
-						"select u.id from User u join u.roles r where r.name = 'Super Admin' order by u.id", Long.class)
+						"select u.id from User u join u.roles r where r.name = :roleName order by u.id", Long.class)
+				.setParameter("roleName", RoleNames.SUPER_ADMIN)
 				.setMaxResults(1)
 				.getSingleResult();
 		superAdmin = ItPrincipals.superAdmin(adminId);
@@ -68,7 +70,7 @@ class QuizQueriesIT extends AbstractOracleIT {
 		Page<QuizAttemptResultResponse> all = quizResultService.listAttempts(
 				quizId, null, null, null, null, null, superAdmin, 0, 20);
 		FapUserPrincipal trainer = new FapUserPrincipal(
-				superAdmin.id(), "it-trainer@fap.local", "", Set.of("Trainer"), true, List.of());
+				superAdmin.id(), "it-trainer@fap.local", "", Set.of(RoleNames.TRAINER), true, List.of());
 		Page<QuizAttemptResultResponse> scoped = quizResultService.listAttempts(
 				quizId, QuizAttemptStatus.Submitted, null, null, null, null, trainer, 0, 20);
 

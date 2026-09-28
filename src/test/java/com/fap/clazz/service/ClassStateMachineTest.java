@@ -13,6 +13,7 @@ import com.fap.program.entity.TrainingProgram;
 import com.fap.program.enums.TrainingProgramStatus;
 import com.fap.program.repository.TrainingProgramRepository;
 import com.fap.result.service.CourseResultService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -22,8 +23,11 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,6 +61,12 @@ class ClassStateMachineTest {
 			auditLogService,
 			classEnrollmentService,
 			courseResultService);
+
+	@BeforeEach
+	void lookupDefaultsDelegateToStubbedFinders() {
+		lenient().doCallRealMethod().when(classRepository).getWithTrainingProgramOrThrow(any());
+		lenient().doCallRealMethod().when(classRepository).getWithTrainingProgramForUpdateOrThrow(any());
+	}
 
 	@ParameterizedTest(name = "{0} -> {1} is allowed")
 	@CsvSource({

@@ -16,6 +16,7 @@ import com.fap.training.repository.TrainingRegistrationRepository;
 import com.fap.training.repository.TrainingSessionRepository;
 import com.fap.user.entity.User;
 import com.fap.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -29,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -68,6 +70,11 @@ class TrainingSessionStateMachineTest {
 			auditLogService,
 			notificationService,
 			classEnrollmentService);
+
+	@BeforeEach
+	void delegateLookupToFinder() {
+		lenient().doCallRealMethod().when(trainingSessionRepository).getWithClassAndTrainerOrThrow(any());
+	}
 
 	@ParameterizedTest(name = "Upcoming -> {0} is allowed")
 	@CsvSource({"Completed", "Canceled"})
@@ -113,6 +120,48 @@ class TrainingSessionStateMachineTest {
 		service.updateStatus(SESSION_ID, current, CURRENT_USER_ID);
 
 		assertThat(session.getStatus()).isEqualTo(current);
+	}
+
+	/** There is no messages.properties key for this code, so clients read the Java message itself. */
+	@Test
+	void rejectedTransitionCarriesTheClientFacingMessage() {
+		givenSession(TrainingSessionStatus.Canceled);
+
+		assertThatThrownBy(() -> service.updateStatus(SESSION_ID, TrainingSessionStatus.Upcoming, CURRENT_USER_ID))
+				.isInstanceOf(ConflictException.class)
+				.hasMessage("Invalid training session status transition");
+	}
+
+	@Test
+	void rejectsMissingTargetStatusAsInvalidTransition() {
+		TrainingSession session = givenSession(TrainingSessionStatus.Upcoming);
+
+		assertThatThrownBy(() -> service.updateStatus(SESSION_ID, null, CURRENT_USER_ID))
+				.isInstanceOf(ConflictException.class)
+				.extracting("code")
+				.isEqualTo("INVALID_TRAINING_SESSION_STATUS_TRANSITION");
+
+		assertThat(session.getStatus()).isEqualTo(TrainingSessionStatus.Upcoming);
+		verifyNoInteractions(notificationService);
+	}
+
+	/**
+	 * Current behaviour, pinned rather than endorsed: re-sending Completed skips the attendance guard
+	 * and the promotion (they belong to Upcoming -> Completed only) but notifies participants again.
+	 */
+	@Test
+	void completedNoOpSkipsCompletionStepsButStillNotifiesParticipants() {
+		givenSession(TrainingSessionStatus.Completed);
+		TrainingRegistration completed = registration(101L, TrainingRegistrationStatus.Completed);
+		when(trainingRegistrationRepository.findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
+				eq(SESSION_ID), any()))
+				.thenReturn(List.of(completed));
+
+		service.updateStatus(SESSION_ID, TrainingSessionStatus.Completed, CURRENT_USER_ID);
+
+		verify(trainingRegistrationRepository, never()).findUserIdsByTrainingSessionIdAndStatus(anyLong(), any());
+		verify(notificationService).create(eq(101L), anyString(), anyString());
+		verify(auditLogService).record("UPDATE_TRAINING_SESSION_STATUS:Completed", "training_session", SESSION_ID);
 	}
 
 	@Test

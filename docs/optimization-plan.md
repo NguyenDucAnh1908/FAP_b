@@ -78,7 +78,7 @@ Password login vẫn đọc DB (không cache), nên đổi mật khẩu có hi�
 
 | Read path (seed local) | Statements trước | Sau | Cách |
 |---|---:|---:|---|
-| `adminDashboard.getDashboard` | 27 | 16 (0 khi cache nóng) | `group by status` + cache `DASHBOARD_CACHE_TTL` (30 s); cache hit không mượn kết nối |
+| `adminDashboard.getDashboard` | 27 | 15 (0 khi cache nóng) | `group by status` + preview không đếm tổng + cache `DASHBOARD_CACHE_TTL` (30 s); cache hit không mượn kết nối |
 | `courseResult.list` (5 kết quả) | 12 (2N+2) | 4 (hằng số) | Snapshot quiz và adjustment đọc theo lớp |
 | `courseResult.calculate` | ~6 + 2 × số quiz bắt buộc, mỗi học viên (+ `list` 2N+2) | 13 cho cả lớp (seed: 3 kết quả), kể cả ghi và `list`; không tăng theo số học viên | Đọc kết quả, đăng ký, điểm danh, bài làm tốt nhất (projection, không CLOB) một lần; bulk delete snapshot; ghi theo batch |
 | `myLearning.learningContent` | 23 | 11 | Thống kê bài làm + số câu hỏi theo nhóm |
@@ -123,3 +123,20 @@ Avatar (≤ 2 MB) giữ nguyên `byte[]`. Round-trip byte chính xác được k
 - `./mvnw verify` với `FAP_IT_DB_URL` trỏ Oracle XE 21 local: 21 IT, 0 lỗi; không có bảng `HT_*`
   nào được tạo; V32, V33 đã áp.
 - Nhánh Testcontainers (Docker) chưa chạy trên máy dev (không có Docker); CI sẽ chạy nhánh này.
+
+### Sửa lỗi CI Dashboard ngày 2026-09-28
+
+- Đã tái hiện lỗi `17 > 16` trên schema Oracle XE 21 riêng, khởi tạo bằng Flyway và seed hiện tại.
+  Số 16 ở lần đo trước không bao phủ trường hợp cả hai danh sách preview đều đủ 5 dòng.
+- Hai lời gọi `search(..., PageRequest.of(0, 5, ...))` trả về `Page`, làm phát sinh
+  `select count(...) from training_sessions ...` và `select count(...) from audit_logs ...`.
+  Spring Data có thể bỏ qua count khi trang chưa đủ 5 dòng; Dashboard không sử dụng tổng số dòng.
+- Chỉ thay đường đọc preview của Dashboard bằng `List` có giới hạn tại DB. Giữ nguyên các API
+  phân trang, cache, bộ lọc, thứ tự và cấu trúc response. Buổi học vẫn fetch lớp và giảng viên cùng
+  truy vấn, không phát sinh truy vấn riêng khi map response.
+- Đo sau sửa: Dashboard chưa cache chạy 15 SQL; mỗi preview chạy đúng 1 SQL. Giữ nguyên ngân sách
+  16 trong `AdminDashboardIT` và `QueryBaselineIT`, không bỏ hoặc nới test.
+- Thêm kiểm thử 0/3/5/8 buổi học, lọc ngày/trạng thái/xóa mềm, thứ tự khi trùng thời gian, giới hạn
+  5 dòng và số entity tải; kiểm tra toàn Dashboard khi cả hai preview đều đầy.
+- Dependency graph của `NguyenDucAnh1908/FAP_b` đã được bật trên GitHub theo xác nhận của chủ repo.
+  Giữ nguyên job dependency-review và ngưỡng `fail-on-severity: high`.

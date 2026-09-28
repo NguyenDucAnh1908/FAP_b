@@ -1,5 +1,6 @@
 package com.fap.syllabus.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.syllabus.entity.SyllabusDay;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -14,6 +15,11 @@ public interface SyllabusDayRepository extends JpaRepository<SyllabusDay, Long> 
 	List<SyllabusDay> findBySyllabusIdOrderBySortOrderAsc(Long syllabusId);
 
 	Optional<SyllabusDay> findByIdAndSyllabusId(Long id, Long syllabusId);
+
+	default SyllabusDay getByIdAndSyllabusIdOrThrow(Long id, Long syllabusId) {
+		return findByIdAndSyllabusId(id, syllabusId)
+				.orElseThrow(() -> new NotFoundException("Syllabus day not found"));
+	}
 
 	@Modifying
 	@Query("delete from SyllabusDay d where d.syllabus.id = :syllabusId")

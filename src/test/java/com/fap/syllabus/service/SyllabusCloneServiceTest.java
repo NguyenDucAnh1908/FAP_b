@@ -35,6 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -58,7 +60,7 @@ class SyllabusCloneServiceTest {
 	private final SyllabusOutlineMapper outlineMapper = mock(SyllabusOutlineMapper.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
 
-	private final SyllabusService service = new SyllabusService(
+	private final SyllabusVersionService service = new SyllabusVersionService(
 			syllabusRepository,
 			dayRepository,
 			contentRepository,
@@ -73,6 +75,7 @@ class SyllabusCloneServiceTest {
 
 	@BeforeEach
 	void setUp() {
+		lenient().doCallRealMethod().when(syllabusRepository).getOrThrow(any());
 		source = sourceSyllabus(SyllabusStatus.Inactive);
 		when(syllabusRepository.findById(SOURCE_ID)).thenReturn(Optional.of(source));
 		when(syllabusRepository.save(any(Syllabus.class))).thenAnswer(invocation -> {

@@ -91,20 +91,4 @@ public class DomainMetrics {
 			return tag;
 		}
 	}
-
-	/** Closed set of upload paths tracked as a metric tag. */
-	public enum UploadType {
-		MATERIAL("material"),
-		AVATAR("avatar");
-
-		private final String tag;
-
-		UploadType(String tag) {
-			this.tag = tag;
-		}
-
-		String tag() {
-			return tag;
-		}
-	}
 }

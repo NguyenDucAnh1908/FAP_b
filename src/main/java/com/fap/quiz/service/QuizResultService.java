@@ -10,6 +10,7 @@ import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.ForbiddenException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.common.security.RoleNames;
 import com.fap.quiz.dto.QuizAnswerItemRequest;
 import com.fap.quiz.dto.QuizAttemptResultResponse;
 import com.fap.quiz.dto.QuizAttemptReviewQuestionResponse;
@@ -43,9 +44,6 @@ import java.util.Set;
 @Service
 public class QuizResultService {
 
-	private static final String SUPER_ADMIN_ROLE = "Super Admin";
-	private static final String CLASS_ADMIN_ROLE = "Class Admin";
-	private static final String TRAINER_ROLE = "Trainer";
 	private static final Collection<TrainingRegistrationStatus> ELIGIBLE_REGISTRATION_STATUSES = List.of(
 			TrainingRegistrationStatus.Registered,
 			TrainingRegistrationStatus.Completed);
@@ -122,8 +120,7 @@ public class QuizResultService {
 	@Transactional(readOnly = true)
 	public QuizAttemptReviewResponse getAttemptDetail(Long quizId, Long attemptId, FapUserPrincipal principal) {
 		assertCanViewResults(principal, null, null);
-		QuizAttempt attempt = quizAttemptRepository.findByQuizIdAndId(quizId, attemptId)
-				.orElseThrow(() -> new NotFoundException("Quiz attempt not found"));
+		QuizAttempt attempt = quizAttemptRepository.getByQuizIdAndIdOrThrow(quizId, attemptId);
 		assertCanViewAttempt(principal, quizId, attemptId);
 		if (attempt.getStatus() != QuizAttemptStatus.Submitted) {
 			throw new ConflictException("QUIZ_ATTEMPT_REVIEW_UNAVAILABLE", "Only submitted attempt can be reviewed");
@@ -138,7 +135,7 @@ public class QuizResultService {
 			Long classId,
 			Long trainingSessionId,
 			FapUserPrincipal principal) {
-		Quiz quiz = findQuiz(quizId);
+		Quiz quiz = quizRepository.getQuizOrThrow(quizId);
 		assertCanViewResults(principal, classId, trainingSessionId);
 		QuizAttemptStats stats = quizAttemptRepository.summarizeQuizResults(
 				quizId,
@@ -258,11 +255,6 @@ public class QuizResultService {
 		}
 	}
 
-	private Quiz findQuiz(Long quizId) {
-		return quizRepository.findById(quizId)
-				.orElseThrow(() -> new NotFoundException("Quiz not found"));
-	}
-
 	private void ensureQuizExists(Long quizId) {
 		if (!quizRepository.existsById(quizId)) {
 			throw new NotFoundException("Quiz not found");
@@ -270,13 +262,13 @@ public class QuizResultService {
 	}
 
 	private boolean isResultViewer(FapUserPrincipal principal) {
-		return principal.roles().contains(SUPER_ADMIN_ROLE)
-				|| principal.roles().contains(CLASS_ADMIN_ROLE)
-				|| principal.roles().contains(TRAINER_ROLE);
+		return principal.roles().contains(RoleNames.SUPER_ADMIN)
+				|| principal.roles().contains(RoleNames.CLASS_ADMIN)
+				|| principal.roles().contains(RoleNames.TRAINER);
 	}
 
 	private boolean isSuperAdmin(FapUserPrincipal principal) {
-		return principal.roles().contains(SUPER_ADMIN_ROLE);
+		return principal.roles().contains(RoleNames.SUPER_ADMIN);
 	}
 
 	private Map<Long, JsonNode> readAnswers(String answersJson) {

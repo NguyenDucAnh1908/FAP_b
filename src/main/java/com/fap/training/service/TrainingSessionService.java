@@ -11,6 +11,9 @@ import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.common.security.RoleNames;
+import com.fap.common.util.StatusTransitions;
+import com.fap.common.util.TextNormalizer;
 import com.fap.notification.service.NotificationService;
 import com.fap.training.dto.CreateTrainingSessionRequest;
 import com.fap.training.dto.TrainingSessionResponse;
@@ -121,7 +124,7 @@ public class TrainingSessionService {
 				order,
 				Sort.by(Sort.Direction.ASC, "sessionDate", "startTime"),
 				"id", "sessionDate", "startTime", "endTime", "status", "createdAt");
-		return trainingSessionRepository.searchScoped(scopeUserId(principal), status, classId, trainerId, fromDate, toDate, normalize(keyword), pageRequest)
+		return trainingSessionRepository.searchScoped(scopeUserId(principal), status, classId, trainerId, fromDate, toDate, TextNormalizer.blankToNull(keyword), pageRequest)
 				.map(trainingSessionMapper::toResponse);
 	}
 
@@ -158,12 +161,12 @@ public class TrainingSessionService {
 
 	@Transactional(readOnly = true)
 	public TrainingSessionResponse get(Long id) {
-		return trainingSessionMapper.toResponse(findSession(id));
+		return trainingSessionMapper.toResponse(trainingSessionRepository.getWithClassAndTrainerOrThrow(id));
 	}
 
 	@Transactional
 	public TrainingSessionResponse update(Long id, UpdateTrainingSessionRequest request, Long currentUserId) {
-		TrainingSession session = findSession(id);
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(id);
 		ensureUpcoming(session);
 		validateTimeRange(request.sessionDate(), request.startTime(), request.endTime());
 		FapClass fapClass = session.getFapClass();
@@ -188,8 +191,12 @@ public class TrainingSessionService {
 
 	@Transactional
 	public TrainingSessionResponse updateStatus(Long id, TrainingSessionStatus status, Long currentUserId) {
-		TrainingSession session = findSession(id);
-		validateTransition(session.getStatus(), status);
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(id);
+		StatusTransitions.requireAllowed(
+				session.getStatus(),
+				status,
+				"INVALID_TRAINING_SESSION_STATUS_TRANSITION",
+				"Invalid training session status transition");
 		if (session.getStatus() == TrainingSessionStatus.Upcoming && status == TrainingSessionStatus.Completed) {
 			validateAttendanceReadyForCompletion(session.getId());
 			finalizeRegisteredParticipants(session.getId());
@@ -203,11 +210,6 @@ public class TrainingSessionService {
 		auditLogService.record("UPDATE_TRAINING_SESSION_STATUS:" + status.name(), "training_session", session.getId());
 		notifyRegisteredParticipants(session, status);
 		return trainingSessionMapper.toResponse(session);
-	}
-
-	private TrainingSession findSession(Long id) {
-		return trainingSessionRepository.findWithClassAndTrainerById(id)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
 	}
 
 	private FapClass findActiveClass(Long classId) {
@@ -255,16 +257,6 @@ public class TrainingSessionService {
 		session.setRegistrationMode(request.registrationMode());
 	}
 
-	private void validateTransition(TrainingSessionStatus current, TrainingSessionStatus target) {
-		if (current == target) {
-			return;
-		}
-		if (current != TrainingSessionStatus.Upcoming
-				|| (target != TrainingSessionStatus.Completed && target != TrainingSessionStatus.Canceled)) {
-			throw new ConflictException("INVALID_TRAINING_SESSION_STATUS_TRANSITION", "Invalid training session status transition");
-		}
-	}
-
 	private void validateAttendanceReadyForCompletion(Long trainingSessionId) {
 		Set<Long> registeredUserIds = new HashSet<>(trainingRegistrationRepository
 				.findUserIdsByTrainingSessionIdAndStatus(
@@ -309,7 +301,7 @@ public class TrainingSessionService {
 					"TRAINING_SESSION_TRAINER_SCHEDULE_CONFLICT",
 					"The trainer already has another training session during this time");
 		}
-		String normalizedRoom = normalize(room);
+		String normalizedRoom = TextNormalizer.blankToNull(room);
 		if (sessionType != TrainingSessionType.Online
 				&& normalizedRoom != null
 				&& trainingSessionRepository.countRoomScheduleConflicts(
@@ -396,11 +388,7 @@ public class TrainingSessionService {
 		}
 	}
 
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
-	}
-
 	private Long scopeUserId(FapUserPrincipal principal) {
-		return principal == null || principal.roles().contains("Super Admin") ? null : principal.id();
+		return principal == null || principal.roles().contains(RoleNames.SUPER_ADMIN) ? null : principal.id();
 	}
 }

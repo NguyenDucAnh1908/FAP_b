@@ -4,6 +4,7 @@ import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.security.AuthorizationCache;
+import com.fap.common.security.RoleNames;
 import com.fap.role.entity.Role;
 import com.fap.role.repository.RoleRepository;
 import com.fap.user.dto.CreateUserRequest;
@@ -14,6 +15,7 @@ import com.fap.user.enums.Gender;
 import com.fap.user.enums.UserStatus;
 import com.fap.user.mapper.UserMapper;
 import com.fap.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,6 +50,12 @@ class UserServiceTest {
 			userMapper,
 			auditLogService,
 			authorizationCache);
+
+	@BeforeEach
+	void useRealRepositoryLookups() {
+		// The default lookup must run so the findWithRolesById stubs below keep driving behaviour.
+		lenient().doCallRealMethod().when(userRepository).getWithRolesOrThrow(any());
+	}
 
 	@Test
 	void listNormalizesFiltersAndDelegatesToSearchRepository() {
@@ -99,7 +109,7 @@ class UserServiceTest {
 				Gender.Male,
 				null,
 				Set.of(1L)),
-				Set.of("Super Admin"));
+				Set.of(RoleNames.SUPER_ADMIN));
 
 		assertThat(response).isEqualTo(expected);
 		verify(passwordEncoder).encode("password123");
@@ -119,7 +129,7 @@ class UserServiceTest {
 				Gender.Male,
 				null,
 				Set.of(1L)),
-				Set.of("Super Admin")))
+				Set.of(RoleNames.SUPER_ADMIN)))
 				.isInstanceOf(ConflictException.class);
 	}
 
@@ -137,7 +147,7 @@ class UserServiceTest {
 				Gender.Male,
 				null,
 				Set.of(99L)),
-				Set.of("Super Admin")))
+				Set.of(RoleNames.SUPER_ADMIN)))
 				.isInstanceOf(NotFoundException.class);
 	}
 
@@ -145,7 +155,7 @@ class UserServiceTest {
 	void createRejectsSuperAdminRoleWhenActorIsNotSuperAdmin() {
 		Role superAdmin = new Role();
 		superAdmin.setId(1L);
-		superAdmin.setName("Super Admin");
+		superAdmin.setName(RoleNames.SUPER_ADMIN);
 		when(userRepository.existsByEmailIgnoreCase("user@example.com")).thenReturn(false);
 		when(roleRepository.findByIdIn(Set.of(1L))).thenReturn(Set.of(superAdmin));
 
@@ -158,7 +168,7 @@ class UserServiceTest {
 				Gender.Male,
 				null,
 				Set.of(1L)),
-				Set.of("Class Admin")))
+				Set.of(RoleNames.CLASS_ADMIN)))
 				.isInstanceOf(ConflictException.class)
 				.hasMessage("Only Super Admin can manage Super Admin role");
 	}
@@ -167,10 +177,10 @@ class UserServiceTest {
 	void updateRejectsRemovingLastActiveSuperAdminRole() {
 		Role superAdmin = new Role();
 		superAdmin.setId(1L);
-		superAdmin.setName("Super Admin");
+		superAdmin.setName(RoleNames.SUPER_ADMIN);
 		Role trainer = new Role();
 		trainer.setId(2L);
-		trainer.setName("Trainer");
+		trainer.setName(RoleNames.TRAINER);
 		User user = new User();
 		user.setId(1000L);
 		user.setEmail("admin@example.com");
@@ -179,7 +189,7 @@ class UserServiceTest {
 		when(userRepository.findWithRolesById(1000L)).thenReturn(Optional.of(user));
 		when(userRepository.findByEmailIgnoreCase("admin@example.com")).thenReturn(Optional.of(user));
 		when(roleRepository.findByIdIn(Set.of(2L))).thenReturn(Set.of(trainer));
-		when(userRepository.countByRoleNameAndStatus("Super Admin", UserStatus.Active)).thenReturn(1L);
+		when(userRepository.countByRoleNameAndStatus(RoleNames.SUPER_ADMIN, UserStatus.Active)).thenReturn(1L);
 
 		assertThatThrownBy(() -> userService.update(1000L, new UpdateUserRequest(
 				"Admin",
@@ -189,9 +199,18 @@ class UserServiceTest {
 				Gender.Male,
 				null,
 				Set.of(2L)),
-				Set.of("Super Admin")))
+				Set.of(RoleNames.SUPER_ADMIN)))
 				.isInstanceOf(ConflictException.class)
 				.hasMessage("Cannot remove Super Admin role from the last active Super Admin");
+	}
+
+	@Test
+	void getRejectsUnknownUser() {
+		when(userRepository.findWithRolesById(404L)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> userService.get(404L))
+				.isInstanceOf(NotFoundException.class)
+				.hasMessage("User not found");
 	}
 
 	@Test
@@ -209,13 +228,13 @@ class UserServiceTest {
 	@Test
 	void updateStatusRejectsLastActiveSuperAdminDeactivation() {
 		Role superAdmin = new Role();
-		superAdmin.setName("Super Admin");
+		superAdmin.setName(RoleNames.SUPER_ADMIN);
 		User user = new User();
 		user.setId(1000L);
 		user.setStatus(UserStatus.Active);
 		user.setRoles(Set.of(superAdmin));
 		when(userRepository.findWithRolesById(1000L)).thenReturn(Optional.of(user));
-		when(userRepository.countByRoleNameAndStatus("Super Admin", UserStatus.Active)).thenReturn(1L);
+		when(userRepository.countByRoleNameAndStatus(RoleNames.SUPER_ADMIN, UserStatus.Active)).thenReturn(1L);
 
 		assertThatThrownBy(() -> userService.updateStatus(1000L, UserStatus.Inactive, 2000L))
 				.isInstanceOf(ConflictException.class)
@@ -225,14 +244,14 @@ class UserServiceTest {
 	@Test
 	void updateStatusAllowsDeactivatingNonSelfWhenAnotherSuperAdminRemains() {
 		Role superAdmin = new Role();
-		superAdmin.setName("Super Admin");
+		superAdmin.setName(RoleNames.SUPER_ADMIN);
 		User user = new User();
 		user.setId(1000L);
 		user.setStatus(UserStatus.Active);
 		user.setRoles(Set.of(superAdmin));
 		UserResponse expected = new UserResponse(1000L, "Admin", "admin@example.com", null, null, Gender.Male, null, UserStatus.Inactive, null, null, null);
 		when(userRepository.findWithRolesById(1000L)).thenReturn(Optional.of(user));
-		when(userRepository.countByRoleNameAndStatus("Super Admin", UserStatus.Active)).thenReturn(2L);
+		when(userRepository.countByRoleNameAndStatus(RoleNames.SUPER_ADMIN, UserStatus.Active)).thenReturn(2L);
 		when(userMapper.toResponse(user)).thenReturn(expected);
 
 		UserResponse response = userService.updateStatus(1000L, UserStatus.Inactive, 2000L);

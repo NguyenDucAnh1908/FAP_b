@@ -162,7 +162,14 @@ public class GlobalExceptionHandler {
 				.body(ErrorResponse.of("INTERNAL_ERROR", messageService.get("error.INTERNAL_ERROR")));
 	}
 
+	/**
+	 * Most specific localized text available: the exception's own message key, then
+	 * {@code error.<code>}, then the exception's English message.
+	 */
 	private String errorMessage(BusinessException exception) {
-		return messageService.getOrDefault("error." + exception.getCode(), exception.getMessage());
+		Object[] args = exception.getMessageArgs();
+		String byCode = messageService.getOrDefault("error." + exception.getCode(), exception.getMessage(), args);
+		String messageKey = exception.getMessageKey();
+		return messageKey == null ? byCode : messageService.getOrDefault(messageKey, byCode, args);
 	}
 }

@@ -1,5 +1,6 @@
 package com.fap.syllabus.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.syllabus.entity.Syllabus;
 import com.fap.syllabus.enums.SyllabusStatus;
 import org.springframework.data.domain.Page;
@@ -11,6 +12,10 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
+
+	default Syllabus getOrThrow(Long id) {
+		return findById(id).orElseThrow(() -> new NotFoundException("Syllabus not found"));
+	}
 
 	boolean existsByCodeIgnoreCase(String code);
 

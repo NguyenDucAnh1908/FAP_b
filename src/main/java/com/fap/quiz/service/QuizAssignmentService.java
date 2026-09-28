@@ -65,7 +65,7 @@ public class QuizAssignmentService {
 
 	@Transactional
 	public QuizAssignmentResponse assign(Long quizId, CreateQuizAssignmentRequest request, Long currentUserId) {
-		Quiz quiz = findQuiz(quizId);
+		Quiz quiz = quizRepository.getQuizOrThrow(quizId);
 		ensurePublished(quiz);
 		validateScope(request);
 
@@ -87,8 +87,7 @@ public class QuizAssignmentService {
 
 	@Transactional
 	public void delete(Long quizId, Long assignmentId) {
-		QuizAssignment assignment = quizAssignmentRepository.findByQuizIdAndId(quizId, assignmentId)
-				.orElseThrow(() -> new NotFoundException("Quiz assignment not found"));
+		QuizAssignment assignment = quizAssignmentRepository.getByQuizIdAndIdOrThrow(quizId, assignmentId);
 		ensurePublished(assignment.getQuiz());
 		if (assignment.getFapClass() != null
 				&& completionQuizRepository.existsByFapClassIdAndQuizId(assignment.getFapClass().getId(), quizId)) {
@@ -122,11 +121,6 @@ public class QuizAssignmentService {
 		if (hasClass == hasSession) {
 			throw new BadRequestException("INVALID_QUIZ_ASSIGNMENT_SCOPE", "Provide exactly one of classId or trainingSessionId");
 		}
-	}
-
-	private Quiz findQuiz(Long quizId) {
-		return quizRepository.findById(quizId)
-				.orElseThrow(() -> new NotFoundException("Quiz not found"));
 	}
 
 	private void ensureQuizExists(Long quizId) {

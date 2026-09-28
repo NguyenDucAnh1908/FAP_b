@@ -8,6 +8,7 @@ import com.fap.clazz.enums.ClassEnrollmentStatus;
 import com.fap.common.exception.ForbiddenException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.common.security.RoleNames;
 import com.fap.training.entity.TrainingSession;
 import com.fap.training.repository.TrainingSessionRepository;
 import org.springframework.stereotype.Service;
@@ -15,11 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ClassAccessService {
-
-	private static final String SUPER_ADMIN_ROLE = "Super Admin";
-	private static final String CLASS_ADMIN_ROLE = "Class Admin";
-	private static final String TRAINER_ROLE = "Trainer";
-	private static final String TRAINEE_ROLE = "Trainee";
 
 	private final ClassRepository classRepository;
 	private final ClassAdminRepository classAdminRepository;
@@ -132,26 +128,26 @@ public class ClassAccessService {
 	}
 
 	private boolean isSuperAdmin(FapUserPrincipal principal) {
-		return principal.roles().contains(SUPER_ADMIN_ROLE);
+		return principal.roles().contains(RoleNames.SUPER_ADMIN);
 	}
 
 	private boolean isAssignedClassAdmin(FapUserPrincipal principal, Long classId) {
-		return principal.roles().contains(CLASS_ADMIN_ROLE)
+		return principal.roles().contains(RoleNames.CLASS_ADMIN)
 				&& classAdminRepository.existsByFapClassIdAndUserId(classId, principal.id());
 	}
 
 	private boolean isAssignedClassTrainer(FapUserPrincipal principal, Long classId) {
-		return principal.roles().contains(TRAINER_ROLE)
+		return principal.roles().contains(RoleNames.TRAINER)
 				&& classTrainerRepository.existsByFapClassIdAndUserId(classId, principal.id());
 	}
 
 	private boolean isSessionTrainer(FapUserPrincipal principal, TrainingSession session) {
-		return principal.roles().contains(TRAINER_ROLE)
+		return principal.roles().contains(RoleNames.TRAINER)
 				&& session.getTrainer().getId().equals(principal.id());
 	}
 
 	private boolean isEnrolledTrainee(FapUserPrincipal principal, Long classId) {
-		return principal.roles().contains(TRAINEE_ROLE)
+		return principal.roles().contains(RoleNames.TRAINEE)
 				&& classEnrollmentRepository.existsByFapClassIdAndUserIdAndStatusIn(
 						classId,
 						principal.id(),

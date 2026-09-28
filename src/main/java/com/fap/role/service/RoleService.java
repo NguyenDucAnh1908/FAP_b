@@ -2,8 +2,8 @@ package com.fap.role.service;
 
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.audit.AuditLogService;
-import com.fap.common.exception.NotFoundException;
 import com.fap.common.security.AuthorizationCache;
+import com.fap.common.security.RoleNames;
 import com.fap.role.dto.PermissionResponse;
 import com.fap.role.dto.RoleResponse;
 import com.fap.role.dto.UpdatePermissionRequest;
@@ -24,8 +24,6 @@ import java.util.Set;
 
 @Service
 public class RoleService {
-	private static final String SUPER_ADMIN_ROLE = "Super Admin";
-
 	private static final Set<String> SUPPORTED_PERMISSION_RESOURCES = Set.of(
 			"user",
 			"syllabus",
@@ -73,8 +71,7 @@ public class RoleService {
 		validatePermissionMatrix(request);
 		request.permissions().forEach(item -> {
 			String resource = normalizeResource(item.resource());
-			Role role = roleRepository.findById(item.roleId())
-					.orElseThrow(() -> new NotFoundException("Role not found"));
+			Role role = roleRepository.getRoleOrThrow(item.roleId());
 			Permission permission = permissionRepository.findByRoleIdAndResource(item.roleId(), resource)
 					.orElseGet(() -> {
 						Permission created = new Permission();
@@ -111,7 +108,7 @@ public class RoleService {
 	}
 
 	private PermissionResponse enforceSuperAdminFullAccess(PermissionResponse permission) {
-		if (!SUPER_ADMIN_ROLE.equalsIgnoreCase(permission.roleName())) {
+		if (!RoleNames.SUPER_ADMIN.equalsIgnoreCase(permission.roleName())) {
 			return permission;
 		}
 		return new PermissionResponse(
@@ -122,6 +119,6 @@ public class RoleService {
 	}
 
 	private boolean isSuperAdmin(Role role) {
-		return SUPER_ADMIN_ROLE.equalsIgnoreCase(role.getName());
+		return RoleNames.SUPER_ADMIN.equalsIgnoreCase(role.getName());
 	}
 }

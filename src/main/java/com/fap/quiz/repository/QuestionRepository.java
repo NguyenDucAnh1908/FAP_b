@@ -1,5 +1,6 @@
 package com.fap.quiz.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.quiz.entity.Question;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -8,6 +9,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface QuestionRepository extends JpaRepository<Question, Long> {
+
+	/** One place for the lookup so every caller fails with the same not-found message. */
+	default Question getQuestionOrThrow(Long id) {
+		return findById(id)
+				.orElseThrow(() -> new NotFoundException("Question not found"));
+	}
 
 	@Query(
 			value = """

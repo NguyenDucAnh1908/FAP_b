@@ -31,6 +31,8 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -72,6 +74,7 @@ class TrainingSessionSchedulingTest {
 				auditLogService,
 				notificationService,
 				classEnrollmentService);
+		lenient().doCallRealMethod().when(trainingSessionRepository).getWithClassAndTrainerOrThrow(any());
 		fapClass = new FapClass();
 		fapClass.setId(CLASS_ID);
 		fapClass.setStatus(ClassStatus.Active);

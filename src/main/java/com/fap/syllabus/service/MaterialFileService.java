@@ -3,12 +3,12 @@ package com.fap.syllabus.service;
 import com.fap.common.audit.AuditLogService;
 import com.fap.clazz.enums.ClassEnrollmentStatus;
 import com.fap.common.exception.BadRequestException;
-import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.ForbiddenException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.metrics.DomainMetrics;
 import com.fap.common.api.PageRequestFactory;
 import com.fap.common.util.FileValidator;
+import com.fap.common.util.TextNormalizer;
 import com.fap.syllabus.dto.AssignedMaterialFileResponse;
 import com.fap.syllabus.dto.CreateMaterialFileRequest;
 import com.fap.syllabus.dto.CreateMaterialRequest;
@@ -18,7 +18,6 @@ import com.fap.syllabus.dto.UpdateMaterialFileRequest;
 import com.fap.syllabus.entity.MaterialFile;
 import com.fap.syllabus.entity.Syllabus;
 import com.fap.syllabus.entity.SyllabusTopic;
-import com.fap.syllabus.enums.SyllabusStatus;
 import com.fap.syllabus.mapper.MaterialFileMapper;
 import com.fap.syllabus.repository.MaterialFileContentRepository;
 import com.fap.syllabus.repository.MaterialFileRepository;
@@ -52,10 +51,17 @@ public class MaterialFileService {
 	private static final String DEFAULT_DOWNLOAD_CONTENT_TYPE = "application/octet-stream";
 
 	/** Placeholder held only between save() and the id-dependent download URL being set. */
-	private static final String PENDING_FILE_URL = "pending";
+	static final String PENDING_FILE_URL = "pending";
 
 	public static String downloadPath(Long materialId) {
 		return "/api/v1/materials/" + materialId + "/download";
+	}
+
+	/** Recognises a URL built by {@link #downloadPath}, whose bytes live in Oracle rather than elsewhere. */
+	static boolean isInternalDownloadPath(String fileUrl) {
+		return fileUrl != null
+				&& fileUrl.startsWith("/api/v1/materials/")
+				&& fileUrl.endsWith("/download");
 	}
 
 	private final SyllabusRepository syllabusRepository;
@@ -88,7 +94,7 @@ public class MaterialFileService {
 
 	@Transactional(readOnly = true)
 	public List<MaterialFileResponse> list(Long syllabusId, Long topicId) {
-		findTopic(syllabusId, topicId);
+		topicRepository.getByIdAndUnitDaySyllabusIdOrThrow(topicId, syllabusId);
 		return materialFileRepository.findByTopicIdOrderByUploadedAtDesc(topicId).stream()
 				.map(materialFileMapper::toResponse)
 				.toList();
@@ -115,13 +121,13 @@ public class MaterialFileService {
 				order,
 				Sort.by(Sort.Direction.DESC, "uploadedAt", "id"),
 				"id", "uploadedAt", "fileName", "contentType", "fileSize");
-		return materialFileRepository.search(syllabusId, topicId, normalize(keyword), pageRequest)
+		return materialFileRepository.search(syllabusId, topicId, TextNormalizer.blankToNull(keyword), pageRequest)
 				.map(materialFileMapper::toResponse);
 	}
 
 	@Transactional(readOnly = true)
 	public MaterialFileResponse get(Long materialId) {
-		return materialFileMapper.toResponse(findMaterial(materialId));
+		return materialFileMapper.toResponse(materialFileRepository.getWithTopicOrThrow(materialId));
 	}
 
 	@Transactional(readOnly = true)
@@ -147,7 +153,7 @@ public class MaterialFileService {
 		return materialFileRepository.searchAssignedToUser(
 						currentUserId,
 						ELIGIBLE_CLASS_ENROLLMENT_STATUSES,
-						normalize(keyword),
+						TextNormalizer.blankToNull(keyword),
 						pageRequest)
 				.map(materialFileMapper::toAssignedResponse);
 	}
@@ -169,7 +175,7 @@ public class MaterialFileService {
 			CreateMaterialFileRequest request,
 			Long currentUserId) {
 		findEditableSyllabus(syllabusId);
-		SyllabusTopic topic = findTopic(syllabusId, topicId);
+		SyllabusTopic topic = topicRepository.getByIdAndUnitDaySyllabusIdOrThrow(topicId, syllabusId);
 		MaterialFile materialFile = new MaterialFile();
 		materialFile.setTopic(topic);
 		applyFields(materialFile, request.fileName(), request.fileUrl(), request.fileSize(), request.contentType());
@@ -189,7 +195,7 @@ public class MaterialFileService {
 		boolean counted = false;
 		try {
 			findEditableSyllabus(syllabusId);
-			SyllabusTopic topic = findTopic(syllabusId, topicId);
+			SyllabusTopic topic = topicRepository.getByIdAndUnitDaySyllabusIdOrThrow(topicId, syllabusId);
 			fileValidator.validateUpload(file);
 			String fileName = fileValidator.sanitizeFileName(file.getOriginalFilename());
 
@@ -198,7 +204,7 @@ public class MaterialFileService {
 			materialFile.setTopic(topic);
 			materialFile.setFileName(fileName);
 			materialFile.setFileSize(size);
-			materialFile.setContentType(normalize(file.getContentType()));
+			materialFile.setContentType(TextNormalizer.blankToNull(file.getContentType()));
 			materialFile.setUploadedBy(currentUserId);
 			materialFile.setUploadedAt(LocalDateTime.now());
 			// file_url is NOT NULL, and the download path needs the generated id — save first, then set it.
@@ -240,7 +246,7 @@ public class MaterialFileService {
 	 */
 	@Transactional(readOnly = true)
 	public MaterialFileDownload download(Long materialId, Long currentUserId, boolean canManageMaterials) {
-		MaterialFile materialFile = findMaterial(materialId);
+		MaterialFile materialFile = materialFileRepository.getWithTopicOrThrow(materialId);
 		if (!canManageMaterials
 				&& !materialFileRepository.existsAssignedToUser(
 						materialId, currentUserId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES)) {
@@ -299,9 +305,9 @@ public class MaterialFileService {
 
 	@Transactional
 	public MaterialFileResponse update(Long materialId, UpdateMaterialFileRequest request) {
-		MaterialFile materialFile = findMaterial(materialId);
+		MaterialFile materialFile = materialFileRepository.getWithTopicOrThrow(materialId);
 		Syllabus syllabus = materialFile.getTopic().getUnit().getDay().getSyllabus();
-		ensureEditable(syllabus);
+		SyllabusRules.ensureEditable(syllabus);
 		applyFields(materialFile, request.fileName(), request.fileUrl(), request.fileSize(), request.contentType());
 		auditLogService.record("UPDATE_MATERIAL_FILE", "syllabus", syllabus.getId());
 		return materialFileMapper.toResponse(materialFile);
@@ -309,9 +315,9 @@ public class MaterialFileService {
 
 	@Transactional
 	public void delete(Long materialId) {
-		MaterialFile materialFile = findMaterial(materialId);
+		MaterialFile materialFile = materialFileRepository.getWithTopicOrThrow(materialId);
 		Syllabus syllabus = materialFile.getTopic().getUnit().getDay().getSyllabus();
-		ensureEditable(syllabus);
+		SyllabusRules.ensureEditable(syllabus);
 		materialFileRepository.delete(materialFile);
 		auditLogService.record("DELETE_MATERIAL_FILE", "syllabus", syllabus.getId());
 	}
@@ -319,34 +325,16 @@ public class MaterialFileService {
 	@Transactional
 	public void delete(Long syllabusId, Long topicId, Long materialId) {
 		findEditableSyllabus(syllabusId);
-		findTopic(syllabusId, topicId);
-		MaterialFile materialFile = materialFileRepository.findByIdAndTopicId(materialId, topicId)
-				.orElseThrow(() -> new NotFoundException("Material file not found"));
+		topicRepository.getByIdAndUnitDaySyllabusIdOrThrow(topicId, syllabusId);
+		MaterialFile materialFile = materialFileRepository.getByIdAndTopicIdOrThrow(materialId, topicId);
 		materialFileRepository.delete(materialFile);
 		auditLogService.record("DELETE_MATERIAL_FILE", "syllabus", syllabusId);
 	}
 
 	private Syllabus findEditableSyllabus(Long syllabusId) {
-		Syllabus syllabus = syllabusRepository.findById(syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus not found"));
-		ensureEditable(syllabus);
+		Syllabus syllabus = syllabusRepository.getOrThrow(syllabusId);
+		SyllabusRules.ensureEditable(syllabus);
 		return syllabus;
-	}
-
-	private void ensureEditable(Syllabus syllabus) {
-		if (syllabus.getStatus() == SyllabusStatus.Active || syllabus.getStatus() == SyllabusStatus.Inactive) {
-			throw new ConflictException("SYLLABUS_NOT_EDITABLE", "Only Drafting or Pending syllabus can be edited");
-		}
-	}
-
-	private SyllabusTopic findTopic(Long syllabusId, Long topicId) {
-		return topicRepository.findByIdAndUnitDaySyllabusId(topicId, syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus topic not found"));
-	}
-
-	private MaterialFile findMaterial(Long materialId) {
-		return materialFileRepository.findWithTopicById(materialId)
-				.orElseThrow(() -> new NotFoundException("Material file not found"));
 	}
 
 	private void applyFields(
@@ -358,10 +346,6 @@ public class MaterialFileService {
 		materialFile.setFileName(fileName.trim());
 		materialFile.setFileUrl(fileUrl.trim());
 		materialFile.setFileSize(fileSize);
-		materialFile.setContentType(normalize(contentType));
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
+		materialFile.setContentType(TextNormalizer.blankToNull(contentType));
 	}
 }

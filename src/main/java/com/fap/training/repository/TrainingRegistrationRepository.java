@@ -1,5 +1,6 @@
 package com.fap.training.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.training.entity.TrainingRegistration;
 import com.fap.training.enums.TrainingRegistrationStatus;
 import com.fap.training.enums.TrainingSessionStatus;
@@ -58,6 +59,15 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
 	Optional<TrainingRegistration> findByTrainingSessionIdAndUserId(Long trainingSessionId, Long userId);
+
+	/**
+	 * Lookup for callers that treat a missing registration as not found. Feedback submission uses
+	 * the same finder but answers with a conflict instead, so it stays on the finder.
+	 */
+	default TrainingRegistration getByTrainingSessionIdAndUserIdOrThrow(Long trainingSessionId, Long userId) {
+		return findByTrainingSessionIdAndUserId(trainingSessionId, userId)
+				.orElseThrow(() -> new NotFoundException("Training registration not found"));
+	}
 
 	/** All registrations of a session, to sync many users against it without a lookup per user. */
 	List<TrainingRegistration> findByTrainingSessionId(Long trainingSessionId);

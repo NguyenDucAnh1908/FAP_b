@@ -17,7 +17,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +36,10 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TrainingAnalyticsServiceTest {
+
+	// Fixed so the "today" attendance cutoff stubbed below cannot drift if a run crosses midnight.
+	private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-03-15T09:00:00Z"), ZoneOffset.UTC);
+	private static final LocalDate TODAY = LocalDate.now(CLOCK);
 
 	@Mock
 	private TrainingSessionRepository trainingSessionRepository;
@@ -57,7 +65,8 @@ class TrainingAnalyticsServiceTest {
 				trainingRegistrationRepository,
 				attendanceRecordRepository,
 				trainingFeedbackRepository,
-				classEnrollmentRepository);
+				classEnrollmentRepository,
+				CLOCK);
 	}
 
 	@Test
@@ -120,7 +129,7 @@ class TrainingAnalyticsServiceTest {
 				classAdminId,
 				TrainingSessionStatus.Upcoming,
 				TrainingRegistrationStatus.Registered,
-				LocalDate.now(),
+				TODAY,
 				fromDate,
 				toDate)).thenReturn(0L);
 		when(trainingFeedbackRepository.summarizeForAnalytics(classAdminId, fromDate, toDate))
@@ -145,6 +154,20 @@ class TrainingAnalyticsServiceTest {
 				.isInstanceOf(BadRequestException.class)
 				.hasMessage("From date must not be after to date");
 		verify(trainingSessionRepository, never()).countStatusesForAnalytics(any(), any(), any());
+	}
+
+	@Test
+	void takesTheAttendanceCutoffAndGeneratedAtFromTheClock() {
+		TrainingAnalyticsResponse response = service.getAnalytics(null, null, null);
+
+		verify(trainingSessionRepository).countPendingAttendanceForAnalytics(
+				null,
+				TrainingSessionStatus.Upcoming,
+				TrainingRegistrationStatus.Registered,
+				TODAY,
+				null,
+				null);
+		assertThat(response.generatedAt()).isEqualTo(LocalDateTime.now(CLOCK));
 	}
 
 	private long statusCount(List<TrainingAnalyticsResponse.StatusCount> items, String status) {

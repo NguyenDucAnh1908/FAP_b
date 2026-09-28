@@ -6,7 +6,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
+
+	/** Bounded dashboard preview without a pagination count query. */
+	List<AuditLog> findAllBy(Pageable pageable);
 
 	@Query("""
 			select a

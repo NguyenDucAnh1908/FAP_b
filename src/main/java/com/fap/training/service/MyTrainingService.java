@@ -7,6 +7,7 @@ import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.api.PageRequestFactory;
+import com.fap.common.util.TextNormalizer;
 import com.fap.training.dto.MyAttendanceResponse;
 import com.fap.training.dto.MyClassAdminDashboardResponse;
 import com.fap.training.dto.MyTrainerDashboardResponse;
@@ -102,7 +103,7 @@ public class MyTrainingService {
 						sessionStatus,
 						fromDate,
 						toDate,
-						normalize(keyword),
+						TextNormalizer.blankToNull(keyword),
 						pageRequest)
 				.map(myTrainingMapper::toRegistrationResponse);
 	}
@@ -147,7 +148,7 @@ public class MyTrainingService {
 						sessionStatus,
 						fromDate,
 						toDate,
-						normalize(keyword),
+						TextNormalizer.blankToNull(keyword),
 						pageRequest)
 				.map(myTrainingMapper::toSessionResponse);
 	}
@@ -189,7 +190,7 @@ public class MyTrainingService {
 						status,
 						fromDate,
 						toDate,
-						normalize(keyword),
+						TextNormalizer.blankToNull(keyword),
 						pageRequest)
 				.map(myTrainingMapper::toAttendanceResponse);
 	}
@@ -357,9 +358,5 @@ public class MyTrainingService {
 		if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
 			throw new BadRequestException("INVALID_MY_TRAINING_DATE_FILTER", "From date must be before or equal to to date");
 		}
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
 	}
 }

@@ -5,6 +5,8 @@ import com.fap.common.exception.BadRequestException;
 import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.util.StatusTransitions;
+import com.fap.common.util.TextNormalizer;
 import com.fap.quiz.dto.CreateQuizRequest;
 import com.fap.quiz.dto.QuizQuestionItemRequest;
 import com.fap.quiz.dto.QuizQuestionResponse;
@@ -83,13 +85,17 @@ public class QuizService {
 				"openDate", "open_date",
 				"closeDate", "close_date",
 				"createdAt", "created_at"));
-		return quizRepository.search(enumName(status), normalize(category), normalize(keyword), nativePageRequest)
+		return quizRepository.search(
+						NativeQueryParameters.enumName(status),
+						TextNormalizer.blankToNull(category),
+						TextNormalizer.blankToNull(keyword),
+						nativePageRequest)
 				.map(this::toResponse);
 	}
 
 	@Transactional(readOnly = true)
 	public QuizResponse get(Long id) {
-		return toResponse(findQuiz(id));
+		return toResponse(quizRepository.getQuizOrThrow(id));
 	}
 
 	@Transactional
@@ -110,7 +116,7 @@ public class QuizService {
 
 	@Transactional
 	public QuizResponse update(Long id, UpdateQuizRequest request, Long currentUserId) {
-		Quiz quiz = findQuiz(id);
+		Quiz quiz = quizRepository.getQuizOrThrow(id);
 		ensureDraft(quiz);
 		validateDateRange(request.openDate(), request.closeDate());
 		applyFields(quiz, request);
@@ -122,7 +128,7 @@ public class QuizService {
 
 	@Transactional
 	public void delete(Long id, Long currentUserId) {
-		Quiz quiz = findQuiz(id);
+		Quiz quiz = quizRepository.getQuizOrThrow(id);
 		ensureDraft(quiz);
 		LocalDateTime now = LocalDateTime.now();
 		quiz.setDeleted(true);
@@ -134,7 +140,7 @@ public class QuizService {
 
 	@Transactional
 	public QuizResponse updateStatus(Long id, UpdateQuizStatusRequest request, Long currentUserId) {
-		Quiz quiz = findQuiz(id);
+		Quiz quiz = quizRepository.getQuizOrThrow(id);
 		validateTransition(quiz, request.status());
 		quiz.setStatus(request.status());
 		quiz.setUpdatedAt(LocalDateTime.now());
@@ -156,7 +162,7 @@ public class QuizService {
 			Long id,
 			UpdateQuizQuestionsRequest request,
 			Long currentUserId) {
-		Quiz quiz = findQuiz(id);
+		Quiz quiz = quizRepository.getQuizOrThrow(id);
 		ensureDraft(quiz);
 		validateQuestionItems(request.questions());
 		Map<Long, Question> questions = loadQuestions(request.questions());
@@ -211,7 +217,7 @@ public class QuizService {
 
 	private void applyFields(Quiz quiz, CreateQuizRequest request) {
 		quiz.setTitle(request.title().trim());
-		quiz.setDescription(normalize(request.description()));
+		quiz.setDescription(TextNormalizer.blankToNull(request.description()));
 		quiz.setDurationMinutes(request.durationMinutes());
 		quiz.setPassingScore(request.passingScore());
 		quiz.setMaxAttempts(request.maxAttempts());
@@ -223,7 +229,7 @@ public class QuizService {
 
 	private void applyFields(Quiz quiz, UpdateQuizRequest request) {
 		quiz.setTitle(request.title().trim());
-		quiz.setDescription(normalize(request.description()));
+		quiz.setDescription(TextNormalizer.blankToNull(request.description()));
 		quiz.setDurationMinutes(request.durationMinutes());
 		quiz.setPassingScore(request.passingScore());
 		quiz.setMaxAttempts(request.maxAttempts());
@@ -235,11 +241,6 @@ public class QuizService {
 
 	private QuizResponse toResponse(Quiz quiz) {
 		return quizMapper.toResponse(quiz, quizQuestionRepository.countByIdQuizId(quiz.getId()));
-	}
-
-	private Quiz findQuiz(Long id) {
-		return quizRepository.findById(id)
-				.orElseThrow(() -> new NotFoundException("Quiz not found"));
 	}
 
 	private void ensureQuizExists(Long id) {
@@ -255,32 +256,23 @@ public class QuizService {
 	}
 
 	private void validateTransition(Quiz quiz, QuizStatus target) {
-		if (quiz.getStatus() == target) {
-			return;
+		StatusTransitions.requireAllowed(
+				quiz.getStatus(),
+				target,
+				"INVALID_QUIZ_STATUS_TRANSITION",
+				"Invalid quiz status transition");
+		// Publishing is what exposes the quiz to trainees, so only that step needs questions; the
+		// Published -> Published no-op and closing must not count them.
+		if (quiz.getStatus() == QuizStatus.Draft
+				&& target == QuizStatus.Published
+				&& quizQuestionRepository.countByIdQuizId(quiz.getId()) == 0) {
+			throw new ConflictException("QUIZ_QUESTION_REQUIRED", "Quiz requires at least one question before publishing");
 		}
-		if (quiz.getStatus() == QuizStatus.Draft && target == QuizStatus.Published) {
-			if (quizQuestionRepository.countByIdQuizId(quiz.getId()) == 0) {
-				throw new ConflictException("QUIZ_QUESTION_REQUIRED", "Quiz requires at least one question before publishing");
-			}
-			return;
-		}
-		if (quiz.getStatus() == QuizStatus.Published && target == QuizStatus.Closed) {
-			return;
-		}
-		throw new ConflictException("INVALID_QUIZ_STATUS_TRANSITION", "Invalid quiz status transition");
 	}
 
 	private void validateDateRange(LocalDate openDate, LocalDate closeDate) {
 		if (openDate != null && closeDate != null && openDate.isAfter(closeDate)) {
 			throw new BadRequestException("INVALID_QUIZ_DATE_RANGE", "Quiz open date must be before or equal to close date");
 		}
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
-	}
-
-	private String enumName(Enum<?> value) {
-		return value == null ? null : value.name();
 	}
 }

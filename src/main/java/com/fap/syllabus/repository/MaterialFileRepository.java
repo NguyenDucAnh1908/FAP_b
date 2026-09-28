@@ -1,5 +1,6 @@
 package com.fap.syllabus.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.syllabus.entity.MaterialFile;
 import com.fap.clazz.enums.ClassEnrollmentStatus;
 import org.springframework.data.domain.Page;
@@ -21,8 +22,17 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
 	Optional<MaterialFile> findByIdAndTopicId(Long id, Long topicId);
 
+	default MaterialFile getByIdAndTopicIdOrThrow(Long id, Long topicId) {
+		return findByIdAndTopicId(id, topicId)
+				.orElseThrow(() -> new NotFoundException("Material file not found"));
+	}
+
 	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
 	Optional<MaterialFile> findWithTopicById(Long id);
+
+	default MaterialFile getWithTopicOrThrow(Long id) {
+		return findWithTopicById(id).orElseThrow(() -> new NotFoundException("Material file not found"));
+	}
 
 	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
 	@Query(
