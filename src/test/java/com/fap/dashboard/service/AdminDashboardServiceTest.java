@@ -16,6 +16,7 @@ import com.fap.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -78,20 +79,23 @@ class AdminDashboardServiceTest {
 		when(outcomes.getSubmitted()).thenReturn(0L);
 		when(outcomes.getPassed()).thenReturn(0L);
 		when(quizAttemptRepository.countSubmittedOutcomes()).thenReturn(outcomes);
-		when(trainingSessionRepository.findForDashboard(any(), any(), any())).thenReturn(List.of());
-		when(auditLogRepository.findAllBy(any())).thenReturn(List.of());
+		when(trainingSessionRepository.search(any(), any(), any(), any(), any(), any(), any()))
+				.thenReturn(Page.empty());
+		when(auditLogRepository.search(any(), any(), any(), any())).thenReturn(Page.empty());
 	}
 
 	@Test
 	void takesTodayAndGeneratedAtFromTheClock() {
 		AdminDashboardResponse response = service.getDashboard();
 
-		verify(trainingSessionRepository).findForDashboard(
+		verify(trainingSessionRepository).search(
 				TrainingSessionStatus.Upcoming,
+				null,
+				null,
 				LocalDate.now(CLOCK),
+				null,
+				null,
 				PageRequest.of(0, 5, Sort.by(Sort.Direction.ASC, "sessionDate", "startTime", "id")));
-		verify(auditLogRepository).findAllBy(
-				PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
 		assertThat(response.generatedAt()).isEqualTo(LocalDateTime.now(CLOCK));
 	}
 
