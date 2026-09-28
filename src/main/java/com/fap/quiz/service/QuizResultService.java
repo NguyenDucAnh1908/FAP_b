@@ -21,12 +21,12 @@ import com.fap.quiz.entity.QuizAttempt;
 import com.fap.quiz.entity.QuizQuestion;
 import com.fap.quiz.enums.QuizAttemptStatus;
 import com.fap.quiz.repository.QuizAttemptRepository;
+import com.fap.quiz.repository.QuizAttemptStats;
 import com.fap.quiz.repository.QuizQuestionRepository;
 import com.fap.quiz.repository.QuizRepository;
 import com.fap.training.enums.TrainingRegistrationStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -140,19 +140,14 @@ public class QuizResultService {
 			FapUserPrincipal principal) {
 		Quiz quiz = findQuiz(quizId);
 		assertCanViewResults(principal, classId, trainingSessionId);
-		List<QuizAttempt> attempts = quizAttemptRepository.searchQuizResults(
-						quizId,
-						null,
-						null,
-						null,
-						classId,
-						trainingSessionId,
-						isSuperAdmin(principal),
-						principal.id(),
-						ELIGIBLE_REGISTRATION_STATUSES,
-						Pageable.unpaged())
-				.getContent();
-		return summarize(quiz, attempts);
+		QuizAttemptStats stats = quizAttemptRepository.summarizeQuizResults(
+				quizId,
+				classId,
+				trainingSessionId,
+				isSuperAdmin(principal),
+				principal.id(),
+				ELIGIBLE_REGISTRATION_STATUSES);
+		return summarize(quiz, stats);
 	}
 
 	private QuizAttemptResultResponse toResultResponse(QuizAttempt attempt) {
@@ -174,27 +169,10 @@ public class QuizResultService {
 				attempt.getSubmittedAt());
 	}
 
-	private QuizAttemptSummaryResponse summarize(Quiz quiz, List<QuizAttempt> attempts) {
-		long submittedAttempts = attempts.stream()
-				.filter(attempt -> attempt.getStatus() == QuizAttemptStatus.Submitted)
-				.count();
-		long inProgressAttempts = attempts.stream()
-				.filter(attempt -> attempt.getStatus() == QuizAttemptStatus.InProgress)
-				.count();
-		long passedAttempts = attempts.stream()
-				.filter(attempt -> Boolean.TRUE.equals(attempt.getPassed()))
-				.count();
+	private QuizAttemptSummaryResponse summarize(Quiz quiz, QuizAttemptStats stats) {
+		long submittedAttempts = stats.submittedAttempts();
+		long passedAttempts = stats.passedAttempts();
 		long failedAttempts = submittedAttempts - passedAttempts;
-		List<Integer> scores = attempts.stream()
-				.filter(attempt -> attempt.getStatus() == QuizAttemptStatus.Submitted)
-				.map(QuizAttempt::getScore)
-				.filter(score -> score != null)
-				.toList();
-		Double averageScore = scores.isEmpty()
-				? null
-				: scores.stream().mapToInt(Integer::intValue).average().orElse(0);
-		Integer highestScore = scores.stream().max(Integer::compareTo).orElse(null);
-		Integer lowestScore = scores.stream().min(Integer::compareTo).orElse(null);
 		double passRate = submittedAttempts == 0
 				? 0
 				: BigDecimal.valueOf(passedAttempts)
@@ -204,15 +182,15 @@ public class QuizResultService {
 		return new QuizAttemptSummaryResponse(
 				quiz.getId(),
 				quiz.getTitle(),
-				attempts.size(),
-				inProgressAttempts,
+				stats.totalAttempts(),
+				stats.inProgressAttempts(),
 				submittedAttempts,
 				passedAttempts,
 				failedAttempts,
 				passRate,
-				averageScore,
-				highestScore,
-				lowestScore);
+				stats.averageScore(),
+				stats.highestScore(),
+				stats.lowestScore());
 	}
 
 	private QuizAttemptReviewResponse toReviewResponse(QuizAttempt attempt, List<QuizQuestion> quizQuestions) {

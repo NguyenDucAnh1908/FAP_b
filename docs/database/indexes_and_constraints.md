@@ -149,6 +149,8 @@ This preserves business history and prevents accidental removal of audit-relevan
 User/permission:
 - `idx_users_status`
 - `idx_users_deleted`
+- `idx_users_email_upper` (function-based: Spring Data `*IgnoreCase` compares `UPPER(email)`)
+- `idx_user_roles_role`
 - `idx_permissions_role`
 
 Syllabus/material:
@@ -156,6 +158,7 @@ Syllabus/material:
 - `idx_syll_name`
 - `idx_syll_deleted`
 - `idx_syll_created_by`
+- `idx_syllabuses_code_upper` (function-based, `existsByCodeIgnoreCase`)
 - `idx_material_topic`
 
 Program/class:
@@ -166,11 +169,16 @@ Program/class:
 - `idx_classes_tp`
 - `idx_classes_dates`
 - `idx_classes_deleted`
+- `idx_classes_code_upper` (function-based, `existsByClassCodeIgnoreCase`)
 - `idx_class_trainers_user`
+- `idx_class_trainers_syllabus`
 - `idx_class_admins_user`
 - `idx_class_enrollments_class_status`
 - `idx_class_enrollments_user_status`
 - `idx_completion_quizzes_class`
+- `idx_completion_quizzes_quiz`
+- `idx_result_quizzes_quiz`
+- `idx_result_quizzes_attempt`
 - `idx_course_results_class_status`
 - `idx_course_results_publish`
 - `idx_result_adjustments_result`
@@ -186,10 +194,16 @@ Quiz/question:
 - `idx_qq_question`
 - `idx_attempt_user`
 - `idx_attempt_quiz_user`
+- `idx_attempt_status_submitted` (dashboard counts by status and submission date)
+- `idx_qa_quiz`
+- `idx_qa_class`
+- `idx_qa_session`
 
 Training calendar:
-- `idx_ts_class`
-- `idx_ts_trainer`
+- `idx_ts_class_time` (class schedule conflicts; replaced `idx_ts_class` in V32)
+- `idx_ts_trainer_time` (trainer schedule conflicts; replaced `idx_ts_trainer` in V32)
+- `idx_ts_room_time` (function-based on `LOWER(TRIM(room))`, room conflicts)
+- `idx_ts_session_date` (analytics date filters without status)
 - `idx_ts_status_date`
 - `idx_ts_deleted`
 - `idx_reg_training_status`
@@ -202,6 +216,7 @@ System:
 - `idx_notifications_user_read`
 - `idx_audit_entity`
 - `idx_audit_user_time`
+- `idx_audit_created_at` (audit list, newest first)
 - `idx_refresh_user`
 - `idx_refresh_exp`
 

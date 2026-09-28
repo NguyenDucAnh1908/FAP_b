@@ -60,8 +60,13 @@
 						<value>(?i)(bearer\s+)\S+</value>
 						<mask>$1****</mask>
 					</valueMask>
+					<!--
+					  No literal '}' in these patterns: logback's variable substitution truncates the
+					  value at it, which left an unclosed character class and made every non-local
+					  profile fail to start. \x7D is the closing brace.
+					-->
 					<valueMask>
-						<value>(?i)((?:password|pwd|secret|token|authorization|refresh[_-]?token)"?\s*[:=]\s*"?)[^"\s,}]+</value>
+						<value>(?i)((?:password|pwd|secret|token|authorization|refresh[_-]?token)"?\s*[:=]\s*"?)[^"\s,\x7D]+</value>
 						<mask>$1****</mask>
 					</valueMask>
 				</jsonGeneratorDecorator>

@@ -62,7 +62,7 @@ class DeploymentReadinessIntegrationTest {
 		assertThat(hikari.getValidationTimeout()).isEqualTo(5_000L);
 		assertThat(hikari.getIdleTimeout()).isEqualTo(600_000L);
 		assertThat(hikari.getMaxLifetime()).isEqualTo(1_800_000L);
-		assertThat(hikari.getKeepaliveTime()).isZero();
+		assertThat(hikari.getKeepaliveTime()).isEqualTo(120_000L);
 	}
 
 	@ParameterizedTest

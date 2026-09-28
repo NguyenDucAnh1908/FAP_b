@@ -168,6 +168,71 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
 			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
 			Pageable pageable);
 
+	/**
+	 * Aggregates the attempts {@link #searchQuizResults} would return (same filters, keep the WHERE
+	 * clauses in sync) without loading them, so the summary never materializes attempts and their
+	 * CLOB answers. Averages and extremes only count submitted attempts.
+	 */
+	@Query("""
+			select new com.fap.quiz.repository.QuizAttemptStats(
+			    count(a),
+			    coalesce(sum(case when a.status = com.fap.quiz.enums.QuizAttemptStatus.InProgress then 1L else 0L end), 0L),
+			    coalesce(sum(case when a.status = com.fap.quiz.enums.QuizAttemptStatus.Submitted then 1L else 0L end), 0L),
+			    coalesce(sum(case when a.passed = true then 1L else 0L end), 0L),
+			    avg(case when a.status = com.fap.quiz.enums.QuizAttemptStatus.Submitted then a.score end),
+			    max(case when a.status = com.fap.quiz.enums.QuizAttemptStatus.Submitted then a.score end),
+			    min(case when a.status = com.fap.quiz.enums.QuizAttemptStatus.Submitted then a.score end))
+			from QuizAttempt a
+			where a.quiz.id = :quizId
+			  and (:classId is null or exists (
+			      select r.id
+			      from TrainingRegistration r
+			      where r.user = a.user
+			        and r.status in :eligibleStatuses
+			        and r.trainingSession.fapClass.id = :classId
+			  ))
+			  and (:trainingSessionId is null or exists (
+			      select r.id
+			      from TrainingRegistration r
+			      where r.user = a.user
+			        and r.status in :eligibleStatuses
+			        and r.trainingSession.id = :trainingSessionId
+			  ))
+			  and (
+			      :scopeAll = true
+			      or exists (
+			          select r.id
+			          from TrainingRegistration r
+			          join ClassAdmin ca on ca.fapClass = r.trainingSession.fapClass
+			          where r.user = a.user
+			            and r.status in :eligibleStatuses
+			            and ca.user.id = :scopeUserId
+			      )
+			      or exists (
+			          select r.id
+			          from TrainingRegistration r
+			          join ClassTrainer ct on ct.fapClass = r.trainingSession.fapClass
+			          where r.user = a.user
+			            and r.status in :eligibleStatuses
+			            and ct.user.id = :scopeUserId
+			      )
+			      or exists (
+			          select r.id
+			          from TrainingRegistration r
+			          where r.user = a.user
+			            and r.status in :eligibleStatuses
+			            and r.trainingSession.trainer.id = :scopeUserId
+			      )
+			  )
+			""")
+	QuizAttemptStats summarizeQuizResults(
+			@Param("quizId") Long quizId,
+			@Param("classId") Long classId,
+			@Param("trainingSessionId") Long trainingSessionId,
+			@Param("scopeAll") boolean scopeAll,
+			@Param("scopeUserId") Long scopeUserId,
+			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses);
+
 	@Query("""
 			select count(distinct a)
 			from QuizAttempt a

@@ -52,39 +52,57 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 			@Param("keyword") String keyword,
 			Pageable pageable);
 
+	// Eligibility is an EXISTS, not a join: joining enrollments multiplies rows per class/program, and
+	// the DISTINCT that removed them fails on Oracle (ORA-00932) because Syllabus has CLOB columns.
 	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
 	@Query(
 			value = """
-					select distinct m
+					select m
 					from MaterialFile m
-					join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
-					join FapClass c on c.trainingProgram = tps.program
-					join ClassEnrollment e on e.fapClass = c
-					where e.user.id = :userId
-					  and e.status in :eligibleStatuses
+					join m.topic t
+					join t.unit u
+					join u.day d
+					join d.syllabus s
+					where exists (
+					      select e.id
+					      from TrainingProgramSyllabus tps
+					      join FapClass c on c.trainingProgram = tps.program
+					      join ClassEnrollment e on e.fapClass = c
+					      where tps.syllabus = s
+					        and e.user.id = :userId
+					        and e.status in :eligibleStatuses
+					  )
 					  and (:keyword is null
 					       or lower(m.fileName) like concat(concat('%', lower(:keyword)), '%')
 					       or lower(m.fileUrl) like concat(concat('%', lower(:keyword)), '%')
 					       or lower(coalesce(m.contentType, '')) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.name) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.unit.day.syllabus.name) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.unit.day.syllabus.code) like concat(concat('%', lower(:keyword)), '%'))
+					       or lower(t.name) like concat(concat('%', lower(:keyword)), '%')
+					       or lower(s.name) like concat(concat('%', lower(:keyword)), '%')
+					       or lower(s.code) like concat(concat('%', lower(:keyword)), '%'))
 					""",
 			countQuery = """
-					select count(distinct m)
+					select count(m)
 					from MaterialFile m
-					join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
-					join FapClass c on c.trainingProgram = tps.program
-					join ClassEnrollment e on e.fapClass = c
-					where e.user.id = :userId
-					  and e.status in :eligibleStatuses
+					join m.topic t
+					join t.unit u
+					join u.day d
+					join d.syllabus s
+					where exists (
+					      select e.id
+					      from TrainingProgramSyllabus tps
+					      join FapClass c on c.trainingProgram = tps.program
+					      join ClassEnrollment e on e.fapClass = c
+					      where tps.syllabus = s
+					        and e.user.id = :userId
+					        and e.status in :eligibleStatuses
+					  )
 					  and (:keyword is null
 					       or lower(m.fileName) like concat(concat('%', lower(:keyword)), '%')
 					       or lower(m.fileUrl) like concat(concat('%', lower(:keyword)), '%')
 					       or lower(coalesce(m.contentType, '')) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.name) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.unit.day.syllabus.name) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.unit.day.syllabus.code) like concat(concat('%', lower(:keyword)), '%'))
+					       or lower(t.name) like concat(concat('%', lower(:keyword)), '%')
+					       or lower(s.name) like concat(concat('%', lower(:keyword)), '%')
+					       or lower(s.code) like concat(concat('%', lower(:keyword)), '%'))
 					""")
 	Page<MaterialFile> searchAssignedToUser(
 			@Param("userId") Long userId,
@@ -94,21 +112,29 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 
 	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
 	@Query("""
-			select distinct m
+			select m
 			from MaterialFile m
-			join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
-			join FapClass c on c.trainingProgram = tps.program
-			join ClassEnrollment e on e.fapClass = c
-			where e.user.id = :userId
-			  and c.id = :classId
-			  and e.status in :eligibleStatuses
+			join m.topic t
+			join t.unit u
+			join u.day d
+			join d.syllabus s
+			where exists (
+			      select e.id
+			      from TrainingProgramSyllabus tps
+			      join FapClass c on c.trainingProgram = tps.program
+			      join ClassEnrollment e on e.fapClass = c
+			      where tps.syllabus = s
+			        and c.id = :classId
+			        and e.user.id = :userId
+			        and e.status in :eligibleStatuses
+			  )
 			  and (:keyword is null
 			       or lower(m.fileName) like concat(concat('%', lower(:keyword)), '%')
 			       or lower(m.fileUrl) like concat(concat('%', lower(:keyword)), '%')
 			       or lower(coalesce(m.contentType, '')) like concat(concat('%', lower(:keyword)), '%')
-			       or lower(m.topic.name) like concat(concat('%', lower(:keyword)), '%')
-			       or lower(m.topic.unit.day.syllabus.name) like concat(concat('%', lower(:keyword)), '%')
-			       or lower(m.topic.unit.day.syllabus.code) like concat(concat('%', lower(:keyword)), '%'))
+			       or lower(t.name) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(s.name) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(s.code) like concat(concat('%', lower(:keyword)), '%'))
 			""")
 	List<MaterialFile> findAssignedToUserByClass(
 			@Param("userId") Long userId,

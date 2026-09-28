@@ -49,6 +49,11 @@ Use the health probes as follows:
 Both probe URLs are public and return only health status. Other Actuator endpoints remain
 authenticated.
 
+JPA batching is environment-tunable: `JPA_BATCH_SIZE` (JDBC insert/update batch, default `50`),
+`JPA_BATCH_FETCH_SIZE` (lazy association batch fetch, default `50`) and `JPA_FETCH_SIZE` (rows per
+JDBC round trip, default `100`). JSON responses of at least 2 KB are gzip-compressed; set
+`SERVER_COMPRESSION_ENABLED=false` when a reverse proxy already compresses.
+
 HikariCP settings are environment-tunable:
 
 | Variable | Default | Purpose |
@@ -59,7 +64,7 @@ HikariCP settings are environment-tunable:
 | `DB_POOL_VALIDATION_TIMEOUT_MS` | `5000` | Maximum time to validate a connection |
 | `DB_POOL_IDLE_TIMEOUT_MS` | `600000` | Time before an excess idle connection is retired |
 | `DB_POOL_MAX_LIFETIME_MS` | `1800000` | Maximum lifetime of a pooled connection |
-| `DB_POOL_KEEPALIVE_MS` | `0` | Keepalive interval; `0` disables keepalive |
+| `DB_POOL_KEEPALIVE_MS` | `120000` | Keepalive interval for idle connections; `0` disables keepalive |
 
 Before increasing the pool, keep this within the database connection budget:
 
@@ -69,6 +74,34 @@ replica count * DB_POOL_MAX <= Oracle connection limit - admin/background reserv
 
 If keepalive is enabled, set it to at least `30000` and below `DB_POOL_MAX_LIFETIME_MS`.
 Set max lifetime below any connection lifetime imposed by Oracle or the network proxy.
+
+## Tests
+
+| Kind | Naming | Phase | Needs |
+|------|--------|-------|-------|
+| Unit | `*Test` | `./mvnw test` (Surefire) | nothing |
+| Integration | `*IT` | `./mvnw verify` (Failsafe) | a real Oracle |
+
+Integration tests extend `AbstractOracleIT`: they run Flyway, boot with `ddl-auto=validate`, execute
+the real JPQL/SQL and assert statement counts, so Oracle-only errors (such as `ORA-00932` on
+`DISTINCT` over CLOB columns) and N+1 regressions fail the build. They find a database in this
+order:
+
+1. `FAP_IT_DB_URL` (+ `FAP_IT_DB_USERNAME`, `FAP_IT_DB_PASSWORD`): an existing Oracle. Use a
+   development schema only: Flyway migrates it, though every test rolls back its own data.
+2. Docker: a throwaway `gvenzl/oracle-xe` container (what CI uses).
+3. Neither: the `*IT` classes are skipped. CI sets `FAP_IT_REQUIRE_DB=true` so they fail instead.
+
+```powershell
+$env:FAP_IT_DB_URL = "jdbc:oracle:thin:@//localhost:1521/XEPDB1"
+$env:FAP_IT_DB_USERNAME = "fap"
+$env:FAP_IT_DB_PASSWORD = "12345"
+.\mvnw.cmd verify
+```
+
+`verify` also writes JaCoCo coverage (`target/site/jacoco-merged`) and the measured statement counts
+of the heavy read paths (`target/query-baseline.txt`). Locally, `HIBERNATE_STATS=true` logs the
+statement count of every session to help spot N+1 queries.
 
 ## Continuous Integration
 
@@ -147,6 +180,7 @@ POST /api/v1/auth/reset-password
 - Syllabus Full Create API: `docs/api/syllabus_full_create_api.md`
 - Generated OpenAPI endpoint inventory: `docs/api/openapi-endpoints.md`
 - Swagger UI verification checklist: `docs/api/swagger_ui_verification.md`
+- Optimization plan and measured baseline: `docs/optimization-plan.md`
 - Database artifacts: `docs/database/README.md`
 
 Regenerate the OpenAPI endpoint inventory after controller mapping or annotation changes:

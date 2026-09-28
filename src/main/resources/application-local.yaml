@@ -10,6 +10,10 @@ spring:
     # apply them. Local development keeps them so the existing schema history still resolves
     # and a fresh local database comes up with data to click through.
     locations: classpath:db/migration,classpath:db/seed
+  jpa:
+    properties:
+      # HIBERNATE_STATS=true logs statement/entity counts per session, to spot N+1 locally.
+      hibernate.generate_statistics: ${HIBERNATE_STATS:false}
   mail:
     host: ${MAIL_HOST:}
     port: ${MAIL_PORT:587}

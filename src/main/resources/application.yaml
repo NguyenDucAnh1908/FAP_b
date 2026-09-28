@@ -26,7 +26,9 @@ spring:
       validation-timeout: ${DB_POOL_VALIDATION_TIMEOUT_MS:5000}
       idle-timeout: ${DB_POOL_IDLE_TIMEOUT_MS:600000}
       max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:1800000}
-      keepalive-time: ${DB_POOL_KEEPALIVE_MS:0}
+      # Pings idle connections so a firewall/NAT or Oracle idle timeout cannot silently drop them
+      # within max-lifetime. Must be >= 30000 and below max-lifetime; 0 disables it.
+      keepalive-time: ${DB_POOL_KEEPALIVE_MS:120000}
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -38,6 +40,15 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+    properties:
+      # Group inserts/updates into JDBC batches instead of one round trip per row (saveAll).
+      hibernate.jdbc.batch_size: ${JPA_BATCH_SIZE:50}
+      hibernate.order_inserts: true
+      hibernate.order_updates: true
+      # Initialize lazy to-one proxies and collections in IN-batches instead of one query each (N+1).
+      hibernate.default_batch_fetch_size: ${JPA_BATCH_FETCH_SIZE:50}
+      # Oracle's driver fetches 10 rows per round trip by default.
+      hibernate.jdbc.fetch_size: ${JPA_FETCH_SIZE:100}
   servlet:
     multipart:
       # Container-level guard. FileValidator re-checks the size so clients get a documented
@@ -48,6 +59,11 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
+  compression:
+    # JSON list responses compress well; files are already compressed or streamed as-is.
+    enabled: ${SERVER_COMPRESSION_ENABLED:true}
+    mime-types: application/json,application/problem+json,text/plain,text/csv
+    min-response-size: 2KB
 
 management:
   health:

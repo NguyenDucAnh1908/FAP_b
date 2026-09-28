@@ -3,6 +3,7 @@ package com.fap.common.audit;
 import com.fap.common.api.PageRequestFactory;
 import com.fap.common.security.FapUserPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -21,10 +22,20 @@ public class AuditLogService {
 
 	private final AuditLogRepository auditLogRepository;
 	private final AuditLogMapper auditLogMapper;
+	private final boolean trustForwardHeaders;
 
-	public AuditLogService(AuditLogRepository auditLogRepository, AuditLogMapper auditLogMapper) {
+	/**
+	 * @param trustForwardHeaders same switch as the rate limiter: only true behind a proxy that
+	 *                            overwrites {@code X-Forwarded-For}. Otherwise any client could
+	 *                            write an arbitrary address into the audit trail.
+	 */
+	public AuditLogService(
+			AuditLogRepository auditLogRepository,
+			AuditLogMapper auditLogMapper,
+			@Value("${app.rate-limit.trust-forward-headers:false}") boolean trustForwardHeaders) {
 		this.auditLogRepository = auditLogRepository;
 		this.auditLogMapper = auditLogMapper;
+		this.trustForwardHeaders = trustForwardHeaders;
 	}
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -77,9 +88,11 @@ public class AuditLogService {
 			return null;
 		}
 		HttpServletRequest request = attributes.getRequest();
-		String forwardedFor = request.getHeader("X-Forwarded-For");
-		if (forwardedFor != null && !forwardedFor.isBlank()) {
-			return forwardedFor.split(",")[0].trim();
+		if (trustForwardHeaders) {
+			String forwardedFor = request.getHeader("X-Forwarded-For");
+			if (forwardedFor != null && !forwardedFor.isBlank()) {
+				return forwardedFor.split(",")[0].trim();
+			}
 		}
 		return request.getRemoteAddr();
 	}

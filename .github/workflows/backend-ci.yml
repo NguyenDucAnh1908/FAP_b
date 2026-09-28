@@ -15,7 +15,11 @@ jobs:
   build-and-test:
     name: Build and test (Java 21)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Includes pulling and starting the Oracle XE container for the *IT suite.
+    timeout-minutes: 30
+    env:
+      # Runners have Docker, so *IT tests must run against Oracle rather than skip silently.
+      FAP_IT_REQUIRE_DB: "true"
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,6 +38,20 @@ jobs:
 
       - name: Run clean verification
         run: ./mvnw --batch-mode --no-transfer-progress clean verify
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-reports
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+            target/site/jacoco/
+            target/site/jacoco-merged/
+            target/query-baseline.txt
+          retention-days: 14
+          if-no-files-found: ignore
 
   dependency-review:
     name: Review dependency changes
