@@ -64,12 +64,14 @@ public class DashboardController {
 		if (principal.roles().contains(RoleNames.CLASS_ADMIN)) {
 			return principal.id();
 		}
-		throw new ForbiddenException("Training analytics is available to administrators only");
+		throw new ForbiddenException("Training analytics is available to administrators only")
+				.withMessageKey("error.ACCESS_DENIED.training_analytics");
 	}
 
 	private void requireRole(FapUserPrincipal principal, String role) {
 		if (!principal.roles().contains(role)) {
-			throw new ForbiddenException("This dashboard is available to Super Admin only");
+			throw new ForbiddenException("This dashboard is available to Super Admin only")
+					.withMessageKey("error.ACCESS_DENIED.super_admin_dashboard");
 		}
 	}
 }

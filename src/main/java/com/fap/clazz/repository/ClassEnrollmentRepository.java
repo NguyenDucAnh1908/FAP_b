@@ -39,7 +39,7 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
 
 	default ClassEnrollment getByFapClassIdAndUserIdOrThrow(Long classId, Long userId) {
 		return findByFapClassIdAndUserId(classId, userId)
-				.orElseThrow(() -> new NotFoundException("Class enrollment not found"));
+				.orElseThrow(() -> new NotFoundException("class_enrollment", "Class enrollment not found"));
 	}
 
 	long countByFapClassIdAndStatus(Long classId, ClassEnrollmentStatus status);

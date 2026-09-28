@@ -98,7 +98,8 @@ public class UserService {
 	@Transactional
 	public UserResponse create(CreateUserRequest request, Set<String> currentUserRoles) {
 		if (userRepository.existsByEmailIgnoreCase(request.email())) {
-			throw new ConflictException("Email already exists");
+			throw new ConflictException("Email already exists")
+					.withMessageKey("error.BUSINESS_CONFLICT.email_exists");
 		}
 		Set<Role> roles = resolveRoles(request.roleIds());
 		validateSuperAdminRoleChange(false, hasSuperAdminRole(roles), currentUserRoles);
@@ -131,7 +132,8 @@ public class UserService {
 		userRepository.findByEmailIgnoreCase(request.email())
 				.filter(existing -> !existing.getId().equals(id))
 				.ifPresent(existing -> {
-					throw new ConflictException("Email already exists");
+					throw new ConflictException("Email already exists")
+							.withMessageKey("error.BUSINESS_CONFLICT.email_exists");
 				});
 		Set<Role> roles = resolveRoles(request.roleIds());
 		boolean currentlySuperAdmin = isSuperAdmin(user);
@@ -176,10 +178,25 @@ public class UserService {
 		return userMapper.toResponse(user);
 	}
 
+	/**
+	 * Stores a new password hash on a user the caller has already loaded and verified.
+	 *
+	 * <p>Takes the managed entity rather than an id because the auth flows must read the user to
+	 * check the current password or reset token anyway, so the write adds no query. Unlike
+	 * {@link #update} and {@link #updateStatus} it neither audits nor invalidates the principal
+	 * cache: the cached principal carries no password hash, and the caller revokes the user's
+	 * refresh tokens itself.
+	 */
+	@Transactional
+	public void changePasswordHash(User user, String encodedPasswordHash, LocalDateTime changedAt) {
+		user.setPasswordHash(encodedPasswordHash);
+		user.setUpdatedAt(changedAt);
+	}
+
 	private Set<Role> resolveRoles(Set<Long> roleIds) {
 		Set<Role> roles = roleRepository.findByIdIn(roleIds);
 		if (roles.size() != roleIds.size()) {
-			throw new NotFoundException("One or more roles were not found");
+			throw new NotFoundException("roles", "One or more roles were not found");
 		}
 		return roles;
 	}

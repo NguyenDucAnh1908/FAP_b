@@ -14,6 +14,6 @@ public interface SyllabusTopicRepository extends JpaRepository<SyllabusTopic, Lo
 
 	default SyllabusTopic getByIdAndUnitDaySyllabusIdOrThrow(Long id, Long syllabusId) {
 		return findByIdAndUnitDaySyllabusId(id, syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus topic not found"));
+				.orElseThrow(() -> new NotFoundException("syllabus_topic", "Syllabus topic not found"));
 	}
 }

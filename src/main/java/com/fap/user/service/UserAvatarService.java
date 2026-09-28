@@ -100,11 +100,13 @@ public class UserAvatarService {
 			throw new BadRequestException("FILE_REQUIRED", "A non-empty file is required");
 		}
 		if (file.getSize() > MAX_AVATAR_SIZE_BYTES) {
-			throw new BadRequestException("FILE_TOO_LARGE", "Avatar exceeds the maximum allowed size of 2MB");
+			throw new BadRequestException("FILE_TOO_LARGE", "Avatar exceeds the maximum allowed size of 2MB")
+					.withMessageKey("error.FILE_TOO_LARGE.avatar");
 		}
 		String contentType = file.getContentType();
 		if (contentType == null || !ALLOWED_AVATAR_CONTENT_TYPES.contains(contentType.toLowerCase())) {
-			throw new BadRequestException("FILE_TYPE_NOT_ALLOWED", "Avatar must be JPEG, PNG, or WebP");
+			throw new BadRequestException("FILE_TYPE_NOT_ALLOWED", "Avatar must be JPEG, PNG, or WebP")
+					.withMessageKey("error.FILE_TYPE_NOT_ALLOWED.avatar");
 		}
 	}
 }

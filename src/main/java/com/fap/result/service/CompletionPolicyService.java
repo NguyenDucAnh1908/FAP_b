@@ -3,10 +3,10 @@ package com.fap.result.service;
 import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassStatus;
 import com.fap.clazz.repository.ClassRepository;
+import com.fap.clazz.service.ClassService;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
-import com.fap.common.exception.NotFoundException;
 import com.fap.quiz.entity.Quiz;
 import com.fap.quiz.repository.QuizAssignmentRepository;
 import com.fap.quiz.repository.QuizRepository;
@@ -19,7 +19,6 @@ import com.fap.result.repository.ClassCompletionQuizRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -28,6 +27,7 @@ import java.util.Set;
 @Service
 public class CompletionPolicyService {
 	private final ClassRepository classRepository;
+	private final ClassService classService;
 	private final ClassCompletionQuizRepository completionQuizRepository;
 	private final QuizRepository quizRepository;
 	private final QuizAssignmentRepository quizAssignmentRepository;
@@ -36,12 +36,14 @@ public class CompletionPolicyService {
 
 	public CompletionPolicyService(
 			ClassRepository classRepository,
+			ClassService classService,
 			ClassCompletionQuizRepository completionQuizRepository,
 			QuizRepository quizRepository,
 			QuizAssignmentRepository quizAssignmentRepository,
 			AuditLogService auditLogService,
 			CourseResultMapper courseResultMapper) {
 		this.classRepository = classRepository;
+		this.classService = classService;
 		this.completionQuizRepository = completionQuizRepository;
 		this.quizRepository = quizRepository;
 		this.quizAssignmentRepository = quizAssignmentRepository;
@@ -51,13 +53,13 @@ public class CompletionPolicyService {
 
 	@Transactional(readOnly = true)
 	public CompletionPolicyResponse getPolicy(Long classId) {
-		FapClass fapClass = findClass(classId);
+		FapClass fapClass = classRepository.getWithTrainingProgramOrThrow(classId);
 		return courseResultMapper.toPolicyResponse(fapClass, completionQuizRepository.findByFapClassIdOrderByIdAsc(classId));
 	}
 
 	@Transactional
 	public CompletionPolicyResponse updatePolicy(Long classId, UpdateCompletionPolicyRequest request, Long currentUserId) {
-		FapClass fapClass = findClassForUpdate(classId);
+		FapClass fapClass = classRepository.getWithTrainingProgramForUpdateOrThrow(classId);
 		if (fapClass.getStatus() == ClassStatus.Closed) {
 			throw new ConflictException("CLASS_COMPLETION_POLICY_LOCKED", "Closed class completion policy cannot be changed");
 		}
@@ -75,8 +77,7 @@ public class CompletionPolicyService {
 		completionQuizRepository.deleteByFapClassId(classId);
 		completionQuizRepository.flush();
 		List<ClassCompletionQuiz> saved = request.requiredQuizzes().stream().map(item -> {
-			Quiz quiz = quizRepository.findById(item.quizId())
-					.orElseThrow(() -> new NotFoundException("Quiz not found"));
+			Quiz quiz = quizRepository.getQuizOrThrow(item.quizId());
 			ClassCompletionQuiz policyQuiz = new ClassCompletionQuiz();
 			policyQuiz.setFapClass(fapClass);
 			policyQuiz.setQuiz(quiz);
@@ -87,20 +88,8 @@ public class CompletionPolicyService {
 			policyQuiz.setUpdatedBy(currentUserId);
 			return completionQuizRepository.save(policyQuiz);
 		}).toList();
-		fapClass.setMinimumAttendanceRate(request.minimumAttendanceRate().setScale(2, RoundingMode.HALF_UP));
-		fapClass.setUpdatedAt(now);
-		fapClass.setUpdatedBy(currentUserId);
+		classService.updateMinimumAttendanceRate(fapClass, request.minimumAttendanceRate(), currentUserId, now);
 		auditLogService.record("UPDATE_COMPLETION_POLICY", "class", classId);
 		return courseResultMapper.toPolicyResponse(fapClass, saved);
-	}
-
-	private FapClass findClass(Long classId) {
-		return classRepository.findWithTrainingProgramById(classId)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
-	}
-
-	private FapClass findClassForUpdate(Long classId) {
-		return classRepository.findWithTrainingProgramByIdForUpdate(classId)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
 	}
 }

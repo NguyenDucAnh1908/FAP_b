@@ -104,6 +104,8 @@ class CourseResultServiceTest {
 		// The lookup defaults delegate to the find* methods, whose stubs drive each test.
 		lenient().doCallRealMethod().when(resultRepository).getByFapClassIdAndUserIdOrThrow(any(), any());
 		lenient().doCallRealMethod().when(resultRepository).getForUpdateOrThrow(any(), any());
+		lenient().doCallRealMethod().when(classRepository).getWithTrainingProgramOrThrow(any());
+		lenient().doCallRealMethod().when(classRepository).getWithTrainingProgramForUpdateOrThrow(any());
 	}
 
 	@Test

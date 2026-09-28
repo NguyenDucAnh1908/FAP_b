@@ -197,7 +197,7 @@ public class QuizService {
 		Map<Long, Question> questions = questionRepository.findAllById(questionIds).stream()
 				.collect(Collectors.toMap(Question::getId, Function.identity()));
 		if (questions.size() != questionIds.size()) {
-			throw new NotFoundException("One or more questions were not found");
+			throw new NotFoundException("questions", "One or more questions were not found");
 		}
 		return questions;
 	}
@@ -245,7 +245,7 @@ public class QuizService {
 
 	private void ensureQuizExists(Long id) {
 		if (!quizRepository.existsById(id)) {
-			throw new NotFoundException("Quiz not found");
+			throw new NotFoundException("quiz", "Quiz not found");
 		}
 	}
 
@@ -266,7 +266,8 @@ public class QuizService {
 		if (quiz.getStatus() == QuizStatus.Draft
 				&& target == QuizStatus.Published
 				&& quizQuestionRepository.countByIdQuizId(quiz.getId()) == 0) {
-			throw new ConflictException("QUIZ_QUESTION_REQUIRED", "Quiz requires at least one question before publishing");
+			throw new ConflictException("QUIZ_QUESTION_REQUIRED", "Quiz requires at least one question before publishing")
+					.withMessageKey("error.QUIZ_QUESTION_REQUIRED.publish");
 		}
 	}
 

@@ -88,6 +88,7 @@ class TrainingRegistrationServiceTest {
 		lenient().doCallRealMethod().when(trainingSessionRepository).getWithClassAndTrainerForUpdateOrThrow(any());
 		lenient().doCallRealMethod().when(trainingRegistrationRepository)
 				.getByTrainingSessionIdAndUserIdOrThrow(any(), any());
+		lenient().doCallRealMethod().when(userRepository).getWithRolesOrThrow(any());
 	}
 
 	@Test

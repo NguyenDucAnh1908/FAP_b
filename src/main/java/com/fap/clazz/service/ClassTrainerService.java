@@ -87,8 +87,7 @@ public class ClassTrainerService {
 	}
 
 	private ClassTrainer createTrainerAssignment(FapClass fapClass, ClassTrainerItemRequest item) {
-		User user = userRepository.findWithRolesById(item.userId())
-				.orElseThrow(() -> new NotFoundException("User not found"));
+		User user = userRepository.getWithRolesOrThrow(item.userId());
 		if (user.getStatus() != UserStatus.Active || user.getRoles().stream().noneMatch(role -> RoleNames.TRAINER.equals(role.getName()))) {
 			throw new ConflictException("CLASS_TRAINER_ROLE_REQUIRED", "Assigned user must be an active Trainer");
 		}
@@ -98,8 +97,7 @@ public class ClassTrainerService {
 			if (!trainingProgramSyllabusRepository.existsByIdProgramIdAndIdSyllabusId(programId, item.syllabusId())) {
 				throw new ConflictException("CLASS_TRAINER_SYLLABUS_NOT_IN_PROGRAM", "Trainer syllabus must belong to the class training program");
 			}
-			syllabus = syllabusRepository.findById(item.syllabusId())
-					.orElseThrow(() -> new NotFoundException("Syllabus not found"));
+			syllabus = syllabusRepository.getOrThrow(item.syllabusId());
 		}
 		ClassTrainer classTrainer = new ClassTrainer();
 		classTrainer.setFapClass(fapClass);
@@ -120,7 +118,7 @@ public class ClassTrainerService {
 
 	private void ensureClassExists(Long classId) {
 		if (!classRepository.existsById(classId)) {
-			throw new NotFoundException("Class not found");
+			throw new NotFoundException("class", "Class not found");
 		}
 	}
 

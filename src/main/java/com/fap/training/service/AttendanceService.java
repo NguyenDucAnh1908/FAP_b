@@ -99,8 +99,7 @@ public class AttendanceService {
 			throw new ConflictException("ATTENDANCE_USER_NOT_REGISTERED", "Attendance user must be registered in the training session");
 		}
 		validateAttendanceItem(item);
-		User user = userRepository.findById(item.userId())
-				.orElseThrow(() -> new NotFoundException("User not found"));
+		User user = userRepository.getUserOrThrow(item.userId());
 		LocalDateTime now = LocalDateTime.now();
 		AttendanceRecord record = attendanceRecordRepository
 				.findByTrainingSessionIdAndUserId(session.getId(), item.userId())
@@ -145,7 +144,8 @@ public class AttendanceService {
 	public AttendanceRecordResponse checkIn(Long trainingSessionId, Long currentUserId) {
 		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(trainingSessionId);
 		if (session.getStatus() == TrainingSessionStatus.Canceled) {
-			throw new ConflictException("ATTENDANCE_SESSION_CANCELED", "Cannot check in to a canceled training session");
+			throw new ConflictException("ATTENDANCE_SESSION_CANCELED", "Cannot check in to a canceled training session")
+					.withMessageKey("error.ATTENDANCE_SESSION_CANCELED.check_in");
 		}
 		if (session.getStatus() == TrainingSessionStatus.Completed) {
 			throw new ConflictException("ATTENDANCE_SESSION_COMPLETED", "Cannot check in to a completed training session");
@@ -153,7 +153,8 @@ public class AttendanceService {
 		TrainingRegistration registration = trainingRegistrationRepository
 				.findByTrainingSessionIdAndUserIdAndStatus(
 						trainingSessionId, currentUserId, TrainingRegistrationStatus.Registered)
-				.orElseThrow(() -> new ForbiddenException("You are not registered for this training session"));
+				.orElseThrow(() -> new ForbiddenException("You are not registered for this training session")
+						.withMessageKey("error.ACCESS_DENIED.training_session_not_registered"));
 		User user = registration.getUser();
 		LocalDateTime now = LocalDateTime.now();
 		AttendanceRecord record = attendanceRecordRepository
@@ -203,7 +204,7 @@ public class AttendanceService {
 
 	private void ensureSessionExists(Long trainingSessionId) {
 		if (!trainingSessionRepository.existsById(trainingSessionId)) {
-			throw new NotFoundException("Training session not found");
+			throw new NotFoundException("training_session", "Training session not found");
 		}
 	}
 }

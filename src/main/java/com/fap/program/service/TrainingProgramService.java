@@ -172,8 +172,7 @@ public class TrainingProgramService {
 	private TrainingProgramSyllabus createProgramSyllabus(
 			TrainingProgram program,
 			TrainingProgramSyllabusItemRequest item) {
-		Syllabus syllabus = syllabusRepository.findById(item.syllabusId())
-				.orElseThrow(() -> new NotFoundException("Syllabus not found"));
+		Syllabus syllabus = syllabusRepository.getOrThrow(item.syllabusId());
 		if (syllabus.getStatus() != SyllabusStatus.Active) {
 			throw new ConflictException("TRAINING_PROGRAM_SYLLABUS_NOT_ACTIVE", "Only active syllabuses can be attached");
 		}
@@ -214,7 +213,7 @@ public class TrainingProgramService {
 
 	private void ensureProgramExists(Long id) {
 		if (!programRepository.existsById(id)) {
-			throw new NotFoundException("Training program not found");
+			throw new NotFoundException("training_program", "Training program not found");
 		}
 	}
 

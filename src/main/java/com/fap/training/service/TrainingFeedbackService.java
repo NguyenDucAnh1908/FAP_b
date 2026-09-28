@@ -84,7 +84,7 @@ public class TrainingFeedbackService {
 	@Transactional(readOnly = true)
 	public TrainingFeedbackSummaryResponse summary(Long trainingSessionId) {
 		if (!trainingSessionRepository.existsById(trainingSessionId)) {
-			throw new NotFoundException("Training session not found");
+			throw new NotFoundException("training_session", "Training session not found");
 		}
 		TrainingFeedbackRepository.FeedbackSummary summary = trainingFeedbackRepository
 				.summarizeByTrainingSessionId(trainingSessionId);

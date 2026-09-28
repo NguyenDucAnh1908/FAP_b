@@ -19,6 +19,7 @@ import com.fap.common.util.AfterCommit;
 import com.fap.user.entity.User;
 import com.fap.user.mapper.UserMapper;
 import com.fap.user.repository.UserRepository;
+import com.fap.user.service.UserService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.AuthenticationException;
@@ -43,6 +44,7 @@ public class AuthService {
 	private final AuthenticationManager authenticationManager;
 	private final JwtService jwtService;
 	private final UserRepository userRepository;
+	private final UserService userService;
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final PasswordResetTokenRepository passwordResetTokenRepository;
 	private final PasswordResetMailService passwordResetMailService;
@@ -58,6 +60,7 @@ public class AuthService {
 			AuthenticationManager authenticationManager,
 			JwtService jwtService,
 			UserRepository userRepository,
+			UserService userService,
 			RefreshTokenRepository refreshTokenRepository,
 			PasswordResetTokenRepository passwordResetTokenRepository,
 			PasswordResetMailService passwordResetMailService,
@@ -70,6 +73,7 @@ public class AuthService {
 		this.authenticationManager = authenticationManager;
 		this.jwtService = jwtService;
 		this.userRepository = userRepository;
+		this.userService = userService;
 		this.refreshTokenRepository = refreshTokenRepository;
 		this.passwordResetTokenRepository = passwordResetTokenRepository;
 		this.passwordResetMailService = passwordResetMailService;
@@ -101,7 +105,8 @@ public class AuthService {
 	public AuthResponse refresh(String token) {
 		RefreshToken existing = refreshTokenRepository.findByTokenAndRevokedFalse(token)
 				.filter(refreshToken -> refreshToken.getExpiresAt().isAfter(LocalDateTime.now(clock)))
-				.orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+				.orElseThrow(() -> new UnauthorizedException("Invalid refresh token")
+						.withMessageKey("error.UNAUTHORIZED.refresh_token"));
 		existing.setRevoked(true);
 		User user = existing.getUser();
 		FapUserPrincipal principal = new FapUserPrincipal(
@@ -122,13 +127,16 @@ public class AuthService {
 
 	@Transactional
 	public void changePassword(Long userId, ChangePasswordRequest request) {
+		// English stays the generic "Invalid credentials"; only the localized text is specific, which
+		// is safe here because the caller is already authenticated (unlike login, see above).
 		User user = userRepository.findById(userId)
-				.orElseThrow(() -> new UnauthorizedException("Invalid credentials"));
+				.orElseThrow(() -> new UnauthorizedException("Invalid credentials")
+						.withMessageKey("error.UNAUTHORIZED.account"));
 		if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
-			throw new UnauthorizedException("Invalid credentials");
+			throw new UnauthorizedException("Invalid credentials")
+					.withMessageKey("error.UNAUTHORIZED.current_password");
 		}
-		user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
-		user.setUpdatedAt(LocalDateTime.now(clock));
+		userService.changePasswordHash(user, passwordEncoder.encode(request.newPassword()), LocalDateTime.now(clock));
 		refreshTokenRepository.revokeAllByUserId(userId);
 	}
 
@@ -159,8 +167,7 @@ public class AuthService {
 				.filter(existing -> existing.getExpiresAt().isAfter(now))
 				.orElseThrow(() -> new BadRequestException("INVALID_RESET_TOKEN", "Invalid or expired OTP"));
 		User user = token.getUser();
-		user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
-		user.setUpdatedAt(now);
+		userService.changePasswordHash(user, passwordEncoder.encode(request.newPassword()), now);
 		token.setUsed(true);
 		token.setUsedAt(now);
 		refreshTokenRepository.revokeAllByUserId(user.getId());

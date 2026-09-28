@@ -23,7 +23,7 @@ public interface QuizAssignmentRepository extends JpaRepository<QuizAssignment, 
 	/** Scoped to the quiz so an assignment id of another quiz reads as not found. */
 	default QuizAssignment getByQuizIdAndIdOrThrow(Long quizId, Long id) {
 		return findByQuizIdAndId(quizId, id)
-				.orElseThrow(() -> new NotFoundException("Quiz assignment not found"));
+				.orElseThrow(() -> new NotFoundException("quiz_assignment", "Quiz assignment not found"));
 	}
 
 	boolean existsByQuizIdAndFapClassId(Long quizId, Long classId);

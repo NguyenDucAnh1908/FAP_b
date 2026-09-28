@@ -13,7 +13,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 	/** One place for the lookup so every caller fails with the same not-found message. */
 	default Question getQuestionOrThrow(Long id) {
 		return findById(id)
-				.orElseThrow(() -> new NotFoundException("Question not found"));
+				.orElseThrow(() -> new NotFoundException("question", "Question not found"));
 	}
 
 	@Query(

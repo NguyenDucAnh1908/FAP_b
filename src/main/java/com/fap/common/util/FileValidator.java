@@ -69,9 +69,12 @@ public class FileValidator {
 			throw new BadRequestException("FILE_REQUIRED", "A non-empty file is required");
 		}
 		if (file.getSize() > maxFileSizeBytes) {
+			// A String, not a number: MessageFormat would group digits by locale ("1,024"), unlike the English message.
+			String maxMegabytes = String.valueOf(DataSize.ofBytes(maxFileSizeBytes).toMegabytes());
 			throw new BadRequestException(
 					"FILE_TOO_LARGE",
-					"File exceeds the maximum allowed size of " + DataSize.ofBytes(maxFileSizeBytes).toMegabytes() + "MB");
+					"File exceeds the maximum allowed size of " + maxMegabytes + "MB")
+					.withMessageKey("error.FILE_TOO_LARGE.limit", maxMegabytes);
 		}
 		String contentType = file.getContentType();
 		if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {

@@ -21,7 +21,7 @@ public interface QuizRepository extends JpaRepository<Quiz, Long> {
 	/** One place for the lookup so every caller fails with the same not-found message. */
 	default Quiz getQuizOrThrow(Long id) {
 		return findById(id)
-				.orElseThrow(() -> new NotFoundException("Quiz not found"));
+				.orElseThrow(() -> new NotFoundException("quiz", "Quiz not found"));
 	}
 
 	interface StatusCount {

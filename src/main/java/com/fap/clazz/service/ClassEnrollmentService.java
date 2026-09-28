@@ -14,17 +14,10 @@ import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.api.PageRequestFactory;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
-import com.fap.common.exception.NotFoundException;
 import com.fap.common.security.RoleNames;
 import com.fap.common.util.TextNormalizer;
 import com.fap.notification.service.NotificationService;
-import com.fap.training.entity.TrainingRegistration;
-import com.fap.training.entity.TrainingSession;
-import com.fap.training.enums.TrainingRegistrationMode;
-import com.fap.training.enums.TrainingRegistrationStatus;
-import com.fap.training.enums.TrainingSessionStatus;
-import com.fap.training.repository.TrainingRegistrationRepository;
-import com.fap.training.repository.TrainingSessionRepository;
+import com.fap.training.service.ClassRosterRegistrationService;
 import com.fap.user.entity.User;
 import com.fap.user.enums.UserStatus;
 import com.fap.user.repository.UserRepository;
@@ -39,26 +32,16 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 public class ClassEnrollmentService {
 
-	private static final Collection<TrainingRegistrationStatus> ACTIVE_SESSION_REGISTRATION_STATUSES = List.of(
-			TrainingRegistrationStatus.Registered,
-			TrainingRegistrationStatus.Waitlist);
-
 	private final ClassRepository classRepository;
 	private final ClassEnrollmentRepository classEnrollmentRepository;
 	private final UserRepository userRepository;
-	private final TrainingSessionRepository trainingSessionRepository;
-	private final TrainingRegistrationRepository trainingRegistrationRepository;
+	private final ClassRosterRegistrationService classRosterRegistrationService;
 	private final ClassEnrollmentMapper classEnrollmentMapper;
 	private final ClassMapper classMapper;
 	private final AuditLogService auditLogService;
@@ -70,8 +53,7 @@ public class ClassEnrollmentService {
 			ClassRepository classRepository,
 			ClassEnrollmentRepository classEnrollmentRepository,
 			UserRepository userRepository,
-			TrainingSessionRepository trainingSessionRepository,
-			TrainingRegistrationRepository trainingRegistrationRepository,
+			ClassRosterRegistrationService classRosterRegistrationService,
 			ClassEnrollmentMapper classEnrollmentMapper,
 			ClassMapper classMapper,
 			AuditLogService auditLogService,
@@ -81,8 +63,7 @@ public class ClassEnrollmentService {
 		this.classRepository = classRepository;
 		this.classEnrollmentRepository = classEnrollmentRepository;
 		this.userRepository = userRepository;
-		this.trainingSessionRepository = trainingSessionRepository;
-		this.trainingRegistrationRepository = trainingRegistrationRepository;
+		this.classRosterRegistrationService = classRosterRegistrationService;
 		this.classEnrollmentMapper = classEnrollmentMapper;
 		this.classMapper = classMapper;
 		this.auditLogService = auditLogService;
@@ -192,7 +173,7 @@ public class ClassEnrollmentService {
 		enrollment.setUpdatedBy(currentUserId);
 		if (nextStatus == ClassEnrollmentStatus.Enrolled) {
 			courseResultService.initializeForEnrollment(enrollment, currentUserId);
-			syncEnrollmentToAutoSessions(enrollment);
+			classRosterRegistrationService.registerInAutoEnrollSessions(classId, enrollment.getUser());
 		}
 		auditLogService.record("APPROVE_CLASS_ENROLLMENT:" + nextStatus.name(), "class_enrollment", enrollment.getId());
 		notificationService.create(
@@ -247,7 +228,7 @@ public class ClassEnrollmentService {
 		enrollment.setUpdatedBy(currentUserId);
 		if (!pendingApproval) {
 			courseResultService.markWithdrawn(enrollment, currentUserId);
-			cancelFutureSessionRegistrations(classId, userId, now);
+			classRosterRegistrationService.cancelFutureSessionRegistrations(classId, userId, now);
 		}
 		auditLogService.record(
 				pendingApproval ? "CANCEL_CLASS_ENROLLMENT_REQUEST" : "WITHDRAW_CLASS_ENROLLMENT",
@@ -275,31 +256,6 @@ public class ClassEnrollmentService {
 					"CLASS_CAPACITY_BELOW_ENROLLED_COUNT",
 					"Class capacity cannot be lower than the current enrolled count");
 		}
-	}
-
-	@Transactional
-	public void syncAutoEnrollSession(TrainingSession session) {
-		if (session.getRegistrationMode() != TrainingRegistrationMode.AutoEnroll) {
-			return;
-		}
-		if (session.getCapacity() < session.getFapClass().getCapacity()) {
-			throw new ConflictException("AUTO_ENROLL_SESSION_CAPACITY_TOO_SMALL", "Auto-enroll session capacity must cover the class capacity");
-		}
-		Map<Long, TrainingRegistration> registrationsByUser = trainingRegistrationRepository
-				.findByTrainingSessionId(session.getId()).stream()
-				.collect(Collectors.toMap(registration -> registration.getUser().getId(), Function.identity()));
-		LocalDateTime now = LocalDateTime.now(clock);
-		List<TrainingRegistration> changed = classEnrollmentRepository
-				.findByFapClassIdAndStatusOrderByCreatedAtAscIdAsc(session.getFapClass().getId(), ClassEnrollmentStatus.Enrolled)
-				.stream()
-				.map(enrollment -> syncRegistration(
-						session,
-						enrollment.getUser(),
-						registrationsByUser.get(enrollment.getUser().getId()),
-						now))
-				.filter(Objects::nonNull)
-				.toList();
-		trainingRegistrationRepository.saveAll(changed);
 	}
 
 	private ClassEnrollment enroll(FapClass fapClass, User user, ClassEnrollmentSource source, Long actorId) {
@@ -333,7 +289,7 @@ public class ClassEnrollmentService {
 
 		if (nextStatus == ClassEnrollmentStatus.Enrolled) {
 			courseResultService.initializeForEnrollment(saved, actorId);
-			syncEnrollmentToAutoSessions(saved);
+			classRosterRegistrationService.registerInAutoEnrollSessions(fapClass.getId(), saved.getUser());
 		}
 		auditLogService.record("CREATE_CLASS_ENROLLMENT:" + nextStatus.name(), "class_enrollment", saved.getId());
 		notificationService.create(
@@ -403,7 +359,7 @@ public class ClassEnrollmentService {
 					enrollment.setUpdatedAt(now);
 					enrollment.setUpdatedBy(actorId);
 					courseResultService.initializeForEnrollment(enrollment, actorId);
-					syncEnrollmentToAutoSessions(enrollment);
+					classRosterRegistrationService.registerInAutoEnrollSessions(fapClass.getId(), enrollment.getUser());
 					auditLogService.record("PROMOTE_CLASS_WAITLIST", "class_enrollment", enrollment.getId());
 					notificationService.create(
 							enrollment.getUser().getId(),
@@ -412,97 +368,8 @@ public class ClassEnrollmentService {
 				});
 	}
 
-	private void syncEnrollmentToAutoSessions(ClassEnrollment enrollment) {
-		List<TrainingSession> sessions = trainingSessionRepository
-				.findByFapClassIdAndRegistrationModeAndStatusOrderBySessionDateAscStartTimeAsc(
-						enrollment.getFapClass().getId(),
-						TrainingRegistrationMode.AutoEnroll,
-						TrainingSessionStatus.Upcoming);
-		if (sessions.isEmpty()) {
-			return;
-		}
-		User user = enrollment.getUser();
-		Map<Long, TrainingRegistration> registrationsBySession = trainingRegistrationRepository
-				.findByUserIdAndTrainingSessionIdIn(user.getId(), sessions.stream().map(TrainingSession::getId).toList())
-				.stream()
-				.collect(Collectors.toMap(registration -> registration.getTrainingSession().getId(), Function.identity()));
-		LocalDateTime now = LocalDateTime.now(clock);
-		List<TrainingRegistration> changed = sessions.stream()
-				.map(session -> syncRegistration(session, user, registrationsBySession.get(session.getId()), now))
-				.filter(Objects::nonNull)
-				.toList();
-		trainingRegistrationRepository.saveAll(changed);
-	}
-
-	/**
-	 * Registers {@code user} for {@code session} unless already registered or completed.
-	 *
-	 * @param existing the user's current registration for the session, prefetched by the caller
-	 * @return the registration to save, or {@code null} when nothing changed
-	 */
-	private TrainingRegistration syncRegistration(
-			TrainingSession session,
-			User user,
-			TrainingRegistration existing,
-			LocalDateTime now) {
-		TrainingRegistration registration = existing;
-		if (registration == null) {
-			registration = new TrainingRegistration();
-			registration.setTrainingSession(session);
-			registration.setUser(user);
-		}
-		if (registration.getStatus() == TrainingRegistrationStatus.Registered
-				|| registration.getStatus() == TrainingRegistrationStatus.Completed) {
-			return null;
-		}
-		registration.setStatus(TrainingRegistrationStatus.Registered);
-		registration.setRegisteredAt(now);
-		registration.setCancelledAt(null);
-		registration.setCompletedAt(null);
-		session.setEnrolledCount(session.getEnrolledCount() + 1);
-		return registration;
-	}
-
-	private void cancelFutureSessionRegistrations(Long classId, Long userId, LocalDateTime now) {
-		trainingRegistrationRepository.findFutureByClassAndUser(
-				classId,
-				userId,
-				TrainingSessionStatus.Upcoming,
-				ACTIVE_SESSION_REGISTRATION_STATUSES)
-				.forEach(registration -> {
-					TrainingSession session = registration.getTrainingSession();
-					if (registration.getStatus() == TrainingRegistrationStatus.Registered) {
-						session.setEnrolledCount(Math.max(0, session.getEnrolledCount() - 1));
-					}
-					registration.setStatus(TrainingRegistrationStatus.Cancelled);
-					registration.setCancelledAt(now);
-					if (session.getRegistrationMode() == TrainingRegistrationMode.SelfEnroll) {
-						promoteSessionWaitlist(session);
-					}
-				});
-	}
-
-	private void promoteSessionWaitlist(TrainingSession session) {
-		if (session.getEnrolledCount() >= session.getCapacity()) {
-			return;
-		}
-		trainingRegistrationRepository
-				.findFirstByTrainingSessionIdAndStatusOrderByRegisteredAtAscIdAsc(
-						session.getId(), TrainingRegistrationStatus.Waitlist)
-				.ifPresent(waitlisted -> {
-					waitlisted.setStatus(TrainingRegistrationStatus.Registered);
-					waitlisted.setCancelledAt(null);
-					session.setEnrolledCount(session.getEnrolledCount() + 1);
-					notificationService.create(
-							waitlisted.getUser().getId(),
-							"Training waitlist promoted",
-							"You have been registered for " + session.getTitle());
-				});
-	}
-
 	private User findTrainee(Long userId) {
-		return userRepository.findWithRolesById(userId)
-				.orElseThrow(() -> new NotFoundException("User not found"));
+		return userRepository.getWithRolesOrThrow(userId);
 	}
 
 	private void validateActiveTrainee(User user) {
@@ -516,7 +383,8 @@ public class ClassEnrollmentService {
 
 	private void ensureClassAcceptsManagedEnrollment(FapClass fapClass) {
 		if (fapClass.getStatus() == ClassStatus.Closed) {
-			throw new ConflictException("CLASS_ENROLLMENT_CLOSED", "Closed class does not accept enrollments");
+			throw new ConflictException("CLASS_ENROLLMENT_CLOSED", "Closed class does not accept enrollments")
+					.withMessageKey("error.CLASS_ENROLLMENT_CLOSED.enroll");
 		}
 	}
 

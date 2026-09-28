@@ -29,7 +29,8 @@ public final class PageRequestFactory {
 		if (!allowedFields.contains(normalizedSortBy)) {
 			throw new BadRequestException(
 					"INVALID_SORT_FIELD",
-					"Unsupported sort field: " + normalizedSortBy);
+					"Unsupported sort field: " + normalizedSortBy)
+					.withMessageArgs(normalizedSortBy);
 		}
 
 		Sort.Direction direction = parseDirection(order);

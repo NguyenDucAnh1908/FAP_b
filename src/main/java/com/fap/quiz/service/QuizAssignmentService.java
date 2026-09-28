@@ -102,7 +102,7 @@ public class QuizAssignmentService {
 			throw new ConflictException("DUPLICATE_QUIZ_CLASS_ASSIGNMENT", "Quiz is already assigned to this class");
 		}
 		FapClass fapClass = classRepository.findById(classId)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
+				.orElseThrow(() -> new NotFoundException("class", "Class not found"));
 		assignment.setFapClass(fapClass);
 	}
 
@@ -111,7 +111,7 @@ public class QuizAssignmentService {
 			throw new ConflictException("DUPLICATE_QUIZ_SESSION_ASSIGNMENT", "Quiz is already assigned to this training session");
 		}
 		TrainingSession trainingSession = trainingSessionRepository.findById(trainingSessionId)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
+				.orElseThrow(() -> new NotFoundException("training_session", "Training session not found"));
 		assignment.setTrainingSession(trainingSession);
 	}
 
@@ -125,7 +125,7 @@ public class QuizAssignmentService {
 
 	private void ensureQuizExists(Long quizId) {
 		if (!quizRepository.existsById(quizId)) {
-			throw new NotFoundException("Quiz not found");
+			throw new NotFoundException("quiz", "Quiz not found");
 		}
 	}
 

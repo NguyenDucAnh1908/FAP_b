@@ -191,7 +191,7 @@ public class MyLearningService {
 
 	private FapClass findMyClass(Long classId, Long currentUserId) {
 		return classRepository.findMineById(classId, currentUserId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
+				.orElseThrow(() -> new NotFoundException("class", "Class not found"));
 	}
 
 	private List<MyClassSyllabusResponse> syllabuses(FapClass fapClass) {

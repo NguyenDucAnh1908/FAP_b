@@ -2,11 +2,17 @@ package com.fap.result.service;
 
 import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassStatus;
+import com.fap.clazz.mapper.ClassMapper;
+import com.fap.clazz.repository.ClassAdminRepository;
 import com.fap.clazz.repository.ClassRepository;
+import com.fap.clazz.repository.ClassTrainerRepository;
+import com.fap.clazz.service.ClassEnrollmentService;
+import com.fap.clazz.service.ClassService;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.program.repository.TrainingProgramRepository;
 import com.fap.quiz.entity.Quiz;
 import com.fap.quiz.enums.QuizStatus;
 import com.fap.quiz.repository.QuizAssignmentRepository;
@@ -34,7 +40,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -56,14 +64,32 @@ class CompletionPolicyServiceTest {
 	private final QuizRepository quizRepository = mock(QuizRepository.class);
 	private final QuizAssignmentRepository quizAssignmentRepository = mock(QuizAssignmentRepository.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
+	// A real ClassService: it owns the class write, and the assertions below check the locked class.
+	private final ClassService classService = new ClassService(
+			classRepository,
+			mock(ClassAdminRepository.class),
+			mock(ClassTrainerRepository.class),
+			mock(TrainingProgramRepository.class),
+			mock(ClassMapper.class),
+			auditLogService,
+			mock(ClassEnrollmentService.class),
+			mock(CourseResultService.class));
 
 	private final CompletionPolicyService service = new CompletionPolicyService(
 			classRepository,
+			classService,
 			completionQuizRepository,
 			quizRepository,
 			quizAssignmentRepository,
 			auditLogService,
 			new CourseResultMapper());
+
+	@BeforeEach
+	void lookupDefaultsDelegateToStubbedFinders() {
+		lenient().doCallRealMethod().when(classRepository).getWithTrainingProgramOrThrow(any());
+		lenient().doCallRealMethod().when(classRepository).getWithTrainingProgramForUpdateOrThrow(any());
+		lenient().doCallRealMethod().when(quizRepository).getQuizOrThrow(any());
+	}
 
 	@BeforeEach
 	void saveReturnsItsArgument() {

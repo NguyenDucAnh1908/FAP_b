@@ -57,7 +57,7 @@ public class NotificationService {
 	@Transactional
 	public NotificationResponse markRead(Long notificationId, Long userId) {
 		Notification notification = notificationRepository.findByIdAndUserId(notificationId, userId)
-				.orElseThrow(() -> new NotFoundException("Notification not found"));
+				.orElseThrow(() -> new NotFoundException("notification", "Notification not found"));
 		notification.setRead(true);
 		return notificationMapper.toResponse(notification);
 	}

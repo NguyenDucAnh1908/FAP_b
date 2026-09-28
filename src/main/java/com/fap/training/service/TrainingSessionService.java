@@ -4,7 +4,6 @@ import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassStatus;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
-import com.fap.clazz.service.ClassEnrollmentService;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.BadRequestException;
@@ -51,7 +50,7 @@ public class TrainingSessionService {
 	private final TrainingSessionMapper trainingSessionMapper;
 	private final AuditLogService auditLogService;
 	private final NotificationService notificationService;
-	private final ClassEnrollmentService classEnrollmentService;
+	private final ClassRosterRegistrationService classRosterRegistrationService;
 
 	public TrainingSessionService(
 			TrainingSessionRepository trainingSessionRepository,
@@ -63,7 +62,7 @@ public class TrainingSessionService {
 			TrainingSessionMapper trainingSessionMapper,
 			AuditLogService auditLogService,
 			NotificationService notificationService,
-			ClassEnrollmentService classEnrollmentService) {
+			ClassRosterRegistrationService classRosterRegistrationService) {
 		this.trainingSessionRepository = trainingSessionRepository;
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
 		this.attendanceRecordRepository = attendanceRecordRepository;
@@ -73,7 +72,7 @@ public class TrainingSessionService {
 		this.trainingSessionMapper = trainingSessionMapper;
 		this.auditLogService = auditLogService;
 		this.notificationService = notificationService;
-		this.classEnrollmentService = classEnrollmentService;
+		this.classRosterRegistrationService = classRosterRegistrationService;
 	}
 
 	@Transactional(readOnly = true)
@@ -154,7 +153,7 @@ public class TrainingSessionService {
 		session.setCreatedBy(currentUserId);
 		session.setUpdatedBy(currentUserId);
 		TrainingSession saved = trainingSessionRepository.save(session);
-		classEnrollmentService.syncAutoEnrollSession(saved);
+		classRosterRegistrationService.syncAutoEnrollSession(saved);
 		auditLogService.record("CREATE_TRAINING_SESSION", "training_session", saved.getId());
 		return trainingSessionMapper.toResponse(saved);
 	}
@@ -182,7 +181,7 @@ public class TrainingSessionService {
 				request.startTime(),
 				request.endTime());
 		applyFields(session, request, trainer);
-		classEnrollmentService.syncAutoEnrollSession(session);
+		classRosterRegistrationService.syncAutoEnrollSession(session);
 		session.setUpdatedAt(LocalDateTime.now());
 		session.setUpdatedBy(currentUserId);
 		auditLogService.record("UPDATE_TRAINING_SESSION", "training_session", session.getId());
@@ -213,8 +212,7 @@ public class TrainingSessionService {
 	}
 
 	private FapClass findActiveClass(Long classId) {
-		FapClass fapClass = classRepository.findWithTrainingProgramById(classId)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
+		FapClass fapClass = classRepository.getWithTrainingProgramOrThrow(classId);
 		if (fapClass.getStatus() != ClassStatus.Active) {
 			throw new ConflictException("TRAINING_SESSION_CLASS_NOT_ACTIVE", "Training session requires an active class");
 		}
@@ -226,7 +224,7 @@ public class TrainingSessionService {
 			throw new ConflictException("TRAINING_SESSION_TRAINER_NOT_ASSIGNED", "Trainer must be assigned to the class");
 		}
 		return userRepository.findById(trainerId)
-				.orElseThrow(() -> new NotFoundException("Trainer not found"));
+				.orElseThrow(() -> new NotFoundException("trainer", "Trainer not found"));
 	}
 
 	private void applyFields(TrainingSession session, CreateTrainingSessionRequest request, User trainer) {

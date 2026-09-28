@@ -18,7 +18,7 @@ public interface SyllabusDayRepository extends JpaRepository<SyllabusDay, Long> 
 
 	default SyllabusDay getByIdAndSyllabusIdOrThrow(Long id, Long syllabusId) {
 		return findByIdAndSyllabusId(id, syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus day not found"));
+				.orElseThrow(() -> new NotFoundException("syllabus_day", "Syllabus day not found"));
 	}
 
 	@Modifying

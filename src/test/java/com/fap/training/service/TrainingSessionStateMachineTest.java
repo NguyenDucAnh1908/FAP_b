@@ -2,7 +2,6 @@ package com.fap.training.service;
 
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
-import com.fap.clazz.service.ClassEnrollmentService;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.notification.service.NotificationService;
@@ -57,7 +56,7 @@ class TrainingSessionStateMachineTest {
 	private final TrainingSessionMapper trainingSessionMapper = mock(TrainingSessionMapper.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
 	private final NotificationService notificationService = mock(NotificationService.class);
-	private final ClassEnrollmentService classEnrollmentService = mock(ClassEnrollmentService.class);
+	private final ClassRosterRegistrationService classRosterRegistrationService = mock(ClassRosterRegistrationService.class);
 
 	private final TrainingSessionService service = new TrainingSessionService(
 			trainingSessionRepository,
@@ -69,7 +68,7 @@ class TrainingSessionStateMachineTest {
 			trainingSessionMapper,
 			auditLogService,
 			notificationService,
-			classEnrollmentService);
+			classRosterRegistrationService);
 
 	@BeforeEach
 	void delegateLookupToFinder() {
@@ -122,7 +121,7 @@ class TrainingSessionStateMachineTest {
 		assertThat(session.getStatus()).isEqualTo(current);
 	}
 
-	/** There is no messages.properties key for this code, so clients read the Java message itself. */
+	/** The English messages.properties text for this code repeats the Java message, so English clients read it verbatim. */
 	@Test
 	void rejectedTransitionCarriesTheClientFacingMessage() {
 		givenSession(TrainingSessionStatus.Canceled);

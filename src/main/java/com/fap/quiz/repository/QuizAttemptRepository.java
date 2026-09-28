@@ -112,7 +112,7 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
 	/** Scoped to the owner so another user's attempt reads as not found rather than forbidden. */
 	default QuizAttempt getByIdAndUserIdOrThrow(Long id, Long userId) {
 		return findByIdAndUserId(id, userId)
-				.orElseThrow(() -> new NotFoundException("Quiz attempt not found"));
+				.orElseThrow(() -> new NotFoundException("quiz_attempt", "Quiz attempt not found"));
 	}
 
 	@EntityGraph(attributePaths = {"quiz", "user"})
@@ -121,7 +121,7 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
 	/** Scoped to the quiz so an attempt id of another quiz reads as not found. */
 	default QuizAttempt getByQuizIdAndIdOrThrow(Long quizId, Long id) {
 		return findByQuizIdAndId(quizId, id)
-				.orElseThrow(() -> new NotFoundException("Quiz attempt not found"));
+				.orElseThrow(() -> new NotFoundException("quiz_attempt", "Quiz attempt not found"));
 	}
 
 	@EntityGraph(attributePaths = {"quiz", "user"})

@@ -4,7 +4,6 @@ import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassStatus;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
-import com.fap.clazz.service.ClassEnrollmentService;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.notification.service.NotificationService;
@@ -55,7 +54,7 @@ class TrainingSessionSchedulingTest {
 	@Mock private TrainingSessionMapper trainingSessionMapper;
 	@Mock private AuditLogService auditLogService;
 	@Mock private NotificationService notificationService;
-	@Mock private ClassEnrollmentService classEnrollmentService;
+	@Mock private ClassRosterRegistrationService classRosterRegistrationService;
 
 	private TrainingSessionService service;
 	private FapClass fapClass;
@@ -73,8 +72,9 @@ class TrainingSessionSchedulingTest {
 				trainingSessionMapper,
 				auditLogService,
 				notificationService,
-				classEnrollmentService);
+				classRosterRegistrationService);
 		lenient().doCallRealMethod().when(trainingSessionRepository).getWithClassAndTrainerOrThrow(any());
+		lenient().doCallRealMethod().when(classRepository).getWithTrainingProgramOrThrow(any());
 		fapClass = new FapClass();
 		fapClass.setId(CLASS_ID);
 		fapClass.setStatus(ClassStatus.Active);

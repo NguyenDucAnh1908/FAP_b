@@ -18,7 +18,7 @@ public interface TrainingProgramRepository extends JpaRepository<TrainingProgram
 	/** One place for the lookup so every caller fails with the same not-found message. */
 	default TrainingProgram getTrainingProgramOrThrow(Long id) {
 		return findById(id)
-				.orElseThrow(() -> new NotFoundException("Training program not found"));
+				.orElseThrow(() -> new NotFoundException("training_program", "Training program not found"));
 	}
 
 	interface StatusCount {

@@ -13,7 +13,6 @@ import com.fap.common.audit.AuditLogService;
 import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
-import com.fap.common.exception.NotFoundException;
 import com.fap.program.entity.TrainingProgram;
 import com.fap.program.enums.TrainingProgramStatus;
 import com.fap.program.repository.TrainingProgramRepository;
@@ -28,6 +27,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 
 @Service
@@ -110,8 +111,7 @@ public class ClassService {
 		}
 		validateDateRange(request.startDate(), request.endDate());
 		validateEnrollmentDateRange(request.enrollmentStartDate(), request.enrollmentEndDate());
-		TrainingProgram program = trainingProgramRepository.findById(request.trainingProgramId())
-				.orElseThrow(() -> new NotFoundException("Training program not found"));
+		TrainingProgram program = trainingProgramRepository.getTrainingProgramOrThrow(request.trainingProgramId());
 		if (program.getStatus() != TrainingProgramStatus.Active) {
 			throw new ConflictException("CLASS_TRAINING_PROGRAM_NOT_ACTIVE", "Class requires an active training program");
 		}
@@ -182,6 +182,26 @@ public class ClassService {
 		fapClass.setUpdatedAt(LocalDateTime.now());
 		fapClass.setUpdatedBy(currentUserId);
 		auditLogService.record("DELETE_CLASS", "class", fapClass.getId());
+	}
+
+	/**
+	 * Sets the minimum attendance rate of the class's completion policy.
+	 *
+	 * <p>Takes the instance the caller has already locked with {@code PESSIMISTIC_WRITE} rather than
+	 * an id, so the write happens under that lock without reading the class again. The caller
+	 * records the audit entry because the rate is only one part of its policy change, and passes
+	 * the timestamp so the class and the rest of that change are stamped alike.
+	 */
+	@Transactional
+	public void updateMinimumAttendanceRate(
+			FapClass lockedClass,
+			BigDecimal minimumAttendanceRate,
+			Long currentUserId,
+			LocalDateTime updatedAt) {
+		// The column holds two decimals; round here so the returned entity matches what is stored.
+		lockedClass.setMinimumAttendanceRate(minimumAttendanceRate.setScale(2, RoundingMode.HALF_UP));
+		lockedClass.setUpdatedAt(updatedAt);
+		lockedClass.setUpdatedBy(currentUserId);
 	}
 
 	private void applyFields(FapClass fapClass, CreateClassRequest request) {

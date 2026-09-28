@@ -78,8 +78,7 @@ public class ClassAdminService {
 	}
 
 	private ClassAdmin createAdminAssignment(FapClass fapClass, Long userId) {
-		User user = userRepository.findWithRolesById(userId)
-				.orElseThrow(() -> new NotFoundException("User not found"));
+		User user = userRepository.getWithRolesOrThrow(userId);
 		if (user.getStatus() != UserStatus.Active || user.getRoles().stream().noneMatch(role -> RoleNames.CLASS_ADMIN.equals(role.getName()))) {
 			throw new ConflictException("CLASS_ADMIN_ROLE_REQUIRED", "Assigned user must be an active Class Admin");
 		}
@@ -101,7 +100,7 @@ public class ClassAdminService {
 
 	private void ensureClassExists(Long classId) {
 		if (!classRepository.existsById(classId)) {
-			throw new NotFoundException("Class not found");
+			throw new NotFoundException("class", "Class not found");
 		}
 	}
 

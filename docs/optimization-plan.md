@@ -16,7 +16,7 @@ Nguồn: audit ngày 2026-09-28 (DB/JPA, cấu trúc code, cấu hình/test/buil
 | 2 | Hot path mỗi request: cache principal/permission, audit cùng transaction, mail sau commit | ✅ |
 | 3 | Khử N+1 ở service nặng (CourseResult, MyLearning, ClassEnrollment, dashboard), pooled sequence | ✅ |
 | 4 | File: stream upload/download, clone BLOB phía DB (giữ BLOB trong Oracle) | ✅ |
-| 5 | Tái cấu trúc: tách god service, gom logic trùng, i18n, code chết | ⬜ |
+| 5 | Tái cấu trúc: tách god service, gom logic trùng, i18n, code chết, test cho service chưa có test | ✅ |
 | 6 | Build/CI/docs: loại `db/seed` khỏi jar prod, build-info, dọn `docs/.claude` | ⬜ |
 
 ## Quyết định đã chốt (2026-09-28)
@@ -111,17 +111,45 @@ và treo 30 s/entity khi không có DB). Ứng dụng không dùng HQL insert.
 Avatar (≤ 2 MB) giữ nguyên `byte[]`. Round-trip byte chính xác được kiểm chứng trên Oracle bởi
 `MaterialContentStorageIT` (upload → download, clone → download).
 
+## Giai đoạn 5 — đã giao
+
+Làm theo module trong bản sao riêng, mỗi module build + unit test, review phản biện, rồi gộp.
+
+| Hạng mục | Kết quả |
+|---|---|
+| Hằng số role | `common.security.RoleNames`; không còn literal `"Super Admin"`... trong `src/main` ngoài lớp này |
+| State machine | `TransitionalStatus` + `StatusTransitions` cho Class, TrainingProgram, Quiz, Syllabus, TrainingSession; guard, mã lỗi, thứ tự kiểm tra giữ nguyên |
+| Lookup trùng lặp | `getXxxOrThrow` (default method) trên repository của module sở hữu, cùng exception/message, cùng SQL |
+| God service | `SyllabusService` → `SyllabusService` / `SyllabusFullService` / `SyllabusVersionService` (+ `SyllabusRules`); `SyllabusController` → 5 controller, cùng mapping (tài liệu OpenAPI sinh ra giống hệt); `CourseResultService` → `CompletionPolicyService` / `CourseResultCalculator` / `CourseResultService` + `CourseResultMapper` |
+| Ghi xuyên module | W1 mật khẩu qua `UserService.changePasswordHash`; W2 đăng ký buổi học qua `training.ClassRosterRegistrationService` (bỏ phụ thuộc training → clazz); W3 tỉ lệ điểm danh tối thiểu qua `ClassService.updateMinimumAttendanceRate`. Đọc xuyên module vẫn cho phép theo rule nên không thêm facade |
+| Thời gian | Bean `Clock`; inject vào QuizAttempt, ClassEnrollment, Auth, TrainingAnalytics (logic phụ thuộc "now"); các dấu thời gian audit giữ `LocalDateTime.now()` |
+| i18n | Mọi mã lỗi có key en/vi (thêm 80); `NotFoundException(resource, message)` cho 43 chỗ → message cụ thể theo tài nguyên, mã API vẫn `RESOURCE_NOT_FOUND`; message có tham số dùng `{0}`; ACCESS_DENIED, UNAUTHORIZED (trừ đăng nhập), "Email already exists" trả message cụ thể; `ErrorMessageKeysTest` chặn thiếu key |
+| Code chết | Xoá `AuditAspect`, `Auditable`, `CurrentUser`, `ClockProvider`, `DomainMetrics.UploadType`, `JwtService.isValid`, overload `AuditLogService.search` 5 tham số. Giữ package `calendar`/`storage` vì rule dự án còn liệt kê |
+| Test | Unit test cho QuizResult, QuizAssignment, Question, Quiz, ClassAdmin, ClassTrainer, ClassService, MyLearning, MyTraining, TrainingFeedback, Attendance, SyllabusOutline, SyllabusOutputStandard, MaterialFile, Notification, FapUserDetailsService/AuthorizationCache, TrainingProgram; 311 → 1036 unit test |
+
+Thay đổi có chủ đích ở message HTTP (mã lỗi không đổi): 404 và 403 trả message theo tài nguyên/lý do,
+refresh token sai trả "Invalid refresh token", trùng email trả "Email already exists"; bản vi có bản dịch.
+
+Lỗi phát hiện nhưng chưa sửa (ngoài phạm vi tái cấu trúc, cần quyết định nghiệp vụ):
+- `ClassEnrollmentService.approve` không kiểm tra lại user còn Active.
+- Hai bản thăng hạng waitlist khác nhau (lớp vs buổi học): metric PROMOTED, `completedAt`, tiêu đề thông báo.
+- `SyllabusImportService`: dòng CSV thiếu cột cuối gây "Unexpected error" thay vì dùng mặc định.
+- Syllabus Active → Inactive bị chặn (khớp `06_business_logic_review.md`, trái `BUSINESS_FLOW.md`).
+- Bài làm quiz InProgress vẫn nộp được sau khi quiz Closed; GET attempt có thể tự nộp.
+- Thông báo/email vẫn là tiếng Anh cứng (cần locale người nhận).
+
 ## Còn lại
 
-- Giai đoạn 5 (tái cấu trúc) và 6 (build/CI/docs) như bảng trạng thái.
+- Giai đoạn 6 (build/CI/docs), gồm `docs/api/openapi-endpoints.md` đã cũ so với code (thiếu endpoint
+  lớp/kết quả/avatar/check-in) và docs API ghi `NOT_FOUND` thay vì `RESOURCE_NOT_FOUND`.
 - Update full syllabus vẫn giữ BLOB của tài liệu được giữ lại trong RAM; bỏ hẳn cần đổi cách xoá/tạo
   lại cây outline (giữ nguyên material thay vì xoá rồi tạo lại).
 
 ## Kiểm chứng
 
-- `./mvnw test`: 311 test, 0 lỗi.
-- `./mvnw verify` với `FAP_IT_DB_URL` trỏ Oracle XE 21 local: 21 IT, 0 lỗi; không có bảng `HT_*`
-  nào được tạo; V32, V33 đã áp.
+- Sau giai đoạn 5: `./mvnw test` 1036 test, 0 lỗi; `./mvnw verify` với Oracle XE 21 local: 22 IT,
+  0 lỗi, ngân sách truy vấn không đổi (dashboard 16, courseResult.list 4, myLearning 11/9).
+- Sau giai đoạn 4: `./mvnw test` 311 test; 21 IT; không có bảng `HT_*` nào được tạo; V32, V33 đã áp.
 - Nhánh Testcontainers (Docker) chưa chạy trên máy dev (không có Docker); CI sẽ chạy nhánh này.
 
 ### Sửa lỗi CI Dashboard ngày 2026-09-28

@@ -54,7 +54,7 @@ public class SyllabusOutputStandardService {
 
 	private void ensureSyllabusExists(Long syllabusId) {
 		if (!syllabusRepository.existsById(syllabusId)) {
-			throw new NotFoundException("Syllabus not found");
+			throw new NotFoundException("syllabus", "Syllabus not found");
 		}
 	}
 

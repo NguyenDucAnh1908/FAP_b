@@ -16,13 +16,20 @@ import com.fap.common.security.RoleNames;
 import com.fap.notification.service.NotificationService;
 import com.fap.result.service.CourseResultService;
 import com.fap.role.entity.Role;
+import com.fap.training.entity.TrainingRegistration;
+import com.fap.training.entity.TrainingSession;
+import com.fap.training.enums.TrainingRegistrationMode;
+import com.fap.training.enums.TrainingRegistrationStatus;
+import com.fap.training.enums.TrainingSessionStatus;
 import com.fap.training.repository.TrainingRegistrationRepository;
 import com.fap.training.repository.TrainingSessionRepository;
+import com.fap.training.service.ClassRosterRegistrationService;
 import com.fap.user.entity.User;
 import com.fap.user.enums.UserStatus;
 import com.fap.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
 
 import java.time.Clock;
@@ -30,6 +37,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -63,12 +71,19 @@ class ClassEnrollmentServiceTest {
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
 	private final NotificationService notificationService = mock(NotificationService.class);
 	private final CourseResultService courseResultService = mock(CourseResultService.class);
+	// Real training-side collaborator over the same mocks, so these tests still cover the roster
+	// sync that ClassEnrollmentService triggers; its own cases are in ClassRosterRegistrationServiceTest.
+	private final ClassRosterRegistrationService classRosterRegistrationService = new ClassRosterRegistrationService(
+			trainingSessionRepository,
+			trainingRegistrationRepository,
+			classEnrollmentRepository,
+			notificationService,
+			CLOCK);
 	private final ClassEnrollmentService service = new ClassEnrollmentService(
 			classRepository,
 			classEnrollmentRepository,
 			userRepository,
-			trainingSessionRepository,
-			trainingRegistrationRepository,
+			classRosterRegistrationService,
 			new ClassEnrollmentMapper(),
 			classMapper,
 			auditLogService,
@@ -80,6 +95,7 @@ class ClassEnrollmentServiceTest {
 	void lookupDefaultsDelegateToStubbedFinders() {
 		lenient().doCallRealMethod().when(classRepository).getWithTrainingProgramForUpdateOrThrow(any());
 		lenient().doCallRealMethod().when(classEnrollmentRepository).getByFapClassIdAndUserIdOrThrow(any(), any());
+		lenient().doCallRealMethod().when(userRepository).getWithRolesOrThrow(any());
 	}
 
 	@BeforeEach
@@ -385,6 +401,52 @@ class ClassEnrollmentServiceTest {
 		verify(classRepository).searchAvailableForUser(eq(USER_ID), eq(TODAY), isNull(), any());
 	}
 
+	@Test
+	void approvingIntoTheClassRegistersTheTraineeForUpcomingAutoEnrollSessions() {
+		FapClass fapClass = givenOpenClass(2);
+		User user = givenActiveTrainee();
+		ClassEnrollment pending = enrollment(fapClass, user, ClassEnrollmentStatus.PendingApproval, 901L);
+		when(classEnrollmentRepository.findByFapClassIdAndUserId(CLASS_ID, USER_ID)).thenReturn(Optional.of(pending));
+		TrainingSession session = autoEnrollSession(fapClass, 0);
+		when(trainingSessionRepository.findByFapClassIdAndRegistrationModeAndStatusOrderBySessionDateAscStartTimeAsc(
+				CLASS_ID, TrainingRegistrationMode.AutoEnroll, TrainingSessionStatus.Upcoming)).thenReturn(List.of(session));
+
+		service.approve(CLASS_ID, USER_ID, 1L);
+
+		ArgumentCaptor<List<TrainingRegistration>> saved = ArgumentCaptor.captor();
+		verify(trainingRegistrationRepository).saveAll(saved.capture());
+		assertThat(saved.getValue()).singleElement().satisfies(registration -> {
+			assertThat(registration.getUser()).isSameAs(user);
+			assertThat(registration.getTrainingSession()).isSameAs(session);
+			assertThat(registration.getStatus()).isEqualTo(TrainingRegistrationStatus.Registered);
+			assertThat(registration.getRegisteredAt()).isEqualTo(LocalDateTime.now(CLOCK));
+		});
+		assertThat(session.getEnrolledCount()).isEqualTo(1);
+	}
+
+	@Test
+	void withdrawingEnrolledTraineeCancelsTheirUpcomingSessionRegistrationsAtTheWithdrawalTime() {
+		FapClass fapClass = givenOpenClass(30);
+		User user = givenActiveTrainee();
+		ClassEnrollment enrolled = enrollment(fapClass, user, ClassEnrollmentStatus.Enrolled, 902L);
+		when(classEnrollmentRepository.findByFapClassIdAndUserId(CLASS_ID, USER_ID)).thenReturn(Optional.of(enrolled));
+		TrainingSession session = autoEnrollSession(fapClass, 3);
+		TrainingRegistration registration = new TrainingRegistration();
+		registration.setTrainingSession(session);
+		registration.setUser(user);
+		registration.setStatus(TrainingRegistrationStatus.Registered);
+		when(trainingRegistrationRepository.findFutureByClassAndUser(
+				eq(CLASS_ID), eq(USER_ID), eq(TrainingSessionStatus.Upcoming), any())).thenReturn(List.of(registration));
+
+		service.withdraw(CLASS_ID, USER_ID, USER_ID);
+
+		assertThat(registration.getStatus()).isEqualTo(TrainingRegistrationStatus.Cancelled);
+		assertThat(registration.getCancelledAt())
+				.isEqualTo(enrolled.getWithdrawnAt())
+				.isEqualTo(LocalDateTime.now(CLOCK));
+		assertThat(session.getEnrolledCount()).isEqualTo(2);
+	}
+
 	private FapClass givenOpenClass(int capacity) {
 		FapClass fapClass = new FapClass();
 		fapClass.setId(CLASS_ID);
@@ -397,6 +459,16 @@ class ClassEnrollmentServiceTest {
 		fapClass.setEnrollmentEndDate(TODAY.plusDays(1));
 		when(classRepository.findWithTrainingProgramByIdForUpdate(CLASS_ID)).thenReturn(Optional.of(fapClass));
 		return fapClass;
+	}
+
+	private TrainingSession autoEnrollSession(FapClass fapClass, int enrolledCount) {
+		TrainingSession session = new TrainingSession();
+		session.setId(80L);
+		session.setFapClass(fapClass);
+		session.setRegistrationMode(TrainingRegistrationMode.AutoEnroll);
+		session.setCapacity(fapClass.getCapacity());
+		session.setEnrolledCount(enrolledCount);
+		return session;
 	}
 
 	private User givenActiveTrainee() {

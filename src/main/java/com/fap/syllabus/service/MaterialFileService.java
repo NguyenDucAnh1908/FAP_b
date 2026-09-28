@@ -250,7 +250,8 @@ public class MaterialFileService {
 		if (!canManageMaterials
 				&& !materialFileRepository.existsAssignedToUser(
 						materialId, currentUserId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES)) {
-			throw new ForbiddenException("You are not assigned to this material");
+			throw new ForbiddenException("You are not assigned to this material")
+					.withMessageKey("error.ACCESS_DENIED.material_not_assigned");
 		}
 		Path spool = spoolContent(materialId);
 		try {
@@ -290,7 +291,7 @@ public class MaterialFileService {
 			}
 		}
 		if (!stored) {
-			throw new NotFoundException("Material file has no stored content");
+			throw new NotFoundException("material_content", "Material file has no stored content");
 		}
 		return spool;
 	}

@@ -45,7 +45,8 @@ public class ClassAccessService {
 				|| isEnrolledTrainee(principal, classId)) {
 			return;
 		}
-		throw new ForbiddenException("You are not assigned to this class");
+		throw new ForbiddenException("You are not assigned to this class")
+				.withMessageKey("error.ACCESS_DENIED.class_not_assigned");
 	}
 
 	@Transactional(readOnly = true)
@@ -56,7 +57,8 @@ public class ClassAccessService {
 				|| isAssignedClassTrainer(principal, classId)) {
 			return;
 		}
-		throw new ForbiddenException("You cannot view the class enrollment roster");
+		throw new ForbiddenException("You cannot view the class enrollment roster")
+				.withMessageKey("error.ACCESS_DENIED.class_roster_view");
 	}
 
 	@Transactional(readOnly = true)
@@ -65,7 +67,8 @@ public class ClassAccessService {
 		if (isSuperAdmin(principal) || isAssignedClassAdmin(principal, classId)) {
 			return;
 		}
-		throw new ForbiddenException("You cannot manage this class");
+		throw new ForbiddenException("You cannot manage this class")
+				.withMessageKey("error.ACCESS_DENIED.class_manage");
 	}
 
 	@Transactional(readOnly = true)
@@ -75,7 +78,8 @@ public class ClassAccessService {
 				|| isAssignedClassAdmin(principal, classId)) {
 			return;
 		}
-		throw new ForbiddenException("You cannot manage the class enrollment roster");
+		throw new ForbiddenException("You cannot manage the class enrollment roster")
+				.withMessageKey("error.ACCESS_DENIED.class_roster_manage");
 	}
 
 	@Transactional(readOnly = true)
@@ -87,12 +91,13 @@ public class ClassAccessService {
 		if (principal.id().equals(trainerId) && isAssignedClassTrainer(principal, classId)) {
 			return;
 		}
-		throw new ForbiddenException("You cannot create this training session");
+		throw new ForbiddenException("You cannot create this training session")
+				.withMessageKey("error.ACCESS_DENIED.training_session_create");
 	}
 
 	@Transactional(readOnly = true)
 	public void assertCanViewSession(FapUserPrincipal principal, Long trainingSessionId) {
-		TrainingSession session = findSession(trainingSessionId);
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(trainingSessionId);
 		Long classId = session.getFapClass().getId();
 		if (isSuperAdmin(principal)
 				|| isAssignedClassAdmin(principal, classId)
@@ -101,30 +106,27 @@ public class ClassAccessService {
 				|| isEnrolledTrainee(principal, classId)) {
 			return;
 		}
-		throw new ForbiddenException("You are not assigned to this training session");
+		throw new ForbiddenException("You are not assigned to this training session")
+				.withMessageKey("error.ACCESS_DENIED.training_session_not_assigned");
 	}
 
 	@Transactional(readOnly = true)
 	public void assertCanManageSession(FapUserPrincipal principal, Long trainingSessionId) {
-		TrainingSession session = findSession(trainingSessionId);
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(trainingSessionId);
 		Long classId = session.getFapClass().getId();
 		if (isSuperAdmin(principal)
 				|| isAssignedClassAdmin(principal, classId)
 				|| isSessionTrainer(principal, session)) {
 			return;
 		}
-		throw new ForbiddenException("You cannot manage this training session");
+		throw new ForbiddenException("You cannot manage this training session")
+				.withMessageKey("error.ACCESS_DENIED.training_session_manage");
 	}
 
 	private void ensureClassExists(Long classId) {
 		if (!classRepository.existsById(classId)) {
-			throw new NotFoundException("Class not found");
+			throw new NotFoundException("class", "Class not found");
 		}
-	}
-
-	private TrainingSession findSession(Long trainingSessionId) {
-		return trainingSessionRepository.findWithClassAndTrainerById(trainingSessionId)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
 	}
 
 	private boolean isSuperAdmin(FapUserPrincipal principal) {

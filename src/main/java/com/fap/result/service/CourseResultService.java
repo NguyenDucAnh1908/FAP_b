@@ -8,7 +8,6 @@ import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
-import com.fap.common.exception.NotFoundException;
 import com.fap.common.i18n.MessageService;
 import com.fap.notification.service.NotificationService;
 import com.fap.quiz.enums.QuizStatus;
@@ -77,7 +76,7 @@ public class CourseResultService {
 
 	@Transactional(readOnly = true)
 	public ClassCourseResultsResponse list(Long classId) {
-		FapClass fapClass = findClass(classId);
+		FapClass fapClass = classRepository.getWithTrainingProgramOrThrow(classId);
 		// Children of every result in two class-wide queries instead of two queries per result.
 		Map<Long, List<CourseResultQuiz>> quizzesByResult = resultQuizRepository
 				.findByCourseResultFapClassIdOrderByIdAsc(classId).stream()
@@ -111,7 +110,7 @@ public class CourseResultService {
 
 	@Transactional
 	public ClassCourseResultsResponse calculate(Long classId, Long currentUserId) {
-		FapClass fapClass = findClassForUpdate(classId);
+		FapClass fapClass = classRepository.getWithTrainingProgramForUpdateOrThrow(classId);
 		if (fapClass.getStatus() != ClassStatus.Active) {
 			throw new ConflictException("CLASS_RESULT_NOT_CALCULABLE", "Only active class results can be calculated");
 		}
@@ -166,13 +165,14 @@ public class CourseResultService {
 
 	@Transactional
 	public ClassCourseResultsResponse publish(Long classId, Long currentUserId) {
-		FapClass fapClass = findClassForUpdate(classId);
+		FapClass fapClass = classRepository.getWithTrainingProgramForUpdateOrThrow(classId);
 		if (fapClass.getStatus() != ClassStatus.Closed) {
 			throw new ConflictException("CLASS_NOT_CLOSED", "Course results can only be published after the class is closed");
 		}
 		List<CourseResult> results = courseResultRepository.findByFapClassIdOrderByClassEnrollmentUserFullNameAsc(classId);
 		if (results.isEmpty() || results.stream().anyMatch(result -> result.effectiveStatus() == CourseResultStatus.InProgress)) {
-			throw new ConflictException("COURSE_RESULTS_INCOMPLETE", "All course results must be calculated before publication");
+			throw new ConflictException("COURSE_RESULTS_INCOMPLETE", "All course results must be calculated before publication")
+					.withMessageKey("error.COURSE_RESULTS_INCOMPLETE.publication");
 		}
 
 		LocalDateTime now = LocalDateTime.now();
@@ -270,15 +270,5 @@ public class CourseResultService {
 				result,
 				resultQuizRepository.findByCourseResultIdOrderByIdAsc(result.getId()),
 				adjustmentRepository.findByCourseResultIdOrderByAdjustedAtDescIdDesc(result.getId()));
-	}
-
-	private FapClass findClass(Long classId) {
-		return classRepository.findWithTrainingProgramById(classId)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
-	}
-
-	private FapClass findClassForUpdate(Long classId) {
-		return classRepository.findWithTrainingProgramByIdForUpdate(classId)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
 	}
 }

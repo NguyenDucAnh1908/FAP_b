@@ -29,13 +29,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	/** One place for the lookup so every caller fails with the same not-found message. */
 	default User getWithRolesOrThrow(Long id) {
 		return findWithRolesById(id)
-				.orElseThrow(() -> new NotFoundException("User not found"));
+				.orElseThrow(() -> new NotFoundException("user", "User not found"));
 	}
 
 	/** Same message as {@link #getWithRolesOrThrow(Long)}, for callers that do not need the roles. */
 	default User getUserOrThrow(Long id) {
 		return findById(id)
-				.orElseThrow(() -> new NotFoundException("User not found"));
+				.orElseThrow(() -> new NotFoundException("user", "User not found"));
 	}
 
 	boolean existsByEmailIgnoreCase(String email);

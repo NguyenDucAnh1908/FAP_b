@@ -20,6 +20,6 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
 	/** One place for the lookup so every caller fails with the same not-found message. */
 	default Role getRoleOrThrow(Long id) {
 		return findById(id)
-				.orElseThrow(() -> new NotFoundException("Role not found"));
+				.orElseThrow(() -> new NotFoundException("role", "Role not found"));
 	}
 }

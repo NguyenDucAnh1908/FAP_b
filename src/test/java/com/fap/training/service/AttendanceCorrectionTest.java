@@ -73,6 +73,7 @@ class AttendanceCorrectionTest {
 	@BeforeEach
 	void delegateLookupToFinder() {
 		lenient().doCallRealMethod().when(trainingSessionRepository).getWithClassAndTrainerOrThrow(any());
+		lenient().doCallRealMethod().when(userRepository).getUserOrThrow(any());
 	}
 
 	@Test

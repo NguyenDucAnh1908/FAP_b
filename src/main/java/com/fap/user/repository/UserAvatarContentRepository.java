@@ -9,6 +9,6 @@ public interface UserAvatarContentRepository extends JpaRepository<UserAvatarCon
 	/** One place for the lookup so every caller fails with the same not-found message. */
 	default UserAvatarContent getAvatarContentOrThrow(Long userId) {
 		return findById(userId)
-				.orElseThrow(() -> new NotFoundException("Avatar not found"));
+				.orElseThrow(() -> new NotFoundException("user_avatar", "Avatar not found"));
 	}
 }

@@ -21,6 +21,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.Optional;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class UserServiceTest {
@@ -260,5 +262,20 @@ class UserServiceTest {
 		assertThat(user.getStatus()).isEqualTo(UserStatus.Inactive);
 		assertThat(user.getUpdatedAt()).isNotNull();
 		verify(auditLogService).record("UPDATE_USER_STATUS:Inactive", "user", 1000L);
+	}
+
+	@Test
+	void changePasswordHashStoresTheEncodedHashAndStampWithoutAuditOrLookup() {
+		User user = new User();
+		user.setId(1000L);
+		user.setPasswordHash("old-hash");
+		LocalDateTime changedAt = LocalDateTime.of(2026, 3, 2, 9, 0);
+
+		userService.changePasswordHash(user, "new-hash", changedAt);
+
+		assertThat(user.getPasswordHash()).isEqualTo("new-hash");
+		assertThat(user.getUpdatedAt()).isEqualTo(changedAt);
+		// The caller already holds the managed user; hashing is the caller's job too.
+		verifyNoInteractions(userRepository, passwordEncoder, auditLogService, authorizationCache);
 	}
 }

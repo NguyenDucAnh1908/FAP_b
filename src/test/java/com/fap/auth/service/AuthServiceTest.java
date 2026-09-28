@@ -8,13 +8,17 @@ import com.fap.auth.entity.PasswordResetToken;
 import com.fap.auth.entity.RefreshToken;
 import com.fap.auth.repository.PasswordResetTokenRepository;
 import com.fap.auth.repository.RefreshTokenRepository;
+import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.UnauthorizedException;
 import com.fap.common.metrics.DomainMetrics;
+import com.fap.common.security.AuthorizationCache;
 import com.fap.common.security.JwtService;
+import com.fap.role.repository.RoleRepository;
 import com.fap.user.entity.User;
 import com.fap.user.mapper.UserMapper;
 import com.fap.user.repository.UserRepository;
+import com.fap.user.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -34,6 +38,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class AuthServiceTest {
@@ -50,10 +55,22 @@ class AuthServiceTest {
 	private final UserMapper userMapper = mock(UserMapper.class);
 	private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
 	private final DomainMetrics domainMetrics = mock(DomainMetrics.class);
+	private final AuditLogService auditLogService = mock(AuditLogService.class);
+	private final AuthorizationCache authorizationCache = mock(AuthorizationCache.class);
+	// A real UserService: the password write is delegated to it, and the assertions below check
+	// the user the auth flow loaded, not a stubbed call.
+	private final UserService userService = new UserService(
+			userRepository,
+			mock(RoleRepository.class),
+			passwordEncoder,
+			userMapper,
+			auditLogService,
+			authorizationCache);
 	private final AuthService authService = new AuthService(
 			authenticationManager,
 			jwtService,
 			userRepository,
+			userService,
 			refreshTokenRepository,
 			passwordResetTokenRepository,
 			passwordResetMailService,
@@ -78,6 +95,7 @@ class AuthServiceTest {
 		assertThat(user.getPasswordHash()).isEqualTo("new-hash");
 		assertThat(user.getUpdatedAt()).isNotNull();
 		verify(refreshTokenRepository).revokeAllByUserId(1000L);
+		verifyNoInteractions(auditLogService, authorizationCache);
 	}
 
 	@Test
@@ -124,6 +142,7 @@ class AuthServiceTest {
 		assertThat(token.isUsed()).isTrue();
 		assertThat(token.getUsedAt()).isNotNull();
 		verify(refreshTokenRepository).revokeAllByUserId(1000L);
+		verifyNoInteractions(auditLogService, authorizationCache);
 	}
 
 	@Test

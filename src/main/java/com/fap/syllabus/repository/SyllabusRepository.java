@@ -14,7 +14,7 @@ import java.util.List;
 public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
 
 	default Syllabus getOrThrow(Long id) {
-		return findById(id).orElseThrow(() -> new NotFoundException("Syllabus not found"));
+		return findById(id).orElseThrow(() -> new NotFoundException("syllabus", "Syllabus not found"));
 	}
 
 	boolean existsByCodeIgnoreCase(String code);

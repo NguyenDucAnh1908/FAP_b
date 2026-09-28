@@ -4,7 +4,6 @@ import com.fap.clazz.enums.ClassEnrollmentStatus;
 import com.fap.clazz.repository.ClassEnrollmentRepository;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
-import com.fap.common.exception.NotFoundException;
 import com.fap.common.metrics.DomainMetrics;
 import com.fap.common.security.RoleNames;
 import com.fap.notification.service.NotificationService;
@@ -81,7 +80,8 @@ public class TrainingRegistrationService {
 	public TrainingRegistrationResponse cancelSelf(Long trainingSessionId, Long currentUserId) {
 		TrainingSession session = findUpcomingSessionForUpdate(trainingSessionId);
 		if (session.getRegistrationMode() == TrainingRegistrationMode.AutoEnroll) {
-			throw new ConflictException("TRAINING_SESSION_AUTO_ENROLL", "Leave the class to cancel an auto-enrolled session");
+			throw new ConflictException("TRAINING_SESSION_AUTO_ENROLL", "Leave the class to cancel an auto-enrolled session")
+					.withMessageKey("error.TRAINING_SESSION_AUTO_ENROLL.cancel");
 		}
 		TrainingRegistration registration = trainingRegistrationRepository
 				.getByTrainingSessionIdAndUserIdOrThrow(trainingSessionId, currentUserId);
@@ -200,8 +200,7 @@ public class TrainingRegistrationService {
 	}
 
 	private User findActiveUser(Long userId) {
-		User user = userRepository.findWithRolesById(userId)
-				.orElseThrow(() -> new NotFoundException("User not found"));
+		User user = userRepository.getWithRolesOrThrow(userId);
 		if (user.getStatus() != UserStatus.Active) {
 			throw new ConflictException("USER_NOT_ACTIVE", "Only active user can register for training session");
 		}

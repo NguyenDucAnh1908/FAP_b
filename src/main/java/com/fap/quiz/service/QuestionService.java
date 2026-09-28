@@ -129,8 +129,16 @@ public class QuestionService {
 		question.setQuestionType(request.questionType());
 		question.setCategory(request.category().trim());
 		question.setDifficulty(request.difficulty());
-		question.setOptionsJson(writeJson(request.optionsJson(), "INVALID_QUESTION_OPTIONS_JSON", "Question options must be valid JSON"));
-		question.setCorrectAnswersJson(writeJson(request.correctAnswersJson(), "INVALID_QUESTION_CORRECT_ANSWERS_JSON", "Question correct answers must be valid JSON"));
+		question.setOptionsJson(writeJson(
+				request.optionsJson(),
+				"INVALID_QUESTION_OPTIONS_JSON",
+				"error.INVALID_QUESTION_OPTIONS_JSON.invalid_json",
+				"Question options must be valid JSON"));
+		question.setCorrectAnswersJson(writeJson(
+				request.correctAnswersJson(),
+				"INVALID_QUESTION_CORRECT_ANSWERS_JSON",
+				"error.INVALID_QUESTION_CORRECT_ANSWERS_JSON.invalid_json",
+				"Question correct answers must be valid JSON"));
 		question.setExplanation(TextNormalizer.blankToNull(request.explanation()));
 	}
 
@@ -140,8 +148,16 @@ public class QuestionService {
 		question.setQuestionType(request.questionType());
 		question.setCategory(request.category().trim());
 		question.setDifficulty(request.difficulty());
-		question.setOptionsJson(writeJson(request.optionsJson(), "INVALID_QUESTION_OPTIONS_JSON", "Question options must be valid JSON"));
-		question.setCorrectAnswersJson(writeJson(request.correctAnswersJson(), "INVALID_QUESTION_CORRECT_ANSWERS_JSON", "Question correct answers must be valid JSON"));
+		question.setOptionsJson(writeJson(
+				request.optionsJson(),
+				"INVALID_QUESTION_OPTIONS_JSON",
+				"error.INVALID_QUESTION_OPTIONS_JSON.invalid_json",
+				"Question options must be valid JSON"));
+		question.setCorrectAnswersJson(writeJson(
+				request.correctAnswersJson(),
+				"INVALID_QUESTION_CORRECT_ANSWERS_JSON",
+				"error.INVALID_QUESTION_CORRECT_ANSWERS_JSON.invalid_json",
+				"Question correct answers must be valid JSON"));
 		question.setExplanation(TextNormalizer.blankToNull(request.explanation()));
 	}
 
@@ -157,11 +173,15 @@ public class QuestionService {
 		}
 	}
 
-	private String writeJson(JsonNode value, String code, String message) {
+	/**
+	 * @param messageKey the localized text for this failure, which shares {@code code} with the
+	 *                   "non-empty JSON array" check but not its wording
+	 */
+	private String writeJson(JsonNode value, String code, String messageKey, String message) {
 		try {
 			return objectMapper.writeValueAsString(value);
 		} catch (JsonProcessingException exception) {
-			throw new BadRequestException(code, message);
+			throw new BadRequestException(code, message).withMessageKey(messageKey);
 		}
 	}
 }

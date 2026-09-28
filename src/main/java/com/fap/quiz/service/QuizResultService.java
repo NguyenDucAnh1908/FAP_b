@@ -234,7 +234,8 @@ public class QuizResultService {
 
 	private void assertCanViewResults(FapUserPrincipal principal, Long classId, Long trainingSessionId) {
 		if (!isResultViewer(principal)) {
-			throw new ForbiddenException("You cannot view quiz results");
+			throw new ForbiddenException("You cannot view quiz results")
+					.withMessageKey("error.ACCESS_DENIED.quiz_results_view");
 		}
 		if (classId != null) {
 			classAccessService.assertCanViewClass(principal, classId);
@@ -251,13 +252,14 @@ public class QuizResultService {
 				isSuperAdmin(principal),
 				principal.id(),
 				ELIGIBLE_REGISTRATION_STATUSES) == 0) {
-			throw new ForbiddenException("You cannot view this quiz attempt");
+			throw new ForbiddenException("You cannot view this quiz attempt")
+					.withMessageKey("error.ACCESS_DENIED.quiz_attempt_view");
 		}
 	}
 
 	private void ensureQuizExists(Long quizId) {
 		if (!quizRepository.existsById(quizId)) {
-			throw new NotFoundException("Quiz not found");
+			throw new NotFoundException("quiz", "Quiz not found");
 		}
 	}
 

@@ -66,7 +66,7 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 	 */
 	default TrainingRegistration getByTrainingSessionIdAndUserIdOrThrow(Long trainingSessionId, Long userId) {
 		return findByTrainingSessionIdAndUserId(trainingSessionId, userId)
-				.orElseThrow(() -> new NotFoundException("Training registration not found"));
+				.orElseThrow(() -> new NotFoundException("training_registration", "Training registration not found"));
 	}
 
 	/** All registrations of a session, to sync many users against it without a lookup per user. */

@@ -118,7 +118,7 @@ class QuizStateMachineTest {
 		assertThat(quiz.getStatus()).isEqualTo(QuizStatus.Closed);
 	}
 
-	/** No messages.properties key exists for these codes, so the Java message is the HTTP message. */
+	/** The English messages.properties text for these codes repeats the Java message, so English clients read it verbatim. */
 	@Test
 	void rejectedTransitionKeepsItsClientVisibleMessageAndSkipsTheQuestionCount() {
 		givenQuiz(QuizStatus.Closed);

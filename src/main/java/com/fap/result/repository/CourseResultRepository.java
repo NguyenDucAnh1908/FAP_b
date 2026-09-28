@@ -21,7 +21,7 @@ public interface CourseResultRepository extends JpaRepository<CourseResult, Long
 
 	default CourseResult getByFapClassIdAndUserIdOrThrow(Long classId, Long userId) {
 		return findByFapClassIdAndClassEnrollmentUserId(classId, userId)
-				.orElseThrow(() -> new NotFoundException("Course result not found"));
+				.orElseThrow(() -> new NotFoundException("course_result", "Course result not found"));
 	}
 
 	Optional<CourseResult> findByClassEnrollmentId(Long enrollmentId);
@@ -35,7 +35,7 @@ public interface CourseResultRepository extends JpaRepository<CourseResult, Long
 
 	default CourseResult getForUpdateOrThrow(Long classId, Long userId) {
 		return findForUpdate(classId, userId)
-				.orElseThrow(() -> new NotFoundException("Course result not found"));
+				.orElseThrow(() -> new NotFoundException("course_result", "Course result not found"));
 	}
 
 	long countByFapClassId(Long classId);
