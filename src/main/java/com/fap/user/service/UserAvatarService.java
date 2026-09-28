@@ -2,7 +2,6 @@ package com.fap.user.service;
 
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
-import com.fap.common.exception.NotFoundException;
 import com.fap.common.metrics.DomainMetrics;
 import com.fap.user.dto.AvatarDownload;
 import com.fap.user.entity.User;
@@ -56,8 +55,7 @@ public class UserAvatarService {
 		boolean counted = false;
 		try {
 			validateAvatarFile(file);
-			User user = userRepository.findById(currentUserId)
-					.orElseThrow(() -> new NotFoundException("User not found"));
+			User user = userRepository.getUserOrThrow(currentUserId);
 			byte[] data;
 			try {
 				data = file.getBytes();
@@ -93,8 +91,7 @@ public class UserAvatarService {
 
 	@Transactional(readOnly = true)
 	public AvatarDownload download(Long userId) {
-		UserAvatarContent content = avatarContentRepository.findById(userId)
-				.orElseThrow(() -> new NotFoundException("Avatar not found"));
+		UserAvatarContent content = avatarContentRepository.getAvatarContentOrThrow(userId);
 		return new AvatarDownload(content.getContentType(), content.getFileData());
 	}
 

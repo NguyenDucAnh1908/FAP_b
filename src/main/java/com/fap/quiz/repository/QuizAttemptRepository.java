@@ -1,5 +1,6 @@
 package com.fap.quiz.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.quiz.entity.QuizAttempt;
 import com.fap.quiz.enums.QuizAttemptStatus;
 import com.fap.training.enums.TrainingRegistrationStatus;
@@ -108,8 +109,20 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
 	@EntityGraph(attributePaths = {"quiz", "user"})
 	Optional<QuizAttempt> findByIdAndUserId(Long id, Long userId);
 
+	/** Scoped to the owner so another user's attempt reads as not found rather than forbidden. */
+	default QuizAttempt getByIdAndUserIdOrThrow(Long id, Long userId) {
+		return findByIdAndUserId(id, userId)
+				.orElseThrow(() -> new NotFoundException("Quiz attempt not found"));
+	}
+
 	@EntityGraph(attributePaths = {"quiz", "user"})
 	Optional<QuizAttempt> findByQuizIdAndId(Long quizId, Long id);
+
+	/** Scoped to the quiz so an attempt id of another quiz reads as not found. */
+	default QuizAttempt getByQuizIdAndIdOrThrow(Long quizId, Long id) {
+		return findByQuizIdAndId(quizId, id)
+				.orElseThrow(() -> new NotFoundException("Quiz attempt not found"));
+	}
 
 	@EntityGraph(attributePaths = {"quiz", "user"})
 	Optional<QuizAttempt> findFirstByQuizIdAndUserIdOrderByIdDesc(Long quizId, Long userId);

@@ -7,6 +7,7 @@ import com.fap.clazz.mapper.ClassMapper;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.api.PageRequestFactory;
+import com.fap.common.util.TextNormalizer;
 import com.fap.program.entity.TrainingProgramSyllabus;
 import com.fap.program.repository.TrainingProgramSyllabusRepository;
 import com.fap.quiz.dto.AssignedQuizResponse;
@@ -119,7 +120,7 @@ public class MyLearningService {
 				Sort.by(Sort.Direction.DESC, "createdAt"),
 				"id", "createdAt", "name", "classCode", "startDate", "endDate", "status");
 		return classRepository
-				.searchMine(currentUserId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES, normalize(keyword), pageRequest)
+				.searchMine(currentUserId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES, TextNormalizer.blankToNull(keyword), pageRequest)
 				.map(classMapper::toResponse);
 	}
 
@@ -137,7 +138,7 @@ public class MyLearningService {
 			Long currentUserId,
 			String keyword) {
 		FapClass fapClass = findMyClass(classId, currentUserId);
-		String normalizedKeyword = normalize(keyword);
+		String normalizedKeyword = TextNormalizer.blankToNull(keyword);
 		List<MyTrainingSessionResponse> sessions = trainingRegistrationRepository
 				.findMineByClassId(currentUserId, classId, ELIGIBLE_REGISTRATION_STATUSES)
 				.stream()
@@ -326,9 +327,5 @@ public class MyLearningService {
 				latestAttempt == null ? null : latestAttempt.getId(),
 				latestAttempt == null ? null : latestAttempt.getScore(),
 				latestAttempt == null ? null : latestAttempt.getPassed());
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
 	}
 }

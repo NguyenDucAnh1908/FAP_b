@@ -8,11 +8,10 @@ import com.fap.clazz.repository.ClassEnrollmentRepository;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
+import com.fap.common.exception.NotFoundException;
 import com.fap.common.i18n.MessageService;
 import com.fap.notification.service.NotificationService;
-import com.fap.quiz.repository.QuizAssignmentRepository;
 import com.fap.quiz.repository.QuizAttemptRepository;
-import com.fap.quiz.repository.QuizRepository;
 import com.fap.quiz.entity.Quiz;
 import com.fap.quiz.entity.QuizAttempt;
 import com.fap.quiz.enums.QuizAttemptStatus;
@@ -22,6 +21,7 @@ import com.fap.result.dto.UpdateCourseResultRequest;
 import com.fap.result.entity.CourseResult;
 import com.fap.result.entity.ClassCompletionQuiz;
 import com.fap.result.enums.CourseResultStatus;
+import com.fap.result.mapper.CourseResultMapper;
 import com.fap.result.repository.ClassCompletionQuizRepository;
 import com.fap.result.repository.CourseResultAdjustmentRepository;
 import com.fap.result.repository.CourseResultQuizRepository;
@@ -36,6 +36,7 @@ import com.fap.training.repository.AttendanceRecordRepository;
 import com.fap.training.repository.TrainingRegistrationRepository;
 import com.fap.training.repository.TrainingSessionRepository;
 import com.fap.user.entity.User;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.fap.result.entity.CourseResultQuiz;
 import org.mockito.ArgumentCaptor;
@@ -51,6 +52,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -67,8 +69,6 @@ class CourseResultServiceTest {
 	private final CourseResultRepository resultRepository = mock(CourseResultRepository.class);
 	private final CourseResultQuizRepository resultQuizRepository = mock(CourseResultQuizRepository.class);
 	private final CourseResultAdjustmentRepository adjustmentRepository = mock(CourseResultAdjustmentRepository.class);
-	private final QuizRepository quizRepository = mock(QuizRepository.class);
-	private final QuizAssignmentRepository quizAssignmentRepository = mock(QuizAssignmentRepository.class);
 	private final QuizAttemptRepository quizAttemptRepository = mock(QuizAttemptRepository.class);
 	private final TrainingSessionRepository sessionRepository = mock(TrainingSessionRepository.class);
 	private final TrainingRegistrationRepository registrationRepository = mock(TrainingRegistrationRepository.class);
@@ -77,22 +77,34 @@ class CourseResultServiceTest {
 	private final NotificationService notificationService = mock(NotificationService.class);
 	private final MessageService messageService = mock(MessageService.class);
 
-	private final CourseResultService service = new CourseResultService(
-			classRepository,
+	// Real collaborators: the tests assert calculated statuses and the mapped responses.
+	private final CourseResultCalculator calculator = new CourseResultCalculator(
 			enrollmentRepository,
 			completionQuizRepository,
 			resultRepository,
 			resultQuizRepository,
-			adjustmentRepository,
-			quizRepository,
-			quizAssignmentRepository,
 			quizAttemptRepository,
-			sessionRepository,
 			registrationRepository,
-			attendanceRepository,
+			attendanceRepository);
+	private final CourseResultService service = new CourseResultService(
+			classRepository,
+			completionQuizRepository,
+			resultRepository,
+			resultQuizRepository,
+			adjustmentRepository,
+			sessionRepository,
+			calculator,
+			new CourseResultMapper(),
 			auditLogService,
 			notificationService,
 			messageService);
+
+	@BeforeEach
+	void callRealRepositoryDefaults() {
+		// The lookup defaults delegate to the find* methods, whose stubs drive each test.
+		lenient().doCallRealMethod().when(resultRepository).getByFapClassIdAndUserIdOrThrow(any(), any());
+		lenient().doCallRealMethod().when(resultRepository).getForUpdateOrThrow(any(), any());
+	}
 
 	@Test
 	void lateAttendanceCountsAsAttendedAndCanPass() {
@@ -250,6 +262,54 @@ class CourseResultServiceTest {
 		assertThat(response.status()).isEqualTo(CourseResultStatus.Passed);
 		assertThat(response.published()).isFalse();
 		verify(adjustmentRepository).save(any());
+	}
+
+	@Test
+	void adjustingAMissingResultIsNotFound() {
+		when(resultRepository.findForUpdate(CLASS_ID, USER_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.adjust(
+				CLASS_ID,
+				USER_ID,
+				new UpdateCourseResultRequest(CourseResultStatus.Passed, "Approved after review"),
+				ACTOR_ID))
+				.isInstanceOf(NotFoundException.class)
+				.hasMessage("Course result not found");
+		verify(adjustmentRepository, never()).save(any());
+	}
+
+	@Test
+	void getReturnsTheTraineeResultWithItsSnapshots() {
+		CourseResult result = givenResult(givenClass(ClassStatus.Active), CourseResultStatus.Failed);
+		when(resultRepository.findByFapClassIdAndClassEnrollmentUserId(CLASS_ID, USER_ID)).thenReturn(Optional.of(result));
+		when(resultQuizRepository.findByCourseResultIdOrderByIdAsc(result.getId())).thenReturn(List.of());
+		when(adjustmentRepository.findByCourseResultIdOrderByAdjustedAtDescIdDesc(result.getId())).thenReturn(List.of());
+
+		CourseResultResponse response = service.get(CLASS_ID, USER_ID);
+
+		assertThat(response.id()).isEqualTo(result.getId());
+		assertThat(response.userId()).isEqualTo(USER_ID);
+		assertThat(response.status()).isEqualTo(CourseResultStatus.Failed);
+	}
+
+	@Test
+	void getOfAMissingResultIsNotFound() {
+		when(resultRepository.findByFapClassIdAndClassEnrollmentUserId(CLASS_ID, USER_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.get(CLASS_ID, USER_ID))
+				.isInstanceOf(NotFoundException.class)
+				.hasMessage("Course result not found");
+	}
+
+	@Test
+	void traineeCannotSeeAnUnpublishedResult() {
+		CourseResult result = givenResult(givenClass(ClassStatus.Closed), CourseResultStatus.Passed);
+		when(resultRepository.findByFapClassIdAndClassEnrollmentUserId(CLASS_ID, USER_ID)).thenReturn(Optional.of(result));
+
+		assertThatThrownBy(() -> service.getMine(CLASS_ID, USER_ID))
+				.isInstanceOf(ConflictException.class)
+				.extracting("code")
+				.isEqualTo("COURSE_RESULT_NOT_PUBLISHED");
 	}
 
 	private static QuizAttemptRepository.ScoredAttempt scored(Long id, Long quizId, Long userId, Integer score) {

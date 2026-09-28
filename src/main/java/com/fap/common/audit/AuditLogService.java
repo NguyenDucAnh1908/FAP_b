@@ -55,11 +55,6 @@ public class AuditLogService {
 	}
 
 	@Transactional(readOnly = true)
-	public Page<AuditLogResponse> search(Long userId, String entityType, Long entityId, int page, int limit) {
-		return search(userId, entityType, entityId, page, limit, null, null);
-	}
-
-	@Transactional(readOnly = true)
 	public Page<AuditLogResponse> search(
 			Long userId,
 			String entityType,

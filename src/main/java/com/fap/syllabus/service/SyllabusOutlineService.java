@@ -1,7 +1,6 @@
 package com.fap.syllabus.service;
 
 import com.fap.common.audit.AuditLogService;
-import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.syllabus.dto.CreateSyllabusDayRequest;
 import com.fap.syllabus.dto.CreateSyllabusTopicRequest;
@@ -13,7 +12,6 @@ import com.fap.syllabus.entity.Syllabus;
 import com.fap.syllabus.entity.SyllabusDay;
 import com.fap.syllabus.entity.SyllabusTopic;
 import com.fap.syllabus.entity.SyllabusUnit;
-import com.fap.syllabus.enums.SyllabusStatus;
 import com.fap.syllabus.mapper.SyllabusOutlineMapper;
 import com.fap.syllabus.repository.SyllabusDayRepository;
 import com.fap.syllabus.repository.SyllabusRepository;
@@ -72,7 +70,7 @@ public class SyllabusOutlineService {
 	@Transactional
 	public SyllabusDayResponse updateDay(Long syllabusId, Long dayId, CreateSyllabusDayRequest request) {
 		findEditableSyllabus(syllabusId);
-		SyllabusDay day = findDay(syllabusId, dayId);
+		SyllabusDay day = dayRepository.getByIdAndSyllabusIdOrThrow(dayId, syllabusId);
 		day.setDayNumber(request.dayNumber());
 		day.setSortOrder(request.sortOrder());
 		auditLogService.record("UPDATE_SYLLABUS_DAY", "syllabus", syllabusId);
@@ -82,7 +80,7 @@ public class SyllabusOutlineService {
 	@Transactional
 	public void deleteDay(Long syllabusId, Long dayId) {
 		findEditableSyllabus(syllabusId);
-		SyllabusDay day = findDay(syllabusId, dayId);
+		SyllabusDay day = dayRepository.getByIdAndSyllabusIdOrThrow(dayId, syllabusId);
 		dayRepository.delete(day);
 		auditLogService.record("DELETE_SYLLABUS_DAY", "syllabus", syllabusId);
 	}
@@ -90,7 +88,7 @@ public class SyllabusOutlineService {
 	@Transactional
 	public SyllabusUnitResponse createUnit(Long syllabusId, Long dayId, CreateSyllabusUnitRequest request) {
 		findEditableSyllabus(syllabusId);
-		SyllabusDay day = findDay(syllabusId, dayId);
+		SyllabusDay day = dayRepository.getByIdAndSyllabusIdOrThrow(dayId, syllabusId);
 		SyllabusUnit unit = new SyllabusUnit();
 		unit.setDay(day);
 		unit.setName(request.name());
@@ -103,7 +101,7 @@ public class SyllabusOutlineService {
 	@Transactional
 	public SyllabusUnitResponse updateUnit(Long syllabusId, Long unitId, CreateSyllabusUnitRequest request) {
 		findEditableSyllabus(syllabusId);
-		SyllabusUnit unit = findUnit(syllabusId, unitId);
+		SyllabusUnit unit = unitRepository.getByIdAndDaySyllabusIdOrThrow(unitId, syllabusId);
 		unit.setName(request.name());
 		unit.setSortOrder(request.sortOrder());
 		auditLogService.record("UPDATE_SYLLABUS_UNIT", "syllabus", syllabusId);
@@ -113,7 +111,7 @@ public class SyllabusOutlineService {
 	@Transactional
 	public void deleteUnit(Long syllabusId, Long unitId) {
 		findEditableSyllabus(syllabusId);
-		SyllabusUnit unit = findUnit(syllabusId, unitId);
+		SyllabusUnit unit = unitRepository.getByIdAndDaySyllabusIdOrThrow(unitId, syllabusId);
 		unitRepository.delete(unit);
 		auditLogService.record("DELETE_SYLLABUS_UNIT", "syllabus", syllabusId);
 	}
@@ -121,7 +119,7 @@ public class SyllabusOutlineService {
 	@Transactional
 	public SyllabusTopicResponse createTopic(Long syllabusId, Long unitId, CreateSyllabusTopicRequest request) {
 		findEditableSyllabus(syllabusId);
-		SyllabusUnit unit = findUnit(syllabusId, unitId);
+		SyllabusUnit unit = unitRepository.getByIdAndDaySyllabusIdOrThrow(unitId, syllabusId);
 		SyllabusTopic topic = new SyllabusTopic();
 		topic.setUnit(unit);
 		applyTopic(topic, request);
@@ -133,7 +131,7 @@ public class SyllabusOutlineService {
 	@Transactional
 	public SyllabusTopicResponse updateTopic(Long syllabusId, Long topicId, CreateSyllabusTopicRequest request) {
 		findEditableSyllabus(syllabusId);
-		SyllabusTopic topic = findTopic(syllabusId, topicId);
+		SyllabusTopic topic = topicRepository.getByIdAndUnitDaySyllabusIdOrThrow(topicId, syllabusId);
 		applyTopic(topic, request);
 		auditLogService.record("UPDATE_SYLLABUS_TOPIC", "syllabus", syllabusId);
 		return outlineMapper.toResponse(topic);
@@ -142,7 +140,7 @@ public class SyllabusOutlineService {
 	@Transactional
 	public void deleteTopic(Long syllabusId, Long topicId) {
 		findEditableSyllabus(syllabusId);
-		SyllabusTopic topic = findTopic(syllabusId, topicId);
+		SyllabusTopic topic = topicRepository.getByIdAndUnitDaySyllabusIdOrThrow(topicId, syllabusId);
 		topicRepository.delete(topic);
 		auditLogService.record("DELETE_SYLLABUS_TOPIC", "syllabus", syllabusId);
 	}
@@ -163,26 +161,8 @@ public class SyllabusOutlineService {
 	}
 
 	private Syllabus findEditableSyllabus(Long syllabusId) {
-		Syllabus syllabus = syllabusRepository.findById(syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus not found"));
-		if (syllabus.getStatus() == SyllabusStatus.Active || syllabus.getStatus() == SyllabusStatus.Inactive) {
-			throw new ConflictException("SYLLABUS_NOT_EDITABLE", "Only Drafting or Pending syllabus can be edited");
-		}
+		Syllabus syllabus = syllabusRepository.getOrThrow(syllabusId);
+		SyllabusRules.ensureEditable(syllabus);
 		return syllabus;
-	}
-
-	private SyllabusDay findDay(Long syllabusId, Long dayId) {
-		return dayRepository.findByIdAndSyllabusId(dayId, syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus day not found"));
-	}
-
-	private SyllabusUnit findUnit(Long syllabusId, Long unitId) {
-		return unitRepository.findByIdAndDaySyllabusId(unitId, syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus unit not found"));
-	}
-
-	private SyllabusTopic findTopic(Long syllabusId, Long topicId) {
-		return topicRepository.findByIdAndUnitDaySyllabusId(topicId, syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus topic not found"));
 	}
 }

@@ -8,6 +8,7 @@ import com.fap.result.dto.CompletionPolicyResponse;
 import com.fap.result.dto.CourseResultResponse;
 import com.fap.result.dto.UpdateCompletionPolicyRequest;
 import com.fap.result.dto.UpdateCourseResultRequest;
+import com.fap.result.service.CompletionPolicyService;
 import com.fap.result.service.CourseResultService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,10 +29,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class CourseResultController {
 	private final CourseResultService courseResultService;
+	private final CompletionPolicyService completionPolicyService;
 	private final ClassAccessService classAccessService;
 
-	public CourseResultController(CourseResultService courseResultService, ClassAccessService classAccessService) {
+	public CourseResultController(
+			CourseResultService courseResultService,
+			CompletionPolicyService completionPolicyService,
+			ClassAccessService classAccessService) {
 		this.courseResultService = courseResultService;
+		this.completionPolicyService = completionPolicyService;
 		this.classAccessService = classAccessService;
 	}
 
@@ -42,7 +48,7 @@ public class CourseResultController {
 			@PathVariable Long classId,
 			@AuthenticationPrincipal FapUserPrincipal principal) {
 		classAccessService.assertCanViewEnrollmentRoster(principal, classId);
-		return ApiResponse.ok(courseResultService.getPolicy(classId));
+		return ApiResponse.ok(completionPolicyService.getPolicy(classId));
 	}
 
 	@Operation(summary = "Update class completion policy")
@@ -53,7 +59,7 @@ public class CourseResultController {
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody UpdateCompletionPolicyRequest request) {
 		classAccessService.assertCanManageClass(principal, classId);
-		return ApiResponse.ok(courseResultService.updatePolicy(classId, request, principal.id()));
+		return ApiResponse.ok(completionPolicyService.updatePolicy(classId, request, principal.id()));
 	}
 
 	@Operation(summary = "List class course results")

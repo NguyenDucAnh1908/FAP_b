@@ -6,6 +6,7 @@ import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
 import com.fap.common.exception.ForbiddenException;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.common.security.RoleNames;
 import com.fap.training.repository.TrainingSessionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,7 @@ class ClassAccessServiceTest {
 	void superAdminCanViewEnrollmentRoster() {
 		when(classRepository.existsById(10L)).thenReturn(true);
 
-		assertDoesNotThrow(() -> service.assertCanViewEnrollmentRoster(principal(1L, "Super Admin"), 10L));
+		assertDoesNotThrow(() -> service.assertCanViewEnrollmentRoster(principal(1L, RoleNames.SUPER_ADMIN), 10L));
 	}
 
 	@Test
@@ -58,7 +59,7 @@ class ClassAccessServiceTest {
 		when(classRepository.existsById(10L)).thenReturn(true);
 		when(classAdminRepository.existsByFapClassIdAndUserId(10L, 2L)).thenReturn(true);
 
-		assertDoesNotThrow(() -> service.assertCanViewEnrollmentRoster(principal(2L, "Class Admin"), 10L));
+		assertDoesNotThrow(() -> service.assertCanViewEnrollmentRoster(principal(2L, RoleNames.CLASS_ADMIN), 10L));
 	}
 
 	@Test
@@ -66,7 +67,7 @@ class ClassAccessServiceTest {
 		when(classRepository.existsById(10L)).thenReturn(true);
 		when(classTrainerRepository.existsByFapClassIdAndUserId(10L, 3L)).thenReturn(true);
 
-		assertDoesNotThrow(() -> service.assertCanViewEnrollmentRoster(principal(3L, "Trainer"), 10L));
+		assertDoesNotThrow(() -> service.assertCanViewEnrollmentRoster(principal(3L, RoleNames.TRAINER), 10L));
 	}
 
 	@Test
@@ -75,7 +76,7 @@ class ClassAccessServiceTest {
 
 		assertThrows(
 				ForbiddenException.class,
-				() -> service.assertCanViewEnrollmentRoster(principal(4L, "Trainee"), 10L));
+				() -> service.assertCanViewEnrollmentRoster(principal(4L, RoleNames.TRAINEE), 10L));
 	}
 
 	@Test
@@ -84,14 +85,14 @@ class ClassAccessServiceTest {
 
 		assertThrows(
 				ForbiddenException.class,
-				() -> service.assertCanManageEnrollmentRoster(principal(3L, "Trainer"), 10L));
+				() -> service.assertCanManageEnrollmentRoster(principal(3L, RoleNames.TRAINER), 10L));
 	}
 
 	@Test
 	void superAdminCanManageEnrollmentRoster() {
 		when(classRepository.existsById(10L)).thenReturn(true);
 
-		assertDoesNotThrow(() -> service.assertCanManageEnrollmentRoster(principal(1L, "Super Admin"), 10L));
+		assertDoesNotThrow(() -> service.assertCanManageEnrollmentRoster(principal(1L, RoleNames.SUPER_ADMIN), 10L));
 	}
 
 	@Test
@@ -99,7 +100,7 @@ class ClassAccessServiceTest {
 		when(classRepository.existsById(10L)).thenReturn(true);
 		when(classAdminRepository.existsByFapClassIdAndUserId(10L, 2L)).thenReturn(true);
 
-		assertDoesNotThrow(() -> service.assertCanManageEnrollmentRoster(principal(2L, "Class Admin"), 10L));
+		assertDoesNotThrow(() -> service.assertCanManageEnrollmentRoster(principal(2L, RoleNames.CLASS_ADMIN), 10L));
 	}
 
 	@Test
@@ -108,7 +109,7 @@ class ClassAccessServiceTest {
 
 		assertThrows(
 				ForbiddenException.class,
-				() -> service.assertCanManageEnrollmentRoster(principal(3L, "Trainer"), 10L));
+				() -> service.assertCanManageEnrollmentRoster(principal(3L, RoleNames.TRAINER), 10L));
 	}
 
 	@Test
@@ -116,10 +117,10 @@ class ClassAccessServiceTest {
 		when(classRepository.existsById(10L)).thenReturn(true);
 		when(classTrainerRepository.existsByFapClassIdAndUserId(10L, 3L)).thenReturn(true);
 
-		assertDoesNotThrow(() -> service.assertCanCreateSession(principal(3L, "Trainer"), 10L, 3L));
+		assertDoesNotThrow(() -> service.assertCanCreateSession(principal(3L, RoleNames.TRAINER), 10L, 3L));
 		assertThrows(
 				ForbiddenException.class,
-				() -> service.assertCanCreateSession(principal(3L, "Trainer"), 10L, 4L));
+				() -> service.assertCanCreateSession(principal(3L, RoleNames.TRAINER), 10L, 4L));
 	}
 
 	private FapUserPrincipal principal(Long id, String role) {

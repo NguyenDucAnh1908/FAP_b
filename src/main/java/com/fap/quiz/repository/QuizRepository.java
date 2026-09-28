@@ -1,5 +1,6 @@
 package com.fap.quiz.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.quiz.entity.Quiz;
 import com.fap.quiz.enums.QuizStatus;
 import com.fap.training.enums.TrainingRegistrationStatus;
@@ -16,6 +17,12 @@ import java.util.List;
 public interface QuizRepository extends JpaRepository<Quiz, Long> {
 
 	long countByStatus(QuizStatus status);
+
+	/** One place for the lookup so every caller fails with the same not-found message. */
+	default Quiz getQuizOrThrow(Long id) {
+		return findById(id)
+				.orElseThrow(() -> new NotFoundException("Quiz not found"));
+	}
 
 	interface StatusCount {
 		QuizStatus getStatus();

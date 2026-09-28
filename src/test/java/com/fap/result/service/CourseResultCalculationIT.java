@@ -2,6 +2,7 @@ package com.fap.result.service;
 
 import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassStatus;
+import com.fap.common.security.RoleNames;
 import com.fap.result.dto.ClassCourseResultsResponse;
 import com.fap.result.enums.CourseResultStatus;
 import com.fap.support.AbstractOracleIT;
@@ -40,7 +41,8 @@ class CourseResultCalculationIT extends AbstractOracleIT {
 		// Calculation is only allowed for active classes; the change is rolled back with the test.
 		entityManager.find(FapClass.class, classId).setStatus(ClassStatus.Active);
 		actorId = entityManager.createQuery(
-						"select u.id from User u join u.roles r where r.name = 'Super Admin' order by u.id", Long.class)
+						"select u.id from User u join u.roles r where r.name = :roleName order by u.id", Long.class)
+				.setParameter("roleName", RoleNames.SUPER_ADMIN)
 				.setMaxResults(1)
 				.getSingleResult();
 		flushAndClear();

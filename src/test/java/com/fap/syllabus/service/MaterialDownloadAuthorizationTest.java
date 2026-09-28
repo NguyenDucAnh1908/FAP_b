@@ -13,6 +13,7 @@ import com.fap.syllabus.repository.MaterialFileRepository;
 import com.fap.syllabus.repository.SyllabusRepository;
 import com.fap.syllabus.repository.SyllabusTopicRepository;
 import com.fap.clazz.enums.ClassEnrollmentStatus;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -28,6 +29,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -66,6 +69,11 @@ class MaterialDownloadAuthorizationTest {
 			fileValidator,
 			auditLogService,
 			domainMetrics);
+
+	@BeforeEach
+	void useRealLookupDefaults() {
+		lenient().doCallRealMethod().when(materialFileRepository).getWithTopicOrThrow(any());
+	}
 
 	private MaterialFile givenMaterial(String contentType) {
 		MaterialFile materialFile = new MaterialFile();

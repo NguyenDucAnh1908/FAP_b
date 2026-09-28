@@ -1,5 +1,6 @@
 package com.fap.user.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.user.entity.User;
 import com.fap.user.enums.UserStatus;
 import org.springframework.data.domain.Page;
@@ -24,6 +25,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@EntityGraph(attributePaths = "roles")
 	@Query("select u from User u where u.id = :id")
 	Optional<User> findWithRolesById(@Param("id") Long id);
+
+	/** One place for the lookup so every caller fails with the same not-found message. */
+	default User getWithRolesOrThrow(Long id) {
+		return findWithRolesById(id)
+				.orElseThrow(() -> new NotFoundException("User not found"));
+	}
+
+	/** Same message as {@link #getWithRolesOrThrow(Long)}, for callers that do not need the roles. */
+	default User getUserOrThrow(Long id) {
+		return findById(id)
+				.orElseThrow(() -> new NotFoundException("User not found"));
+	}
 
 	boolean existsByEmailIgnoreCase(String email);
 

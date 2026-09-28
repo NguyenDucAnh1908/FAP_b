@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.api.PageRequestFactory;
-import com.fap.common.exception.NotFoundException;
+import com.fap.common.util.TextNormalizer;
 import com.fap.quiz.dto.CreateQuestionRequest;
 import com.fap.quiz.dto.QuestionResponse;
 import com.fap.quiz.dto.UpdateQuestionRequest;
@@ -75,17 +75,17 @@ public class QuestionService {
 				"questionType", "question_type",
 				"createdAt", "created_at"));
 		return questionRepository.search(
-						enumName(questionType),
-						enumName(difficulty),
-						normalize(category),
-						normalize(keyword),
+						NativeQueryParameters.enumName(questionType),
+						NativeQueryParameters.enumName(difficulty),
+						TextNormalizer.blankToNull(category),
+						TextNormalizer.blankToNull(keyword),
 						nativePageRequest)
 				.map(questionMapper::toResponse);
 	}
 
 	@Transactional(readOnly = true)
 	public QuestionResponse get(Long id) {
-		return questionMapper.toResponse(findQuestion(id));
+		return questionMapper.toResponse(questionRepository.getQuestionOrThrow(id));
 	}
 
 	@Transactional
@@ -104,7 +104,7 @@ public class QuestionService {
 
 	@Transactional
 	public QuestionResponse update(Long id, UpdateQuestionRequest request, Long currentUserId) {
-		Question question = findQuestion(id);
+		Question question = questionRepository.getQuestionOrThrow(id);
 		applyFields(question, request);
 		question.setUpdatedAt(LocalDateTime.now());
 		question.setUpdatedBy(currentUserId);
@@ -114,7 +114,7 @@ public class QuestionService {
 
 	@Transactional
 	public void delete(Long id, Long currentUserId) {
-		Question question = findQuestion(id);
+		Question question = questionRepository.getQuestionOrThrow(id);
 		LocalDateTime now = LocalDateTime.now();
 		question.setDeleted(true);
 		question.setDeletedAt(now);
@@ -131,7 +131,7 @@ public class QuestionService {
 		question.setDifficulty(request.difficulty());
 		question.setOptionsJson(writeJson(request.optionsJson(), "INVALID_QUESTION_OPTIONS_JSON", "Question options must be valid JSON"));
 		question.setCorrectAnswersJson(writeJson(request.correctAnswersJson(), "INVALID_QUESTION_CORRECT_ANSWERS_JSON", "Question correct answers must be valid JSON"));
-		question.setExplanation(normalize(request.explanation()));
+		question.setExplanation(TextNormalizer.blankToNull(request.explanation()));
 	}
 
 	private void applyFields(Question question, UpdateQuestionRequest request) {
@@ -142,7 +142,7 @@ public class QuestionService {
 		question.setDifficulty(request.difficulty());
 		question.setOptionsJson(writeJson(request.optionsJson(), "INVALID_QUESTION_OPTIONS_JSON", "Question options must be valid JSON"));
 		question.setCorrectAnswersJson(writeJson(request.correctAnswersJson(), "INVALID_QUESTION_CORRECT_ANSWERS_JSON", "Question correct answers must be valid JSON"));
-		question.setExplanation(normalize(request.explanation()));
+		question.setExplanation(TextNormalizer.blankToNull(request.explanation()));
 	}
 
 	private void validateJsonFields(QuestionType questionType, JsonNode optionsJson, JsonNode correctAnswersJson) {
@@ -163,18 +163,5 @@ public class QuestionService {
 		} catch (JsonProcessingException exception) {
 			throw new BadRequestException(code, message);
 		}
-	}
-
-	private Question findQuestion(Long id) {
-		return questionRepository.findById(id)
-				.orElseThrow(() -> new NotFoundException("Question not found"));
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
-	}
-
-	private String enumName(Enum<?> value) {
-		return value == null ? null : value.name();
 	}
 }

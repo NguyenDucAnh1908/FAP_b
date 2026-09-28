@@ -30,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -51,7 +53,7 @@ class SyllabusFullUpdateMaterialContentTest {
 	private final SyllabusOutlineMapper outlineMapper = mock(SyllabusOutlineMapper.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
 
-	private final SyllabusService service = new SyllabusService(
+	private final SyllabusFullService service = new SyllabusFullService(
 			syllabusRepository,
 			dayRepository,
 			contentRepository,
@@ -64,6 +66,7 @@ class SyllabusFullUpdateMaterialContentTest {
 
 	@BeforeEach
 	void setUp() {
+		lenient().doCallRealMethod().when(syllabusRepository).getOrThrow(any());
 		Syllabus syllabus = new Syllabus();
 		syllabus.setId(SYLLABUS_ID);
 		syllabus.setStatus(SyllabusStatus.Drafting);

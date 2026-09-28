@@ -1,5 +1,6 @@
 package com.fap.user.repository;
 
+import com.fap.common.security.RoleNames;
 import com.fap.role.entity.Role;
 import com.fap.role.repository.RoleRepository;
 import com.fap.support.AbstractOracleIT;
@@ -34,8 +35,8 @@ class UserSearchQueryIT extends AbstractOracleIT {
 
 	@BeforeEach
 	void createUsers() {
-		Role trainee = roleRepository.findByNameIgnoreCase("Trainee").orElseThrow();
-		trainer = roleRepository.findByNameIgnoreCase("Trainer").orElseThrow();
+		Role trainee = roleRepository.findByNameIgnoreCase(RoleNames.TRAINEE).orElseThrow();
+		trainer = roleRepository.findByNameIgnoreCase(RoleNames.TRAINER).orElseThrow();
 		LocalDateTime base = LocalDateTime.of(2030, 1, 1, 0, 0);
 		for (int i = 0; i < FIXTURE_USERS; i++) {
 			User user = new User();

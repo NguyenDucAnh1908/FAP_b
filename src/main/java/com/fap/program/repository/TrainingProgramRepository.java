@@ -1,5 +1,6 @@
 package com.fap.program.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.program.entity.TrainingProgram;
 import com.fap.program.enums.TrainingProgramStatus;
 import org.springframework.data.domain.Page;
@@ -13,6 +14,12 @@ import java.util.List;
 public interface TrainingProgramRepository extends JpaRepository<TrainingProgram, Long> {
 
 	long countByStatus(TrainingProgramStatus status);
+
+	/** One place for the lookup so every caller fails with the same not-found message. */
+	default TrainingProgram getTrainingProgramOrThrow(Long id) {
+		return findById(id)
+				.orElseThrow(() -> new NotFoundException("Training program not found"));
+	}
 
 	interface StatusCount {
 		TrainingProgramStatus getStatus();

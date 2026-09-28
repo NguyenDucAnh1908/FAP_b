@@ -3,6 +3,7 @@ package com.fap.dashboard.service;
 import com.fap.clazz.enums.ClassStatus;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.audit.AuditLogRepository;
+import com.fap.common.security.RoleNames;
 import com.fap.dashboard.dto.AdminDashboardResponse;
 import com.fap.dashboard.dto.TrainingAnalyticsResponse;
 import com.fap.program.enums.TrainingProgramStatus;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -38,8 +40,6 @@ import java.util.stream.Collectors;
 @Service
 public class AdminDashboardService {
 
-	private static final String TRAINEE_ROLE = "Trainee";
-	private static final String TRAINER_ROLE = "Trainer";
 	private static final String CACHE_KEY = "admin";
 
 	private final UserRepository userRepository;
@@ -54,6 +54,7 @@ public class AdminDashboardService {
 	private final TrainingAnalyticsService trainingAnalyticsService;
 	private final Cache<String, AdminDashboardResponse> cache;
 	private final TransactionTemplate readOnlyTransaction;
+	private final Clock clock;
 
 	public AdminDashboardService(
 			UserRepository userRepository,
@@ -67,7 +68,8 @@ public class AdminDashboardService {
 			AuditLogRepository auditLogRepository,
 			TrainingAnalyticsService trainingAnalyticsService,
 			PlatformTransactionManager transactionManager,
-			@Value("${app.dashboard.cache-ttl:30s}") Duration cacheTtl) {
+			@Value("${app.dashboard.cache-ttl:30s}") Duration cacheTtl,
+			Clock clock) {
 		this.userRepository = userRepository;
 		this.syllabusRepository = syllabusRepository;
 		this.trainingProgramRepository = trainingProgramRepository;
@@ -83,6 +85,7 @@ public class AdminDashboardService {
 		this.cache = Caffeine.newBuilder().maximumSize(1).expireAfterWrite(cacheTtl).build();
 		this.readOnlyTransaction = new TransactionTemplate(transactionManager);
 		this.readOnlyTransaction.setReadOnly(true);
+		this.clock = clock;
 	}
 
 	/**
@@ -103,7 +106,7 @@ public class AdminDashboardService {
 				TrainingSessionStatus.Upcoming,
 				null,
 				null,
-				LocalDate.now(),
+				LocalDate.now(clock),
 				null,
 				null,
 				PageRequest.of(0, 5, Sort.by(Sort.Direction.ASC, "sessionDate", "startTime", "id")))
@@ -124,7 +127,8 @@ public class AdminDashboardService {
 		Map<UserStatus, Long> users = countsBy(userRepository.countGroupedByStatus(),
 				UserRepository.StatusCount::getStatus, UserRepository.StatusCount::getTotal);
 		Map<String, Long> activeUsersByRole = countsBy(
-				userRepository.countByRoleNamesAndStatus(List.of(TRAINEE_ROLE, TRAINER_ROLE), UserStatus.Active),
+				userRepository.countByRoleNamesAndStatus(
+						List.of(RoleNames.TRAINEE, RoleNames.TRAINER), UserStatus.Active),
 				UserRepository.RoleCount::getRoleName, UserRepository.RoleCount::getTotal);
 		Map<SyllabusStatus, Long> syllabuses = countsBy(syllabusRepository.countGroupedByStatus(),
 				SyllabusRepository.StatusCount::getStatus, SyllabusRepository.StatusCount::getTotal);
@@ -140,8 +144,8 @@ public class AdminDashboardService {
 						total(users),
 						users.getOrDefault(UserStatus.Active, 0L),
 						users.getOrDefault(UserStatus.Inactive, 0L),
-						activeUsersByRole.getOrDefault(TRAINEE_ROLE, 0L),
-						activeUsersByRole.getOrDefault(TRAINER_ROLE, 0L)),
+						activeUsersByRole.getOrDefault(RoleNames.TRAINEE, 0L),
+						activeUsersByRole.getOrDefault(RoleNames.TRAINER, 0L)),
 				new AdminDashboardResponse.ContentSummary(
 						total(syllabuses),
 						syllabuses.getOrDefault(SyllabusStatus.Active, 0L),
@@ -161,7 +165,7 @@ public class AdminDashboardService {
 						percentage(passedAttempts, submittedAttempts)),
 				nextSessions,
 				recentActivities,
-				LocalDateTime.now());
+				LocalDateTime.now(clock));
 	}
 
 	private static <T, K> Map<K, Long> countsBy(List<T> rows, Function<T, K> key, Function<T, Long> total) {

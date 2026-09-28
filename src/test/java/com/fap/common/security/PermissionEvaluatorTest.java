@@ -32,7 +32,7 @@ class PermissionEvaluatorTest {
 				1L,
 				"admin@example.com",
 				"hash",
-				Set.of("Super Admin"),
+				Set.of(RoleNames.SUPER_ADMIN),
 				true,
 				List.of());
 		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -56,7 +56,7 @@ class PermissionEvaluatorTest {
 				2L,
 				"manager@example.com",
 				"hash",
-				Set.of("Class Admin"),
+				Set.of(RoleNames.CLASS_ADMIN),
 				true,
 				List.of(new SimpleGrantedAuthority("ROLE_ID_10")));
 		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -76,7 +76,7 @@ class PermissionEvaluatorTest {
 				2L,
 				"manager@example.com",
 				"hash",
-				Set.of("Class Admin"),
+				Set.of(RoleNames.CLASS_ADMIN),
 				true,
 				List.of(new SimpleGrantedAuthority("ROLE_ID_10")));
 		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -97,7 +97,7 @@ class PermissionEvaluatorTest {
 				2L,
 				"trainer@example.com",
 				"hash",
-				Set.of("Trainer"),
+				Set.of(RoleNames.TRAINER),
 				true,
 				List.of(new SimpleGrantedAuthority("ROLE_ID_11")));
 		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -140,7 +140,7 @@ class PermissionEvaluatorTest {
 				3L,
 				"class-admin@example.com",
 				"",
-				Set.of("Class Admin"),
+				Set.of(RoleNames.CLASS_ADMIN),
 				true,
 				List.of(new SimpleGrantedAuthority("ROLE_ID_" + roleId)));
 		return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());

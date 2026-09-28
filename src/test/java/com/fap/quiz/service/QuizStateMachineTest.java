@@ -17,8 +17,10 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -116,10 +118,48 @@ class QuizStateMachineTest {
 		assertThat(quiz.getStatus()).isEqualTo(QuizStatus.Closed);
 	}
 
+	/** No messages.properties key exists for these codes, so the Java message is the HTTP message. */
+	@Test
+	void rejectedTransitionKeepsItsClientVisibleMessageAndSkipsTheQuestionCount() {
+		givenQuiz(QuizStatus.Closed);
+
+		assertThatThrownBy(() -> service.updateStatus(
+				QUIZ_ID, new UpdateQuizStatusRequest(QuizStatus.Published), CURRENT_USER_ID))
+				.isInstanceOf(ConflictException.class)
+				.hasMessage("Invalid quiz status transition");
+
+		verify(quizQuestionRepository, never()).countByIdQuizId(anyLong());
+	}
+
+	@Test
+	void publishingWithoutQuestionsKeepsItsClientVisibleMessage() {
+		givenQuiz(QuizStatus.Draft);
+		when(quizQuestionRepository.countByIdQuizId(QUIZ_ID)).thenReturn(0L);
+
+		assertThatThrownBy(() -> service.updateStatus(
+				QUIZ_ID, new UpdateQuizStatusRequest(QuizStatus.Published), CURRENT_USER_ID))
+				.isInstanceOf(ConflictException.class)
+				.hasMessage("Quiz requires at least one question before publishing");
+	}
+
+	@Test
+	void rejectsMissingTargetStatusAsInvalidTransition() {
+		Quiz quiz = givenQuiz(QuizStatus.Draft);
+
+		assertThatThrownBy(() -> service.updateStatus(QUIZ_ID, new UpdateQuizStatusRequest(null), CURRENT_USER_ID))
+				.isInstanceOf(ConflictException.class)
+				.extracting("code")
+				.isEqualTo("INVALID_QUIZ_STATUS_TRANSITION");
+
+		assertThat(quiz.getStatus()).isEqualTo(QuizStatus.Draft);
+		verify(auditLogService, never()).record(anyString(), anyString(), anyLong());
+	}
+
 	private Quiz givenQuiz(QuizStatus status) {
 		Quiz quiz = new Quiz();
 		quiz.setId(QUIZ_ID);
 		quiz.setStatus(status);
+		lenient().doCallRealMethod().when(quizRepository).getQuizOrThrow(any());
 		when(quizRepository.findById(QUIZ_ID)).thenReturn(Optional.of(quiz));
 		return quiz;
 	}

@@ -6,6 +6,7 @@ import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.metrics.DomainMetrics;
+import com.fap.common.security.RoleNames;
 import com.fap.notification.service.NotificationService;
 import com.fap.training.dto.TrainingParticipantsResponse;
 import com.fap.training.dto.TrainingRegistrationResponse;
@@ -83,8 +84,7 @@ public class TrainingRegistrationService {
 			throw new ConflictException("TRAINING_SESSION_AUTO_ENROLL", "Leave the class to cancel an auto-enrolled session");
 		}
 		TrainingRegistration registration = trainingRegistrationRepository
-				.findByTrainingSessionIdAndUserId(trainingSessionId, currentUserId)
-				.orElseThrow(() -> new NotFoundException("Training registration not found"));
+				.getByTrainingSessionIdAndUserIdOrThrow(trainingSessionId, currentUserId);
 		if (registration.getStatus() == TrainingRegistrationStatus.Registered) {
 			registration.setStatus(TrainingRegistrationStatus.Cancelled);
 			registration.setCancelledAt(LocalDateTime.now());
@@ -108,8 +108,7 @@ public class TrainingRegistrationService {
 
 	@Transactional(readOnly = true)
 	public TrainingParticipantsResponse participants(Long trainingSessionId) {
-		TrainingSession session = trainingSessionRepository.findWithClassAndTrainerById(trainingSessionId)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(trainingSessionId);
 		List<TrainingRegistration> registrations = trainingRegistrationRepository
 				.findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
 						trainingSessionId,
@@ -193,8 +192,7 @@ public class TrainingRegistrationService {
 	}
 
 	private TrainingSession findUpcomingSessionForUpdate(Long trainingSessionId) {
-		TrainingSession session = trainingSessionRepository.findWithClassAndTrainerByIdForUpdate(trainingSessionId)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerForUpdateOrThrow(trainingSessionId);
 		if (session.getStatus() != TrainingSessionStatus.Upcoming) {
 			throw new ConflictException("TRAINING_SESSION_NOT_OPEN_FOR_REGISTRATION", "Registration is allowed only for upcoming training sessions");
 		}
@@ -211,7 +209,7 @@ public class TrainingRegistrationService {
 	}
 
 	private void validateSelfRegistrationEligibility(TrainingSession session, User user) {
-		if (user.getRoles().stream().noneMatch(role -> "Trainee".equals(role.getName()))) {
+		if (user.getRoles().stream().noneMatch(role -> RoleNames.TRAINEE.equals(role.getName()))) {
 			throw new ConflictException("TRAINING_REGISTRATION_TRAINEE_REQUIRED", "Only trainee can register for a training session");
 		}
 		if (session.getRegistrationMode() != TrainingRegistrationMode.SelfEnroll) {

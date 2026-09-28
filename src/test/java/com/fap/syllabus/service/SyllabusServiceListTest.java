@@ -5,10 +5,6 @@ import com.fap.syllabus.dto.SyllabusResponse;
 import com.fap.syllabus.entity.Syllabus;
 import com.fap.syllabus.enums.SyllabusStatus;
 import com.fap.syllabus.mapper.SyllabusMapper;
-import com.fap.syllabus.mapper.SyllabusOutlineMapper;
-import com.fap.syllabus.repository.SyllabusDayRepository;
-import com.fap.syllabus.repository.MaterialFileContentRepository;
-import com.fap.syllabus.repository.SyllabusOutputStandardRepository;
 import com.fap.syllabus.repository.SyllabusRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,22 +21,12 @@ import static org.mockito.Mockito.when;
 class SyllabusServiceListTest {
 
 	private final SyllabusRepository syllabusRepository = mock(SyllabusRepository.class);
-	private final SyllabusDayRepository dayRepository = mock(SyllabusDayRepository.class);
-	private final MaterialFileContentRepository materialFileContentRepository =
-			mock(MaterialFileContentRepository.class);
-	private final SyllabusOutputStandardRepository outputStandardRepository =
-			mock(SyllabusOutputStandardRepository.class);
 	private final SyllabusMapper syllabusMapper = mock(SyllabusMapper.class);
-	private final SyllabusOutlineMapper outlineMapper = mock(SyllabusOutlineMapper.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
 
 	private final SyllabusService service = new SyllabusService(
 			syllabusRepository,
-			dayRepository,
-			materialFileContentRepository,
-			outputStandardRepository,
 			syllabusMapper,
-			outlineMapper,
 			auditLogService);
 
 	private String captureLevelNamePassedToRepository(String inputLevelName) {

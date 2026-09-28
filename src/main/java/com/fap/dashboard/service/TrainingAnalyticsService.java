@@ -14,6 +14,7 @@ import com.fap.training.repository.TrainingSessionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -29,18 +30,21 @@ public class TrainingAnalyticsService {
 	private final AttendanceRecordRepository attendanceRecordRepository;
 	private final TrainingFeedbackRepository trainingFeedbackRepository;
 	private final ClassEnrollmentRepository classEnrollmentRepository;
+	private final Clock clock;
 
 	public TrainingAnalyticsService(
 			TrainingSessionRepository trainingSessionRepository,
 			TrainingRegistrationRepository trainingRegistrationRepository,
 			AttendanceRecordRepository attendanceRecordRepository,
 			TrainingFeedbackRepository trainingFeedbackRepository,
-			ClassEnrollmentRepository classEnrollmentRepository) {
+			ClassEnrollmentRepository classEnrollmentRepository,
+			Clock clock) {
 		this.trainingSessionRepository = trainingSessionRepository;
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
 		this.attendanceRecordRepository = attendanceRecordRepository;
 		this.trainingFeedbackRepository = trainingFeedbackRepository;
 		this.classEnrollmentRepository = classEnrollmentRepository;
+		this.clock = clock;
 	}
 
 	@Transactional(readOnly = true)
@@ -77,7 +81,7 @@ public class TrainingAnalyticsService {
 						classAdminId,
 						TrainingSessionStatus.Upcoming,
 						TrainingRegistrationStatus.Registered,
-						LocalDate.now(),
+						LocalDate.now(clock),
 						fromDate,
 						toDate),
 				totalAttendance,
@@ -88,7 +92,7 @@ public class TrainingAnalyticsService {
 				statusCounts(TrainingSessionStatus.values(), sessions),
 				statusCounts(AttendanceStatus.values(), attendance),
 				statusCounts(TrainingRegistrationStatus.values(), registrations),
-				LocalDateTime.now());
+				LocalDateTime.now(clock));
 	}
 
 	private Map<TrainingSessionStatus, Long> sessionCounts(

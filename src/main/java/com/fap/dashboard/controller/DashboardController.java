@@ -3,6 +3,7 @@ package com.fap.dashboard.controller;
 import com.fap.common.api.ApiResponse;
 import com.fap.common.exception.ForbiddenException;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.common.security.RoleNames;
 import com.fap.dashboard.dto.AdminDashboardResponse;
 import com.fap.dashboard.dto.TrainingAnalyticsResponse;
 import com.fap.dashboard.service.AdminDashboardService;
@@ -24,9 +25,6 @@ import java.time.LocalDate;
 @RequestMapping("/api/v1/me")
 public class DashboardController {
 
-	private static final String SUPER_ADMIN_ROLE = "Super Admin";
-	private static final String CLASS_ADMIN_ROLE = "Class Admin";
-
 	private final AdminDashboardService adminDashboardService;
 	private final TrainingAnalyticsService trainingAnalyticsService;
 
@@ -42,7 +40,7 @@ public class DashboardController {
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'user', 'full_access')")
 	public ApiResponse<AdminDashboardResponse> adminDashboard(
 			@AuthenticationPrincipal FapUserPrincipal principal) {
-		requireRole(principal, SUPER_ADMIN_ROLE);
+		requireRole(principal, RoleNames.SUPER_ADMIN);
 		return ApiResponse.ok(adminDashboardService.getDashboard());
 	}
 
@@ -60,10 +58,10 @@ public class DashboardController {
 	}
 
 	private Long analyticsScope(FapUserPrincipal principal) {
-		if (principal.roles().contains(SUPER_ADMIN_ROLE)) {
+		if (principal.roles().contains(RoleNames.SUPER_ADMIN)) {
 			return null;
 		}
-		if (principal.roles().contains(CLASS_ADMIN_ROLE)) {
+		if (principal.roles().contains(RoleNames.CLASS_ADMIN)) {
 			return principal.id();
 		}
 		throw new ForbiddenException("Training analytics is available to administrators only");

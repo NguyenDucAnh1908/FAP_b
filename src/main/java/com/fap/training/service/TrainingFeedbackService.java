@@ -4,6 +4,7 @@ import com.fap.common.api.PageRequestFactory;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.util.TextNormalizer;
 import com.fap.training.dto.CreateTrainingFeedbackRequest;
 import com.fap.training.dto.TrainingFeedbackResponse;
 import com.fap.training.dto.TrainingFeedbackSummaryResponse;
@@ -49,8 +50,7 @@ public class TrainingFeedbackService {
 
 	@Transactional
 	public TrainingFeedbackResponse submit(Long trainingSessionId, Long currentUserId, CreateTrainingFeedbackRequest request) {
-		TrainingSession session = trainingSessionRepository.findWithClassAndTrainerById(trainingSessionId)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(trainingSessionId);
 		if (session.getStatus() != TrainingSessionStatus.Completed) {
 			throw new ConflictException("FEEDBACK_SESSION_NOT_COMPLETED", "Feedback is allowed only for completed training sessions");
 		}
@@ -73,7 +73,7 @@ public class TrainingFeedbackService {
 		feedback.setRatingContent(request.ratingContent());
 		feedback.setRatingTrainer(request.ratingTrainer());
 		feedback.setRatingOrganization(request.ratingOrganization());
-		feedback.setComment(normalize(request.comment()));
+		feedback.setComment(TextNormalizer.blankToNull(request.comment()));
 		feedback.setCreatedAt(now);
 		feedback.setUpdatedAt(now);
 		TrainingFeedback saved = trainingFeedbackRepository.save(feedback);
@@ -130,9 +130,5 @@ public class TrainingFeedbackService {
 
 	private Double averageOrZero(Double value) {
 		return value == null ? 0.0 : value;
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
 	}
 }

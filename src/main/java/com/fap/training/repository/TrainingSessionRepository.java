@@ -1,5 +1,6 @@
 package com.fap.training.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.training.entity.TrainingSession;
 import com.fap.training.enums.TrainingRegistrationStatus;
 import com.fap.training.enums.TrainingSessionStatus;
@@ -121,6 +122,18 @@ public interface TrainingSessionRepository extends JpaRepository<TrainingSession
 	@EntityGraph(attributePaths = {"fapClass", "trainer"})
 	@Query("select s from TrainingSession s where s.id = :id")
 	Optional<TrainingSession> findWithClassAndTrainerByIdForUpdate(@Param("id") Long id);
+
+	/** One place for the lookup so every caller fails with the same not-found message. */
+	default TrainingSession getWithClassAndTrainerOrThrow(Long id) {
+		return findWithClassAndTrainerById(id)
+				.orElseThrow(() -> new NotFoundException("Training session not found"));
+	}
+
+	/** Locking variant of {@link #getWithClassAndTrainerOrThrow(Long)}, for seat-count changes. */
+	default TrainingSession getWithClassAndTrainerForUpdateOrThrow(Long id) {
+		return findWithClassAndTrainerByIdForUpdate(id)
+				.orElseThrow(() -> new NotFoundException("Training session not found"));
+	}
 
 	@EntityGraph(attributePaths = {"fapClass", "trainer"})
 	@Query("""

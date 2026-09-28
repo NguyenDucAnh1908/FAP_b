@@ -67,8 +67,7 @@ public class AttendanceService {
 
 	@Transactional
 	public List<AttendanceRecordResponse> upsert(Long trainingSessionId, UpdateAttendanceRequest request, Long currentUserId) {
-		TrainingSession session = trainingSessionRepository.findWithClassAndTrainerById(trainingSessionId)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(trainingSessionId);
 		if (session.getStatus() == TrainingSessionStatus.Canceled) {
 			throw new ConflictException("ATTENDANCE_SESSION_CANCELED", "Attendance cannot be updated for canceled training session");
 		}
@@ -144,8 +143,7 @@ public class AttendanceService {
 	 */
 	@Transactional
 	public AttendanceRecordResponse checkIn(Long trainingSessionId, Long currentUserId) {
-		TrainingSession session = trainingSessionRepository.findWithClassAndTrainerById(trainingSessionId)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(trainingSessionId);
 		if (session.getStatus() == TrainingSessionStatus.Canceled) {
 			throw new ConflictException("ATTENDANCE_SESSION_CANCELED", "Cannot check in to a canceled training session");
 		}

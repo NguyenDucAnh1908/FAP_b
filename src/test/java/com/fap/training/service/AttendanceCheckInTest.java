@@ -17,6 +17,7 @@ import com.fap.training.repository.TrainingRegistrationRepository;
 import com.fap.training.repository.TrainingSessionRepository;
 import com.fap.user.entity.User;
 import com.fap.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -62,6 +64,11 @@ class AttendanceCheckInTest {
 			userRepository,
 			attendanceRecordMapper,
 			auditLogService);
+
+	@BeforeEach
+	void delegateLookupToFinder() {
+		lenient().doCallRealMethod().when(trainingSessionRepository).getWithClassAndTrainerOrThrow(any());
+	}
 
 	@Test
 	void createsPresentRecordForRegisteredTrainee() {

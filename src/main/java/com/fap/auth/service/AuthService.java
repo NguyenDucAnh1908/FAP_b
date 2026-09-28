@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -48,6 +49,7 @@ public class AuthService {
 	private final UserMapper userMapper;
 	private final PasswordEncoder passwordEncoder;
 	private final DomainMetrics domainMetrics;
+	private final Clock clock;
 	private final long refreshTtlDays;
 	private final long passwordResetTtlMinutes;
 	private final SecureRandom secureRandom = new SecureRandom();
@@ -62,6 +64,7 @@ public class AuthService {
 			UserMapper userMapper,
 			PasswordEncoder passwordEncoder,
 			DomainMetrics domainMetrics,
+			Clock clock,
 			@Value("${app.jwt.refresh-ttl-days:${JWT_REFRESH_TTL_DAYS:7}}") long refreshTtlDays,
 			@Value("${app.password-reset.ttl-minutes:${PASSWORD_RESET_TTL_MINUTES:15}}") long passwordResetTtlMinutes) {
 		this.authenticationManager = authenticationManager;
@@ -73,6 +76,7 @@ public class AuthService {
 		this.userMapper = userMapper;
 		this.passwordEncoder = passwordEncoder;
 		this.domainMetrics = domainMetrics;
+		this.clock = clock;
 		this.refreshTtlDays = refreshTtlDays;
 		this.passwordResetTtlMinutes = passwordResetTtlMinutes;
 	}
@@ -96,7 +100,7 @@ public class AuthService {
 	@Transactional
 	public AuthResponse refresh(String token) {
 		RefreshToken existing = refreshTokenRepository.findByTokenAndRevokedFalse(token)
-				.filter(refreshToken -> refreshToken.getExpiresAt().isAfter(LocalDateTime.now()))
+				.filter(refreshToken -> refreshToken.getExpiresAt().isAfter(LocalDateTime.now(clock)))
 				.orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
 		existing.setRevoked(true);
 		User user = existing.getUser();
@@ -124,7 +128,7 @@ public class AuthService {
 			throw new UnauthorizedException("Invalid credentials");
 		}
 		user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
-		user.setUpdatedAt(LocalDateTime.now());
+		user.setUpdatedAt(LocalDateTime.now(clock));
 		refreshTokenRepository.revokeAllByUserId(userId);
 	}
 
@@ -132,7 +136,7 @@ public class AuthService {
 	public void forgotPassword(ForgotPasswordRequest request) {
 		userRepository.findByEmailIgnoreCase(request.email().trim().toLowerCase())
 				.ifPresent(user -> {
-					LocalDateTime now = LocalDateTime.now();
+					LocalDateTime now = LocalDateTime.now(clock);
 					passwordResetTokenRepository.markUnusedByUserIdAsUsed(user.getId(), now);
 					String otp = newOtp();
 					PasswordResetToken token = new PasswordResetToken();
@@ -150,7 +154,7 @@ public class AuthService {
 
 	@Transactional
 	public void resetPassword(ResetPasswordRequest request) {
-		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.now(clock);
 		PasswordResetToken token = passwordResetTokenRepository.findByTokenHashAndUsedFalse(sha256(request.otp()))
 				.filter(existing -> existing.getExpiresAt().isAfter(now))
 				.orElseThrow(() -> new BadRequestException("INVALID_RESET_TOKEN", "Invalid or expired OTP"));
@@ -171,8 +175,9 @@ public class AuthService {
 		RefreshToken refreshToken = new RefreshToken();
 		refreshToken.setUser(user);
 		refreshToken.setToken(newRefreshToken());
-		refreshToken.setExpiresAt(LocalDateTime.now().plusDays(refreshTtlDays));
-		refreshToken.setCreatedAt(LocalDateTime.now());
+		LocalDateTime now = LocalDateTime.now(clock);
+		refreshToken.setExpiresAt(now.plusDays(refreshTtlDays));
+		refreshToken.setCreatedAt(now);
 		refreshTokenRepository.save(refreshToken);
 		return new AuthResponse(
 				accessToken,

@@ -2,6 +2,7 @@ package com.fap.dashboard.service;
 
 import com.fap.clazz.enums.ClassStatus;
 import com.fap.clazz.repository.ClassRepository;
+import com.fap.common.security.RoleNames;
 import com.fap.dashboard.dto.AdminDashboardResponse;
 import com.fap.program.enums.TrainingProgramStatus;
 import com.fap.program.repository.TrainingProgramRepository;
@@ -55,9 +56,9 @@ class AdminDashboardIT extends AbstractOracleIT {
 		assertThat(users.activeUsers()).isEqualTo(userRepository.countByStatus(UserStatus.Active));
 		assertThat(users.inactiveUsers()).isEqualTo(userRepository.countByStatus(UserStatus.Inactive));
 		assertThat(users.activeTrainees())
-				.isEqualTo(userRepository.countByRoleNameAndStatus("Trainee", UserStatus.Active));
+				.isEqualTo(userRepository.countByRoleNameAndStatus(RoleNames.TRAINEE, UserStatus.Active));
 		assertThat(users.activeTrainers())
-				.isEqualTo(userRepository.countByRoleNameAndStatus("Trainer", UserStatus.Active));
+				.isEqualTo(userRepository.countByRoleNameAndStatus(RoleNames.TRAINER, UserStatus.Active));
 
 		AdminDashboardResponse.ContentSummary content = dashboard.content();
 		assertThat(content.totalSyllabuses()).isEqualTo(syllabusRepository.count());

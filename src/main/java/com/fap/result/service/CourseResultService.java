@@ -4,7 +4,6 @@ import com.fap.clazz.entity.ClassEnrollment;
 import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassEnrollmentStatus;
 import com.fap.clazz.enums.ClassStatus;
-import com.fap.clazz.repository.ClassEnrollmentRepository;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
@@ -12,160 +11,68 @@ import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.i18n.MessageService;
 import com.fap.notification.service.NotificationService;
-import com.fap.quiz.entity.Quiz;
 import com.fap.quiz.enums.QuizStatus;
-import com.fap.quiz.repository.QuizAssignmentRepository;
-import com.fap.quiz.repository.QuizAttemptRepository;
-import com.fap.quiz.repository.QuizRepository;
 import com.fap.result.dto.ClassCourseResultsResponse;
-import com.fap.result.dto.CompletionPolicyQuizRequest;
-import com.fap.result.dto.CompletionPolicyQuizResponse;
-import com.fap.result.dto.CompletionPolicyResponse;
-import com.fap.result.dto.CourseResultAdjustmentResponse;
-import com.fap.result.dto.CourseResultQuizResponse;
 import com.fap.result.dto.CourseResultResponse;
-import com.fap.result.dto.CourseResultSummaryResponse;
-import com.fap.result.dto.UpdateCompletionPolicyRequest;
 import com.fap.result.dto.UpdateCourseResultRequest;
-import com.fap.result.entity.ClassCompletionQuiz;
 import com.fap.result.entity.CourseResult;
 import com.fap.result.entity.CourseResultAdjustment;
 import com.fap.result.entity.CourseResultQuiz;
 import com.fap.result.enums.CourseResultStatus;
+import com.fap.result.mapper.CourseResultMapper;
 import com.fap.result.repository.ClassCompletionQuizRepository;
 import com.fap.result.repository.CourseResultAdjustmentRepository;
 import com.fap.result.repository.CourseResultQuizRepository;
 import com.fap.result.repository.CourseResultRepository;
-import com.fap.training.entity.AttendanceRecord;
-import com.fap.training.entity.TrainingRegistration;
 import com.fap.training.entity.TrainingSession;
-import com.fap.training.enums.AttendanceStatus;
-import com.fap.training.enums.TrainingRegistrationStatus;
 import com.fap.training.enums.TrainingSessionStatus;
-import com.fap.training.repository.AttendanceRecordRepository;
-import com.fap.training.repository.TrainingRegistrationRepository;
 import com.fap.training.repository.TrainingSessionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class CourseResultService {
-	private static final Collection<ClassEnrollmentStatus> RESULT_ENROLLMENT_STATUSES = List.of(
-			ClassEnrollmentStatus.Enrolled,
-			ClassEnrollmentStatus.Completed,
-			ClassEnrollmentStatus.Withdrawn);
-	private static final Collection<ClassEnrollmentStatus> RECALCULATED_ENROLLMENT_STATUSES = List.of(
-			ClassEnrollmentStatus.Enrolled,
-			ClassEnrollmentStatus.Completed);
-	private static final Collection<TrainingRegistrationStatus> ATTENDANCE_REGISTRATION_STATUSES = List.of(
-			TrainingRegistrationStatus.Registered,
-			TrainingRegistrationStatus.Completed);
-
 	private final ClassRepository classRepository;
-	private final ClassEnrollmentRepository classEnrollmentRepository;
 	private final ClassCompletionQuizRepository completionQuizRepository;
 	private final CourseResultRepository courseResultRepository;
 	private final CourseResultQuizRepository resultQuizRepository;
 	private final CourseResultAdjustmentRepository adjustmentRepository;
-	private final QuizRepository quizRepository;
-	private final QuizAssignmentRepository quizAssignmentRepository;
-	private final QuizAttemptRepository quizAttemptRepository;
 	private final TrainingSessionRepository trainingSessionRepository;
-	private final TrainingRegistrationRepository trainingRegistrationRepository;
-	private final AttendanceRecordRepository attendanceRecordRepository;
+	private final CourseResultCalculator courseResultCalculator;
+	private final CourseResultMapper courseResultMapper;
 	private final AuditLogService auditLogService;
 	private final NotificationService notificationService;
 	private final MessageService messageService;
 
 	public CourseResultService(
 			ClassRepository classRepository,
-			ClassEnrollmentRepository classEnrollmentRepository,
 			ClassCompletionQuizRepository completionQuizRepository,
 			CourseResultRepository courseResultRepository,
 			CourseResultQuizRepository resultQuizRepository,
 			CourseResultAdjustmentRepository adjustmentRepository,
-			QuizRepository quizRepository,
-			QuizAssignmentRepository quizAssignmentRepository,
-			QuizAttemptRepository quizAttemptRepository,
 			TrainingSessionRepository trainingSessionRepository,
-			TrainingRegistrationRepository trainingRegistrationRepository,
-			AttendanceRecordRepository attendanceRecordRepository,
+			CourseResultCalculator courseResultCalculator,
+			CourseResultMapper courseResultMapper,
 			AuditLogService auditLogService,
 			NotificationService notificationService,
 			MessageService messageService) {
 		this.classRepository = classRepository;
-		this.classEnrollmentRepository = classEnrollmentRepository;
 		this.completionQuizRepository = completionQuizRepository;
 		this.courseResultRepository = courseResultRepository;
 		this.resultQuizRepository = resultQuizRepository;
 		this.adjustmentRepository = adjustmentRepository;
-		this.quizRepository = quizRepository;
-		this.quizAssignmentRepository = quizAssignmentRepository;
-		this.quizAttemptRepository = quizAttemptRepository;
 		this.trainingSessionRepository = trainingSessionRepository;
-		this.trainingRegistrationRepository = trainingRegistrationRepository;
-		this.attendanceRecordRepository = attendanceRecordRepository;
+		this.courseResultCalculator = courseResultCalculator;
+		this.courseResultMapper = courseResultMapper;
 		this.auditLogService = auditLogService;
 		this.notificationService = notificationService;
 		this.messageService = messageService;
-	}
-
-	@Transactional(readOnly = true)
-	public CompletionPolicyResponse getPolicy(Long classId) {
-		FapClass fapClass = findClass(classId);
-		return toPolicyResponse(fapClass, completionQuizRepository.findByFapClassIdOrderByIdAsc(classId));
-	}
-
-	@Transactional
-	public CompletionPolicyResponse updatePolicy(Long classId, UpdateCompletionPolicyRequest request, Long currentUserId) {
-		FapClass fapClass = findClassForUpdate(classId);
-		if (fapClass.getStatus() == ClassStatus.Closed) {
-			throw new ConflictException("CLASS_COMPLETION_POLICY_LOCKED", "Closed class completion policy cannot be changed");
-		}
-		Set<Long> quizIds = new HashSet<>();
-		for (CompletionPolicyQuizRequest item : request.requiredQuizzes()) {
-			if (!quizIds.add(item.quizId())) {
-				throw new BadRequestException("DUPLICATE_REQUIRED_QUIZ", "Required quizzes must be unique");
-			}
-			if (!quizAssignmentRepository.existsByQuizIdAndFapClassId(item.quizId(), classId)) {
-				throw new BadRequestException("QUIZ_NOT_ASSIGNED_TO_CLASS", "Required quiz must be assigned directly to the class");
-			}
-		}
-
-		LocalDateTime now = LocalDateTime.now();
-		completionQuizRepository.deleteByFapClassId(classId);
-		completionQuizRepository.flush();
-		List<ClassCompletionQuiz> saved = request.requiredQuizzes().stream().map(item -> {
-			Quiz quiz = quizRepository.findById(item.quizId())
-					.orElseThrow(() -> new NotFoundException("Quiz not found"));
-			ClassCompletionQuiz policyQuiz = new ClassCompletionQuiz();
-			policyQuiz.setFapClass(fapClass);
-			policyQuiz.setQuiz(quiz);
-			policyQuiz.setPassingScore(item.passingScore());
-			policyQuiz.setCreatedAt(now);
-			policyQuiz.setUpdatedAt(now);
-			policyQuiz.setCreatedBy(currentUserId);
-			policyQuiz.setUpdatedBy(currentUserId);
-			return completionQuizRepository.save(policyQuiz);
-		}).toList();
-		fapClass.setMinimumAttendanceRate(request.minimumAttendanceRate().setScale(2, RoundingMode.HALF_UP));
-		fapClass.setUpdatedAt(now);
-		fapClass.setUpdatedBy(currentUserId);
-		auditLogService.record("UPDATE_COMPLETION_POLICY", "class", classId);
-		return toPolicyResponse(fapClass, saved);
 	}
 
 	@Transactional(readOnly = true)
@@ -180,27 +87,22 @@ public class CourseResultService {
 				.collect(Collectors.groupingBy(item -> item.getCourseResult().getId()));
 		List<CourseResultResponse> results = courseResultRepository
 				.findByFapClassIdOrderByClassEnrollmentUserFullNameAsc(classId).stream()
-				.map(result -> toResponse(
+				.map(result -> courseResultMapper.toResponse(
 						result,
 						quizzesByResult.getOrDefault(result.getId(), List.of()),
 						adjustmentsByResult.getOrDefault(result.getId(), List.of())))
 				.toList();
-		return new ClassCourseResultsResponse(
-				classId,
-				fapClass.getName(),
-				fapClass.getClassCode(),
-				toSummary(results),
-				results);
+		return courseResultMapper.toClassResultsResponse(classId, fapClass, results);
 	}
 
 	@Transactional(readOnly = true)
 	public CourseResultResponse get(Long classId, Long userId) {
-		return toResponse(findResult(classId, userId));
+		return toResponse(courseResultRepository.getByFapClassIdAndUserIdOrThrow(classId, userId));
 	}
 
 	@Transactional(readOnly = true)
 	public CourseResultResponse getMine(Long classId, Long userId) {
-		CourseResult result = findResult(classId, userId);
+		CourseResult result = courseResultRepository.getByFapClassIdAndUserIdOrThrow(classId, userId);
 		if (result.getPublishedAt() == null) {
 			throw new ConflictException("COURSE_RESULT_NOT_PUBLISHED", "Course result has not been published");
 		}
@@ -213,7 +115,7 @@ public class CourseResultService {
 		if (fapClass.getStatus() != ClassStatus.Active) {
 			throw new ConflictException("CLASS_RESULT_NOT_CALCULABLE", "Only active class results can be calculated");
 		}
-		calculateAll(fapClass, currentUserId);
+		courseResultCalculator.calculateAll(fapClass, currentUserId);
 		auditLogService.record("CALCULATE_COURSE_RESULTS", "class", classId);
 		return list(classId);
 	}
@@ -222,7 +124,7 @@ public class CourseResultService {
 	public void finalizeForClosure(FapClass fapClass, Long currentUserId) {
 		validateSessionsForClosure(fapClass.getId());
 		validateRequiredQuizzesForClosure(fapClass.getId());
-		List<CourseResult> results = calculateAll(fapClass, currentUserId);
+		List<CourseResult> results = courseResultCalculator.calculateAll(fapClass, currentUserId);
 		if (results.stream().anyMatch(result -> result.effectiveStatus() == CourseResultStatus.InProgress)) {
 			throw new ConflictException("COURSE_RESULTS_INCOMPLETE", "All course results must be calculated before closing the class");
 		}
@@ -234,8 +136,7 @@ public class CourseResultService {
 		if (request.status() != CourseResultStatus.Passed && request.status() != CourseResultStatus.Failed) {
 			throw new BadRequestException("INVALID_RESULT_OVERRIDE_STATUS", "Result override must be Passed or Failed");
 		}
-		CourseResult result = courseResultRepository.findForUpdate(classId, userId)
-				.orElseThrow(() -> new NotFoundException("Course result not found"));
+		CourseResult result = courseResultRepository.getForUpdateOrThrow(classId, userId);
 		if (result.getCalculatedStatus() == CourseResultStatus.InProgress
 				|| result.getCalculatedStatus() == CourseResultStatus.Withdrawn) {
 			throw new ConflictException("COURSE_RESULT_NOT_ADJUSTABLE", "Only calculated Passed or Failed results can be adjusted");
@@ -345,147 +246,6 @@ public class CourseResultService {
 		});
 	}
 
-	/**
-	 * Recalculates every result of the class from class-wide reads: results, registrations,
-	 * attendance and best attempts are each loaded once and grouped by user, instead of 4 queries
-	 * plus one per required quiz for every enrollment.
-	 */
-	private List<CourseResult> calculateAll(FapClass fapClass, Long currentUserId) {
-		Long classId = fapClass.getId();
-		List<ClassCompletionQuiz> requiredQuizzes = completionQuizRepository.findByFapClassIdOrderByIdAsc(classId);
-		List<ClassEnrollment> enrollments = classEnrollmentRepository
-				.findByFapClassIdAndStatusInOrderByCreatedAtAscIdAsc(classId, RESULT_ENROLLMENT_STATUSES);
-		Map<Long, CourseResult> resultsByEnrollment = courseResultRepository.findByFapClassId(classId).stream()
-				.collect(Collectors.toMap(result -> result.getClassEnrollment().getId(), Function.identity()));
-
-		Map<Long, Set<Long>> completedSessionsByUser = new HashMap<>();
-		for (TrainingRegistration registration : trainingRegistrationRepository
-				.findByClassIdAndStatusIn(classId, ATTENDANCE_REGISTRATION_STATUSES)) {
-			if (registration.getTrainingSession().getStatus() == TrainingSessionStatus.Completed) {
-				completedSessionsByUser.computeIfAbsent(registration.getUser().getId(), id -> new HashSet<>())
-						.add(registration.getTrainingSession().getId());
-			}
-		}
-		Map<Long, Map<Long, AttendanceStatus>> attendanceByUser = new HashMap<>();
-		for (AttendanceRecord attendance : attendanceRecordRepository.findByTrainingSessionFapClassId(classId)) {
-			attendanceByUser.computeIfAbsent(attendance.getUser().getId(), id -> new HashMap<>())
-					.put(attendance.getTrainingSession().getId(), attendance.getStatus());
-		}
-		Map<String, QuizAttemptRepository.ScoredAttempt> bestAttempts = new HashMap<>();
-		if (!requiredQuizzes.isEmpty()) {
-			List<Long> quizIds = requiredQuizzes.stream().map(item -> item.getQuiz().getId()).toList();
-			// Rows arrive best first, so the first row per quiz and user is the best attempt.
-			quizAttemptRepository.findSubmittedForClassOrderByScoreDesc(classId, quizIds)
-					.forEach(attempt -> bestAttempts.putIfAbsent(
-							attemptKey(attempt.getQuizId(), attempt.getUserId()), attempt));
-		}
-
-		List<CourseResult> results = new ArrayList<>(enrollments.size());
-		for (ClassEnrollment enrollment : enrollments) {
-			CourseResult result = resultsByEnrollment.get(enrollment.getId());
-			if (result == null) {
-				result = new CourseResult();
-				result.setFapClass(fapClass);
-				result.setClassEnrollment(enrollment);
-				result.setUpdatedAt(LocalDateTime.now());
-				result = courseResultRepository.save(result);
-			}
-			results.add(result);
-		}
-
-		// Snapshots of every non-withdrawn result are rebuilt below; withdrawn ones keep theirs.
-		resultQuizRepository.deleteForClassEnrollmentStatuses(classId, RECALCULATED_ENROLLMENT_STATUSES);
-		List<CourseResultQuiz> snapshots = new ArrayList<>();
-		for (int index = 0; index < enrollments.size(); index++) {
-			ClassEnrollment enrollment = enrollments.get(index);
-			CourseResult result = results.get(index);
-			Long userId = enrollment.getUser().getId();
-			if (enrollment.getStatus() == ClassEnrollmentStatus.Withdrawn) {
-				markCalculatedWithdrawn(result, currentUserId);
-				continue;
-			}
-			calculateOne(
-					fapClass,
-					result,
-					requiredQuizzes,
-					completedSessionsByUser.getOrDefault(userId, Set.of()),
-					attendanceByUser.getOrDefault(userId, Map.of()),
-					quizId -> bestAttempts.get(attemptKey(quizId, userId)),
-					snapshots,
-					currentUserId);
-		}
-		resultQuizRepository.saveAll(snapshots);
-		return results;
-	}
-
-	private static String attemptKey(Long quizId, Long userId) {
-		return quizId + ":" + userId;
-	}
-
-	private static void markCalculatedWithdrawn(CourseResult result, Long currentUserId) {
-		result.setCalculatedStatus(CourseResultStatus.Withdrawn);
-		result.setOverrideStatus(null);
-		result.setCalculatedAt(LocalDateTime.now());
-		result.setCalculatedBy(currentUserId);
-		result.setUpdatedAt(LocalDateTime.now());
-	}
-
-	private void calculateOne(
-			FapClass fapClass,
-			CourseResult result,
-			List<ClassCompletionQuiz> requiredQuizzes,
-			Set<Long> completedSessionIds,
-			Map<Long, AttendanceStatus> attendanceBySession,
-			Function<Long, QuizAttemptRepository.ScoredAttempt> bestAttemptForQuiz,
-			List<CourseResultQuiz> snapshots,
-			Long currentUserId) {
-		int attendedSessions = (int) completedSessionIds.stream()
-				.map(attendanceBySession::get)
-				.filter(status -> status == AttendanceStatus.Present || status == AttendanceStatus.Late)
-				.count();
-		int totalSessions = completedSessionIds.size();
-		BigDecimal attendanceRate = totalSessions == 0
-				? BigDecimal.ZERO.setScale(2)
-				: BigDecimal.valueOf(attendedSessions)
-						.multiply(BigDecimal.valueOf(100))
-						.divide(BigDecimal.valueOf(totalSessions), 2, RoundingMode.HALF_UP);
-
-		int passedQuizCount = 0;
-		for (ClassCompletionQuiz requiredQuiz : requiredQuizzes) {
-			QuizAttemptRepository.ScoredAttempt attempt = bestAttemptForQuiz.apply(requiredQuiz.getQuiz().getId());
-			boolean passed = attempt != null && attempt.getScore() != null
-					&& attempt.getScore() >= requiredQuiz.getPassingScore();
-			CourseResultQuiz snapshot = new CourseResultQuiz();
-			snapshot.setCourseResult(result);
-			snapshot.setQuiz(requiredQuiz.getQuiz());
-			snapshot.setRequiredScore(requiredQuiz.getPassingScore());
-			snapshot.setBestAttemptId(attempt == null ? null : attempt.getId());
-			snapshot.setBestScore(attempt == null ? null : attempt.getScore());
-			snapshot.setPassed(passed);
-			snapshots.add(snapshot);
-			if (passed) {
-				passedQuizCount++;
-			}
-		}
-
-		boolean attendancePassed = totalSessions > 0
-				&& attendanceRate.compareTo(fapClass.getMinimumAttendanceRate()) >= 0;
-		boolean quizzesPassed = passedQuizCount == requiredQuizzes.size();
-		result.setAttendanceRate(attendanceRate);
-		result.setAttendedSessions(attendedSessions);
-		result.setTotalSessions(totalSessions);
-		result.setRequiredQuizCount(requiredQuizzes.size());
-		result.setPassedQuizCount(passedQuizCount);
-		result.setCalculatedStatus(attendancePassed && quizzesPassed
-				? CourseResultStatus.Passed
-				: CourseResultStatus.Failed);
-		result.setCalculatedAt(LocalDateTime.now());
-		result.setCalculatedBy(currentUserId);
-		result.setPublishedAt(null);
-		result.setPublishedBy(null);
-		result.setUpdatedAt(LocalDateTime.now());
-	}
-
 	private void validateSessionsForClosure(Long classId) {
 		List<TrainingSession> sessions = trainingSessionRepository.findByFapClassIdOrderBySessionDateAscStartTimeAsc(classId);
 		if (sessions.stream().noneMatch(session -> session.getStatus() == TrainingSessionStatus.Completed)) {
@@ -504,76 +264,12 @@ public class CourseResultService {
 		});
 	}
 
-	private CompletionPolicyResponse toPolicyResponse(FapClass fapClass, List<ClassCompletionQuiz> quizzes) {
-		return new CompletionPolicyResponse(
-				fapClass.getId(),
-				fapClass.getMinimumAttendanceRate(),
-				quizzes.stream().map(item -> new CompletionPolicyQuizResponse(
-						item.getQuiz().getId(),
-						item.getQuiz().getTitle(),
-						item.getPassingScore(),
-						item.getQuiz().getStatus())).toList());
-	}
-
+	// Kept out of the mapper because it queries; list() reads the same children class-wide instead.
 	private CourseResultResponse toResponse(CourseResult result) {
-		return toResponse(
+		return courseResultMapper.toResponse(
 				result,
 				resultQuizRepository.findByCourseResultIdOrderByIdAsc(result.getId()),
 				adjustmentRepository.findByCourseResultIdOrderByAdjustedAtDescIdDesc(result.getId()));
-	}
-
-	private CourseResultResponse toResponse(
-			CourseResult result,
-			List<CourseResultQuiz> resultQuizzes,
-			List<CourseResultAdjustment> resultAdjustments) {
-		List<CourseResultQuizResponse> quizzes = resultQuizzes.stream()
-				.map(item -> new CourseResultQuizResponse(
-						item.getQuiz().getId(),
-						item.getQuiz().getTitle(),
-						item.getRequiredScore(),
-						item.getBestAttemptId(),
-						item.getBestScore(),
-						item.isPassed()))
-				.toList();
-		List<CourseResultAdjustmentResponse> adjustments = resultAdjustments.stream()
-				.map(item -> new CourseResultAdjustmentResponse(
-						item.getId(), item.getPreviousStatus(), item.getNewStatus(), item.getReason(),
-						item.getAdjustedBy(), item.getAdjustedAt()))
-				.toList();
-		return new CourseResultResponse(
-				result.getId(),
-				result.getFapClass().getId(),
-				result.getClassEnrollment().getId(),
-				result.getClassEnrollment().getUser().getId(),
-				result.getClassEnrollment().getUser().getFullName(),
-				result.getClassEnrollment().getUser().getEmail(),
-				result.effectiveStatus(),
-				result.getCalculatedStatus(),
-				result.getOverrideStatus(),
-				result.getAttendanceRate(),
-				result.getAttendedSessions(),
-				result.getTotalSessions(),
-				result.getRequiredQuizCount(),
-				result.getPassedQuizCount(),
-				result.getOverrideReason(),
-				result.getOverriddenBy(),
-				result.getOverriddenAt(),
-				result.getPublishedAt() != null,
-				result.getPublishedAt(),
-				result.getCalculatedAt(),
-				result.getVersionNo(),
-				quizzes,
-				adjustments);
-	}
-
-	private CourseResultSummaryResponse toSummary(List<CourseResultResponse> results) {
-		return new CourseResultSummaryResponse(
-				results.size(),
-				results.stream().filter(item -> item.status() == CourseResultStatus.InProgress).count(),
-				results.stream().filter(item -> item.status() == CourseResultStatus.Passed).count(),
-				results.stream().filter(item -> item.status() == CourseResultStatus.Failed).count(),
-				results.stream().filter(item -> item.status() == CourseResultStatus.Withdrawn).count(),
-				results.stream().filter(CourseResultResponse::published).count());
 	}
 
 	private FapClass findClass(Long classId) {
@@ -584,10 +280,5 @@ public class CourseResultService {
 	private FapClass findClassForUpdate(Long classId) {
 		return classRepository.findWithTrainingProgramByIdForUpdate(classId)
 				.orElseThrow(() -> new NotFoundException("Class not found"));
-	}
-
-	private CourseResult findResult(Long classId, Long userId) {
-		return courseResultRepository.findByFapClassIdAndClassEnrollmentUserId(classId, userId)
-				.orElseThrow(() -> new NotFoundException("Course result not found"));
 	}
 }

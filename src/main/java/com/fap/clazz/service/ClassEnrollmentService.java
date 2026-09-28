@@ -15,6 +15,8 @@ import com.fap.common.api.PageRequestFactory;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.security.RoleNames;
+import com.fap.common.util.TextNormalizer;
 import com.fap.notification.service.NotificationService;
 import com.fap.training.entity.TrainingRegistration;
 import com.fap.training.entity.TrainingSession;
@@ -33,6 +35,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -47,7 +50,6 @@ import java.util.stream.Collectors;
 @Service
 public class ClassEnrollmentService {
 
-	private static final String TRAINEE_ROLE = "Trainee";
 	private static final Collection<TrainingRegistrationStatus> ACTIVE_SESSION_REGISTRATION_STATUSES = List.of(
 			TrainingRegistrationStatus.Registered,
 			TrainingRegistrationStatus.Waitlist);
@@ -62,6 +64,7 @@ public class ClassEnrollmentService {
 	private final AuditLogService auditLogService;
 	private final NotificationService notificationService;
 	private final CourseResultService courseResultService;
+	private final Clock clock;
 
 	public ClassEnrollmentService(
 			ClassRepository classRepository,
@@ -73,7 +76,8 @@ public class ClassEnrollmentService {
 			ClassMapper classMapper,
 			AuditLogService auditLogService,
 			NotificationService notificationService,
-			CourseResultService courseResultService) {
+			CourseResultService courseResultService,
+			Clock clock) {
 		this.classRepository = classRepository;
 		this.classEnrollmentRepository = classEnrollmentRepository;
 		this.userRepository = userRepository;
@@ -84,6 +88,7 @@ public class ClassEnrollmentService {
 		this.auditLogService = auditLogService;
 		this.notificationService = notificationService;
 		this.courseResultService = courseResultService;
+		this.clock = clock;
 	}
 
 	@Transactional(readOnly = true)
@@ -102,7 +107,7 @@ public class ClassEnrollmentService {
 				order,
 				Sort.by(Sort.Direction.ASC, "createdAt", "id"),
 				"id", "createdAt", "updatedAt", "status", "enrolledAt");
-		return classEnrollmentRepository.searchByClass(classId, status, normalize(keyword), pageRequest)
+		return classEnrollmentRepository.searchByClass(classId, status, TextNormalizer.blankToNull(keyword), pageRequest)
 				.map(classEnrollmentMapper::toResponse);
 	}
 
@@ -122,7 +127,7 @@ public class ClassEnrollmentService {
 				order,
 				Sort.by(Sort.Direction.DESC, "updatedAt", "id"),
 				"id", "createdAt", "updatedAt", "status", "enrolledAt");
-		return classEnrollmentRepository.searchMine(userId, status, normalize(keyword), pageRequest)
+		return classEnrollmentRepository.searchMine(userId, status, TextNormalizer.blankToNull(keyword), pageRequest)
 				.map(classEnrollmentMapper::toResponse);
 	}
 
@@ -142,13 +147,13 @@ public class ClassEnrollmentService {
 				order,
 				Sort.by(Sort.Direction.ASC, "startDate", "id"),
 				"id", "createdAt", "name", "classCode", "startDate", "endDate");
-		return classRepository.searchAvailableForUser(userId, LocalDate.now(), normalize(keyword), pageRequest)
+		return classRepository.searchAvailableForUser(userId, LocalDate.now(clock), TextNormalizer.blankToNull(keyword), pageRequest)
 				.map(classMapper::toResponse);
 	}
 
 	@Transactional
 	public List<ClassEnrollmentResponse> add(Long classId, Set<Long> userIds, Long currentUserId) {
-		FapClass fapClass = findClassForUpdate(classId);
+		FapClass fapClass = classRepository.getWithTrainingProgramForUpdateOrThrow(classId);
 		ensureClassAcceptsManagedEnrollment(fapClass);
 		List<ClassEnrollmentResponse> responses = new ArrayList<>();
 		for (Long userId : userIds) {
@@ -161,7 +166,7 @@ public class ClassEnrollmentService {
 
 	@Transactional
 	public ClassEnrollmentResponse selfEnroll(Long classId, Long userId) {
-		FapClass fapClass = findClassForUpdate(classId);
+		FapClass fapClass = classRepository.getWithTrainingProgramForUpdateOrThrow(classId);
 		validateSelfEnrollmentWindow(fapClass);
 		User user = findTrainee(userId);
 		validateActiveTrainee(user);
@@ -170,10 +175,10 @@ public class ClassEnrollmentService {
 
 	@Transactional
 	public ClassEnrollmentResponse approve(Long classId, Long userId, Long currentUserId) {
-		FapClass fapClass = findClassForUpdate(classId);
+		FapClass fapClass = classRepository.getWithTrainingProgramForUpdateOrThrow(classId);
 		ensureClassAcceptsManagedEnrollment(fapClass);
 		ClassEnrollment enrollment = findPendingApproval(classId, userId);
-		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.now(clock);
 		ClassEnrollmentStatus nextStatus = classEnrollmentRepository.countByFapClassIdAndStatus(
 				classId, ClassEnrollmentStatus.Enrolled) < fapClass.getCapacity()
 				? ClassEnrollmentStatus.Enrolled
@@ -201,10 +206,10 @@ public class ClassEnrollmentService {
 
 	@Transactional
 	public ClassEnrollmentResponse reject(Long classId, Long userId, Long currentUserId) {
-		FapClass fapClass = findClassForUpdate(classId);
+		FapClass fapClass = classRepository.getWithTrainingProgramForUpdateOrThrow(classId);
 		ensureClassAcceptsManagedEnrollment(fapClass);
 		ClassEnrollment enrollment = findPendingApproval(classId, userId);
-		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.now(clock);
 		enrollment.setStatus(ClassEnrollmentStatus.Rejected);
 		enrollment.setEnrolledAt(null);
 		enrollment.setReviewedAt(now);
@@ -221,12 +226,11 @@ public class ClassEnrollmentService {
 
 	@Transactional
 	public ClassEnrollmentResponse withdraw(Long classId, Long userId, Long currentUserId) {
-		FapClass fapClass = findClassForUpdate(classId);
+		FapClass fapClass = classRepository.getWithTrainingProgramForUpdateOrThrow(classId);
 		if (fapClass.getStatus() == ClassStatus.Closed) {
 			throw new ConflictException("CLASS_ENROLLMENT_CLOSED", "Closed class enrollment cannot be changed");
 		}
-		ClassEnrollment enrollment = classEnrollmentRepository.findByFapClassIdAndUserId(classId, userId)
-				.orElseThrow(() -> new NotFoundException("Class enrollment not found"));
+		ClassEnrollment enrollment = classEnrollmentRepository.getByFapClassIdAndUserIdOrThrow(classId, userId);
 		if (enrollment.getStatus() != ClassEnrollmentStatus.PendingApproval
 				&& enrollment.getStatus() != ClassEnrollmentStatus.Enrolled
 				&& enrollment.getStatus() != ClassEnrollmentStatus.Waitlisted) {
@@ -235,7 +239,7 @@ public class ClassEnrollmentService {
 
 		boolean releasedSeat = enrollment.getStatus() == ClassEnrollmentStatus.Enrolled;
 		boolean pendingApproval = enrollment.getStatus() == ClassEnrollmentStatus.PendingApproval;
-		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.now(clock);
 		enrollment.setStatus(ClassEnrollmentStatus.Withdrawn);
 		enrollment.setWithdrawnAt(now);
 		enrollment.setCompletedAt(null);
@@ -284,7 +288,7 @@ public class ClassEnrollmentService {
 		Map<Long, TrainingRegistration> registrationsByUser = trainingRegistrationRepository
 				.findByTrainingSessionId(session.getId()).stream()
 				.collect(Collectors.toMap(registration -> registration.getUser().getId(), Function.identity()));
-		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.now(clock);
 		List<TrainingRegistration> changed = classEnrollmentRepository
 				.findByFapClassIdAndStatusOrderByCreatedAtAscIdAsc(session.getFapClass().getId(), ClassEnrollmentStatus.Enrolled)
 				.stream()
@@ -299,7 +303,7 @@ public class ClassEnrollmentService {
 	}
 
 	private ClassEnrollment enroll(FapClass fapClass, User user, ClassEnrollmentSource source, Long actorId) {
-		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.now(clock);
 		ClassEnrollment enrollment = classEnrollmentRepository.findByFapClassIdAndUserId(fapClass.getId(), user.getId())
 				.orElseGet(() -> newEnrollment(fapClass, user, now));
 		if (enrollment.getStatus() == ClassEnrollmentStatus.PendingApproval
@@ -340,7 +344,7 @@ public class ClassEnrollmentService {
 	}
 
 	private ClassEnrollment requestEnrollment(FapClass fapClass, User user) {
-		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.now(clock);
 		ClassEnrollment enrollment = classEnrollmentRepository.findByFapClassIdAndUserId(fapClass.getId(), user.getId())
 				.orElseGet(() -> newEnrollment(fapClass, user, now));
 		if (enrollment.getStatus() == ClassEnrollmentStatus.PendingApproval
@@ -372,8 +376,7 @@ public class ClassEnrollmentService {
 	}
 
 	private ClassEnrollment findPendingApproval(Long classId, Long userId) {
-		ClassEnrollment enrollment = classEnrollmentRepository.findByFapClassIdAndUserId(classId, userId)
-				.orElseThrow(() -> new NotFoundException("Class enrollment not found"));
+		ClassEnrollment enrollment = classEnrollmentRepository.getByFapClassIdAndUserIdOrThrow(classId, userId);
 		if (enrollment.getStatus() != ClassEnrollmentStatus.PendingApproval) {
 			throw new ConflictException(
 					"CLASS_ENROLLMENT_NOT_REVIEWABLE",
@@ -423,7 +426,7 @@ public class ClassEnrollmentService {
 				.findByUserIdAndTrainingSessionIdIn(user.getId(), sessions.stream().map(TrainingSession::getId).toList())
 				.stream()
 				.collect(Collectors.toMap(registration -> registration.getTrainingSession().getId(), Function.identity()));
-		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime now = LocalDateTime.now(clock);
 		List<TrainingRegistration> changed = sessions.stream()
 				.map(session -> syncRegistration(session, user, registrationsBySession.get(session.getId()), now))
 				.filter(Objects::nonNull)
@@ -497,11 +500,6 @@ public class ClassEnrollmentService {
 				});
 	}
 
-	private FapClass findClassForUpdate(Long classId) {
-		return classRepository.findWithTrainingProgramByIdForUpdate(classId)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
-	}
-
 	private User findTrainee(Long userId) {
 		return userRepository.findWithRolesById(userId)
 				.orElseThrow(() -> new NotFoundException("User not found"));
@@ -511,7 +509,7 @@ public class ClassEnrollmentService {
 		if (user.getStatus() != UserStatus.Active) {
 			throw new ConflictException("CLASS_ENROLLMENT_USER_NOT_ACTIVE", "Only active user can enroll in a class");
 		}
-		if (user.getRoles().stream().noneMatch(role -> TRAINEE_ROLE.equals(role.getName()))) {
+		if (user.getRoles().stream().noneMatch(role -> RoleNames.TRAINEE.equals(role.getName()))) {
 			throw new ConflictException("CLASS_ENROLLMENT_TRAINEE_REQUIRED", "User must have the Trainee role");
 		}
 	}
@@ -523,7 +521,7 @@ public class ClassEnrollmentService {
 	}
 
 	private void validateSelfEnrollmentWindow(FapClass fapClass) {
-		LocalDate today = LocalDate.now();
+		LocalDate today = LocalDate.now(clock);
 		if (fapClass.getStatus() != ClassStatus.Active) {
 			throw new ConflictException("CLASS_NOT_OPEN_FOR_ENROLLMENT", "Only active class accepts self enrollment");
 		}
@@ -536,9 +534,5 @@ public class ClassEnrollmentService {
 		if (fapClass.getEnrollmentEndDate() != null && today.isAfter(fapClass.getEnrollmentEndDate())) {
 			throw new ConflictException("CLASS_ENROLLMENT_ENDED", "Class enrollment has ended");
 		}
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
 	}
 }

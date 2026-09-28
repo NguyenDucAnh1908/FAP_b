@@ -7,6 +7,7 @@ import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.metrics.DomainMetrics;
+import com.fap.common.security.RoleNames;
 import com.fap.notification.service.NotificationService;
 import com.fap.role.entity.Role;
 import com.fap.training.entity.TrainingRegistration;
@@ -37,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -78,6 +80,14 @@ class TrainingRegistrationServiceTest {
 	void returnSavedEntity() {
 		when(trainingRegistrationRepository.save(any()))
 				.thenAnswer(invocation -> invocation.getArgument(0));
+	}
+
+	@BeforeEach
+	void delegateLookupsToFinders() {
+		lenient().doCallRealMethod().when(trainingSessionRepository).getWithClassAndTrainerOrThrow(any());
+		lenient().doCallRealMethod().when(trainingSessionRepository).getWithClassAndTrainerForUpdateOrThrow(any());
+		lenient().doCallRealMethod().when(trainingRegistrationRepository)
+				.getByTrainingSessionIdAndUserIdOrThrow(any(), any());
 	}
 
 	@Test
@@ -305,7 +315,7 @@ class TrainingRegistrationServiceTest {
 		user.setFullName("Trainee");
 		user.setStatus(UserStatus.Active);
 		Role traineeRole = new Role();
-		traineeRole.setName("Trainee");
+		traineeRole.setName(RoleNames.TRAINEE);
 		user.getRoles().add(traineeRole);
 		when(userRepository.findWithRolesById(USER_ID)).thenReturn(Optional.of(user));
 		when(classEnrollmentRepository.existsByFapClassIdAndUserIdAndStatusIn(

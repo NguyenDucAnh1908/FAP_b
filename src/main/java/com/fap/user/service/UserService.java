@@ -4,7 +4,9 @@ import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.security.AuthorizationCache;
+import com.fap.common.security.RoleNames;
 import com.fap.common.api.PageRequestFactory;
+import com.fap.common.util.TextNormalizer;
 import com.fap.role.entity.Role;
 import com.fap.role.repository.RoleRepository;
 import com.fap.user.dto.CreateUserRequest;
@@ -27,8 +29,6 @@ import java.util.Set;
 
 @Service
 public class UserService {
-
-	private static final String SUPER_ADMIN_ROLE = "Super Admin";
 
 	private final UserRepository userRepository;
 	private final RoleRepository roleRepository;
@@ -86,9 +86,9 @@ public class UserService {
 				"id", "createdAt", "fullName", "email", "status");
 		Page<User> users = userRepository.search(
 				status,
-				normalizeLikeFilter(keyword),
-				normalizeLikeFilter(email),
-				normalizeLikeFilter(fullName),
+				TextNormalizer.blankToNull(keyword),
+				TextNormalizer.blankToNull(email),
+				TextNormalizer.blankToNull(fullName),
 				roleId,
 				normalizeExactFilter(roleName),
 				pageRequest);
@@ -122,12 +122,12 @@ public class UserService {
 
 	@Transactional(readOnly = true)
 	public UserResponse get(Long id) {
-		return userMapper.toResponse(findUser(id));
+		return userMapper.toResponse(userRepository.getWithRolesOrThrow(id));
 	}
 
 	@Transactional
 	public UserResponse update(Long id, UpdateUserRequest request, Set<String> currentUserRoles) {
-		User user = findUser(id);
+		User user = userRepository.getWithRolesOrThrow(id);
 		userRepository.findByEmailIgnoreCase(request.email())
 				.filter(existing -> !existing.getId().equals(id))
 				.ifPresent(existing -> {
@@ -140,7 +140,7 @@ public class UserService {
 		if (currentlySuperAdmin
 				&& !requestedSuperAdmin
 				&& user.getStatus() == UserStatus.Active
-				&& userRepository.countByRoleNameAndStatus(SUPER_ADMIN_ROLE, UserStatus.Active) <= 1) {
+				&& userRepository.countByRoleNameAndStatus(RoleNames.SUPER_ADMIN, UserStatus.Active) <= 1) {
 			throw new ConflictException("CANNOT_REMOVE_LAST_SUPER_ADMIN_ROLE", "Cannot remove Super Admin role from the last active Super Admin");
 		}
 		user.setFullName(request.fullName());
@@ -159,12 +159,12 @@ public class UserService {
 
 	@Transactional
 	public UserResponse updateStatus(Long id, UserStatus status, Long currentUserId) {
-		User user = findUser(id);
+		User user = userRepository.getWithRolesOrThrow(id);
 		if (status == UserStatus.Inactive) {
 			if (user.getId().equals(currentUserId)) {
 				throw new ConflictException("CANNOT_DEACTIVATE_SELF", "Cannot deactivate your own account");
 			}
-			if (isSuperAdmin(user) && userRepository.countByRoleNameAndStatus(SUPER_ADMIN_ROLE, UserStatus.Active) <= 1) {
+			if (isSuperAdmin(user) && userRepository.countByRoleNameAndStatus(RoleNames.SUPER_ADMIN, UserStatus.Active) <= 1) {
 				throw new ConflictException("CANNOT_DEACTIVATE_LAST_SUPER_ADMIN", "Cannot deactivate the last active Super Admin");
 			}
 		}
@@ -174,11 +174,6 @@ public class UserService {
 		// A deactivated user must lose access on the next request, not when the cache expires.
 		authorizationCache.invalidatePrincipalsAfterCommit();
 		return userMapper.toResponse(user);
-	}
-
-	private User findUser(Long id) {
-		return userRepository.findWithRolesById(id)
-				.orElseThrow(() -> new NotFoundException("User not found"));
 	}
 
 	private Set<Role> resolveRoles(Set<Long> roleIds) {
@@ -195,20 +190,16 @@ public class UserService {
 
 	private boolean hasSuperAdminRole(Set<Role> roles) {
 		return roles.stream()
-				.anyMatch(role -> SUPER_ADMIN_ROLE.equals(role.getName()));
+				.anyMatch(role -> RoleNames.SUPER_ADMIN.equals(role.getName()));
 	}
 
 	private void validateSuperAdminRoleChange(
 			boolean currentHasSuperAdminRole,
 			boolean requestedHasSuperAdminRole,
 			Set<String> currentUserRoles) {
-		if (currentHasSuperAdminRole != requestedHasSuperAdminRole && !currentUserRoles.contains(SUPER_ADMIN_ROLE)) {
+		if (currentHasSuperAdminRole != requestedHasSuperAdminRole && !currentUserRoles.contains(RoleNames.SUPER_ADMIN)) {
 			throw new ConflictException("CANNOT_MANAGE_SUPER_ADMIN_ROLE", "Only Super Admin can manage Super Admin role");
 		}
-	}
-
-	private String normalizeLikeFilter(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
 	}
 
 	private String normalizeExactFilter(String value) {

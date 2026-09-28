@@ -66,7 +66,7 @@ class JwtAuthenticationFilterTest {
 				7L,
 				"trainee@fap.local",
 				"",
-				Set.of("Trainee"),
+				Set.of(RoleNames.TRAINEE),
 				enabled,
 				List.of(new SimpleGrantedAuthority("ROLE_ID_4")));
 	}

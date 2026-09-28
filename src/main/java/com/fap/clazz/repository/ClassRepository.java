@@ -3,6 +3,7 @@ package com.fap.clazz.repository;
 import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassStatus;
 import com.fap.clazz.enums.ClassEnrollmentStatus;
+import com.fap.common.exception.NotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -36,10 +37,20 @@ public interface ClassRepository extends JpaRepository<FapClass, Long> {
 	@EntityGraph(attributePaths = "trainingProgram")
 	Optional<FapClass> findWithTrainingProgramById(Long id);
 
+	default FapClass getWithTrainingProgramOrThrow(Long id) {
+		return findWithTrainingProgramById(id)
+				.orElseThrow(() -> new NotFoundException("Class not found"));
+	}
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@EntityGraph(attributePaths = "trainingProgram")
 	@Query("select c from FapClass c where c.id = :id")
 	Optional<FapClass> findWithTrainingProgramByIdForUpdate(@Param("id") Long id);
+
+	default FapClass getWithTrainingProgramForUpdateOrThrow(Long id) {
+		return findWithTrainingProgramByIdForUpdate(id)
+				.orElseThrow(() -> new NotFoundException("Class not found"));
+	}
 
 	@EntityGraph(attributePaths = "trainingProgram")
 	@Query("""
