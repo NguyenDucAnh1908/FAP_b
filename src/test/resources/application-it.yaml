@@ -1,0 +1,29 @@
+# Integration-test profile: a REAL Oracle (see com.fap.support.OracleItDatabase), real Flyway and
+# ddl-auto=validate, so schema drift, broken migrations and Oracle-only SQL errors fail the build.
+# The datasource URL/credentials are injected by AbstractOracleIT.
+spring:
+  flyway:
+    # db/seed is included so a fresh container has realistic data and an existing local dev schema
+    # (which already applied the seed versions) still validates.
+    locations: classpath:db/migration,classpath:db/seed
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      # Needed by AbstractOracleIT#countStatements. Kept out of main profiles by default.
+      hibernate.generate_statistics: true
+  mail:
+    host: localhost
+
+app:
+  jwt:
+    secret: it_only_jwt_secret_not_used_outside_integration_tests
+  rate-limit:
+    enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.fap: INFO
+    # generate_statistics logs a metrics block per session at INFO.
+    org.hibernate.engine.internal.StatisticalLoggingSessionEventListener: WARN
