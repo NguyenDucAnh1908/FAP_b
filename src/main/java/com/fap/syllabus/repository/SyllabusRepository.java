@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
 
 	boolean existsByCodeIgnoreCase(String code);
@@ -15,6 +17,16 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
 	boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
 
 	long countByStatus(SyllabusStatus status);
+
+	interface StatusCount {
+		SyllabusStatus getStatus();
+
+		Long getTotal();
+	}
+
+	/** Row count per status in one query, for dashboards (replaces one count query per status). */
+	@Query("select s.status as status, count(s) as total from Syllabus s group by s.status")
+	List<StatusCount> countGroupedByStatus();
 
 	@Query("""
 			select s

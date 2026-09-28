@@ -29,7 +29,7 @@ public class QuizAttempt {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "quiz_attempts_seq")
-	@SequenceGenerator(name = "quiz_attempts_seq", sequenceName = "quiz_attempts_seq", allocationSize = 1)
+	@SequenceGenerator(name = "quiz_attempts_seq", sequenceName = "quiz_attempts_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

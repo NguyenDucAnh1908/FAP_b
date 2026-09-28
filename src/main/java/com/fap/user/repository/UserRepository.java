@@ -29,6 +29,34 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	long countByStatus(UserStatus status);
 
+	interface StatusCount {
+		UserStatus getStatus();
+
+		Long getTotal();
+	}
+
+	/** Row count per status in one query, for dashboards (replaces one count query per status). */
+	@Query("select u.status as status, count(u) as total from User u group by u.status")
+	List<StatusCount> countGroupedByStatus();
+
+	interface RoleCount {
+		String getRoleName();
+
+		Long getTotal();
+	}
+
+	@Query("""
+			select r.name as roleName, count(u) as total
+			from User u
+			join u.roles r
+			where u.status = :status
+			  and r.name in :roleNames
+			group by r.name
+			""")
+	List<RoleCount> countByRoleNamesAndStatus(
+			@Param("roleNames") Collection<String> roleNames,
+			@Param("status") UserStatus status);
+
 	/**
 	 * Searches users and returns the requested page with roles initialized.
 	 *

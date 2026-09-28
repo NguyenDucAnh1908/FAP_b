@@ -16,7 +16,6 @@ import com.fap.syllabus.dto.MaterialFileDownload;
 import com.fap.syllabus.dto.MaterialFileResponse;
 import com.fap.syllabus.dto.UpdateMaterialFileRequest;
 import com.fap.syllabus.entity.MaterialFile;
-import com.fap.syllabus.entity.MaterialFileContent;
 import com.fap.syllabus.entity.Syllabus;
 import com.fap.syllabus.entity.SyllabusTopic;
 import com.fap.syllabus.enums.SyllabusStatus;
@@ -33,6 +32,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -188,19 +193,11 @@ public class MaterialFileService {
 			fileValidator.validateUpload(file);
 			String fileName = fileValidator.sanitizeFileName(file.getOriginalFilename());
 
-			byte[] data;
-			try {
-				data = file.getBytes();
-			} catch (IOException exception) {
-				domainMetrics.recordUpload(false);
-				counted = true;
-				throw new BadRequestException("FILE_UNREADABLE", "Uploaded file could not be read");
-			}
-
+			long size = file.getSize();
 			MaterialFile materialFile = new MaterialFile();
 			materialFile.setTopic(topic);
 			materialFile.setFileName(fileName);
-			materialFile.setFileSize((long) data.length);
+			materialFile.setFileSize(size);
 			materialFile.setContentType(normalize(file.getContentType()));
 			materialFile.setUploadedBy(currentUserId);
 			materialFile.setUploadedAt(LocalDateTime.now());
@@ -208,11 +205,18 @@ public class MaterialFileService {
 			materialFile.setFileUrl(PENDING_FILE_URL);
 			MaterialFile saved = materialFileRepository.save(materialFile);
 			saved.setFileUrl(downloadPath(saved.getId()));
+			// The content row references material_files, so that row must exist before streaming.
+			materialFileRepository.flush();
 
-			MaterialFileContent content = new MaterialFileContent();
-			content.setMaterialFile(saved);
-			content.setFileData(data);
-			materialFileContentRepository.save(content);
+			// Streamed from the multipart's temporary storage into the BLOB, never fully on the heap.
+			try (InputStream data = file.getInputStream()) {
+				materialFileContentRepository.insertContent(saved.getId(), data, size);
+			} catch (IOException exception) {
+				domainMetrics.recordUpload(false);
+				counted = true;
+				throw new BadRequestException("FILE_UNREADABLE", "Uploaded file could not be read");
+			}
+			saved.setContentStored(true);
 
 			auditLogService.record("UPLOAD_MATERIAL_FILE", "syllabus", syllabusId);
 			domainMetrics.recordUpload(true);
@@ -242,14 +246,55 @@ public class MaterialFileService {
 						materialId, currentUserId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES)) {
 			throw new ForbiddenException("You are not assigned to this material");
 		}
-		MaterialFileContent content = materialFileContentRepository.findById(materialId)
-				.orElseThrow(() -> new NotFoundException("Material file has no stored content"));
-		return new MaterialFileDownload(
-				materialFile.getFileName(),
-				materialFile.getContentType() == null
-						? DEFAULT_DOWNLOAD_CONTENT_TYPE
-						: materialFile.getContentType(),
-				content.getFileData());
+		Path spool = spoolContent(materialId);
+		try {
+			return new MaterialFileDownload(
+					materialFile.getFileName(),
+					materialFile.getContentType() == null
+							? DEFAULT_DOWNLOAD_CONTENT_TYPE
+							: materialFile.getContentType(),
+					Files.size(spool),
+					Files.newInputStream(spool, StandardOpenOption.DELETE_ON_CLOSE));
+		} catch (IOException exception) {
+			deleteQuietly(spool);
+			throw new UncheckedIOException("Could not open spooled material content", exception);
+		}
+	}
+
+	/**
+	 * Copies the BLOB to a temporary file while the transaction is open. The database connection is
+	 * released as soon as that local copy finishes, instead of being held for as long as a slow client
+	 * takes to download, and the heap only ever holds a copy buffer.
+	 */
+	private Path spoolContent(Long materialId) {
+		Path spool;
+		try {
+			spool = Files.createTempFile("fap-material-", ".download");
+		} catch (IOException exception) {
+			throw new UncheckedIOException("Could not create a temporary download file", exception);
+		}
+		boolean stored = false;
+		try (OutputStream target = Files.newOutputStream(spool)) {
+			stored = materialFileContentRepository.copyContent(materialId, target);
+		} catch (IOException exception) {
+			throw new UncheckedIOException("Could not spool material content", exception);
+		} finally {
+			if (!stored) {
+				deleteQuietly(spool);
+			}
+		}
+		if (!stored) {
+			throw new NotFoundException("Material file has no stored content");
+		}
+		return spool;
+	}
+
+	private static void deleteQuietly(Path path) {
+		try {
+			Files.deleteIfExists(path);
+		} catch (IOException ignored) {
+			// A leftover temp file is harmless; the original failure matters more.
+		}
 	}
 
 	@Transactional

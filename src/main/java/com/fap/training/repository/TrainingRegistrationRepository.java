@@ -59,6 +59,12 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
 	Optional<TrainingRegistration> findByTrainingSessionIdAndUserId(Long trainingSessionId, Long userId);
 
+	/** All registrations of a session, to sync many users against it without a lookup per user. */
+	List<TrainingRegistration> findByTrainingSessionId(Long trainingSessionId);
+
+	/** One user's registrations across sessions, to sync that user without a lookup per session. */
+	List<TrainingRegistration> findByUserIdAndTrainingSessionIdIn(Long userId, Collection<Long> trainingSessionIds);
+
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
 	Optional<TrainingRegistration> findByTrainingSessionIdAndUserIdAndStatus(
 			Long trainingSessionId, Long userId, TrainingRegistrationStatus status);
@@ -138,6 +144,18 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 	List<Long> findUserIdsByTrainingSessionIdAndStatus(
 			@Param("trainingSessionId") Long trainingSessionId,
 			@Param("status") TrainingRegistrationStatus status);
+
+	/** Registrations of every user in a class, for per-class calculations that would otherwise query per user. */
+	@EntityGraph(attributePaths = "trainingSession")
+	@Query("""
+			select r
+			from TrainingRegistration r
+			where r.trainingSession.fapClass.id = :classId
+			  and r.status in :statuses
+			""")
+	List<TrainingRegistration> findByClassIdAndStatusIn(
+			@Param("classId") Long classId,
+			@Param("statuses") Collection<TrainingRegistrationStatus> statuses);
 
 	@EntityGraph(attributePaths = {"trainingSession", "trainingSession.fapClass", "trainingSession.trainer", "user"})
 	@Query("""

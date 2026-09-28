@@ -10,6 +10,7 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -40,6 +41,17 @@ class DatabaseSchemaIT extends AbstractOracleIT {
 
 		assertThat(current).isNotNull();
 		assertThat(current.getVersion().getVersion()).isEqualTo(String.valueOf(highestMigrationVersion()));
+	}
+
+	/** Hibernate's pooled optimizer and the sequences must agree, or ids overlap or boot fails. */
+	@Test
+	void sequencesAllocateInBlocksMatchingTheEntities() {
+		List<?> increments = entityManager
+				.createNativeQuery("select distinct increment_by from user_sequences")
+				.getResultList();
+
+		assertThat(increments).hasSize(1);
+		assertThat(((Number) increments.get(0)).intValue()).isEqualTo(50);
 	}
 
 	private static int highestMigrationVersion() throws IOException {

@@ -25,7 +25,7 @@ public class Notification {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "notifications_seq")
-	@SequenceGenerator(name = "notifications_seq", sequenceName = "notifications_seq", allocationSize = 1)
+	@SequenceGenerator(name = "notifications_seq", sequenceName = "notifications_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

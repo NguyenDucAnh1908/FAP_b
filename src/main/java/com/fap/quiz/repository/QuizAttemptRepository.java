@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import java.time.LocalDateTime;
@@ -30,6 +31,73 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
 			@Param("passed") Boolean passed,
 			@Param("fromDateTime") LocalDateTime fromDateTime,
 			@Param("toDateTime") LocalDateTime toDateTime);
+
+	interface UserQuizAttemptStats {
+		Long getQuizId();
+
+		Long getAttempts();
+
+		Long getPassedAttempts();
+
+		Long getLatestAttemptId();
+	}
+
+	/** One user's attempt count, passed count and latest attempt id for each quiz, in one query. */
+	@Query("""
+			select a.quiz.id as quizId,
+			       count(a) as attempts,
+			       coalesce(sum(case when a.passed = true then 1L else 0L end), 0L) as passedAttempts,
+			       max(a.id) as latestAttemptId
+			from QuizAttempt a
+			where a.user.id = :userId
+			  and a.quiz.id in :quizIds
+			group by a.quiz.id
+			""")
+	List<UserQuizAttemptStats> summarizeForUserByQuiz(
+			@Param("userId") Long userId,
+			@Param("quizIds") Collection<Long> quizIds);
+
+	interface ScoredAttempt {
+		Long getId();
+
+		Long getQuizId();
+
+		Long getUserId();
+
+		Integer getScore();
+	}
+
+	/**
+	 * Submitted attempts of the given quizzes by users enrolled in the class, best first per
+	 * {@code findFirstByQuizIdAndUserIdAndStatusOrderByScoreDescIdDesc} ordering (on Oracle a null
+	 * score sorts first in DESC order). A projection, so the CLOB answers are never read.
+	 */
+	@Query("""
+			select a.id as id, a.quiz.id as quizId, a.user.id as userId, a.score as score
+			from QuizAttempt a
+			where a.status = com.fap.quiz.enums.QuizAttemptStatus.Submitted
+			  and a.quiz.id in :quizIds
+			  and a.user.id in (select e.user.id from ClassEnrollment e where e.fapClass.id = :classId)
+			order by a.score desc, a.id desc
+			""")
+	List<ScoredAttempt> findSubmittedForClassOrderByScoreDesc(
+			@Param("classId") Long classId,
+			@Param("quizIds") Collection<Long> quizIds);
+
+	interface SubmittedOutcomeCount {
+		Long getSubmitted();
+
+		Long getPassed();
+	}
+
+	/** Submitted and passed attempt totals in one scan, for the admin dashboard. */
+	@Query("""
+			select count(a) as submitted,
+			       coalesce(sum(case when a.passed = true then 1L else 0L end), 0L) as passed
+			from QuizAttempt a
+			where a.status = com.fap.quiz.enums.QuizAttemptStatus.Submitted
+			""")
+	SubmittedOutcomeCount countSubmittedOutcomes();
 
 	long countByQuizIdAndUserId(Long quizId, Long userId);
 

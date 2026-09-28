@@ -27,7 +27,7 @@ public class Permission {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "permissions_seq")
-	@SequenceGenerator(name = "permissions_seq", sequenceName = "permissions_seq", allocationSize = 1)
+	@SequenceGenerator(name = "permissions_seq", sequenceName = "permissions_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

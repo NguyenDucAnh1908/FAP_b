@@ -105,4 +105,25 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
 
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
 	List<AttendanceRecord> findByTrainingSessionFapClassIdAndUserId(Long classId, Long userId);
+
+	interface StatusCount {
+		AttendanceStatus getStatus();
+
+		Long getTotal();
+	}
+
+	@Query("""
+			select a.status as status, count(a) as total
+			from AttendanceRecord a
+			where a.user.id = :userId
+			  and a.trainingSession.fapClass.id = :classId
+			group by a.status
+			""")
+	List<StatusCount> countMineByClassIdGroupedByStatus(
+			@Param("userId") Long userId,
+			@Param("classId") Long classId);
+
+	/** Every attendance record of a class, for per-class calculations that would otherwise query per user. */
+	@EntityGraph(attributePaths = "trainingSession")
+	List<AttendanceRecord> findByTrainingSessionFapClassId(Long classId);
 }

@@ -18,12 +18,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assumptions.assumeThat;
 
 /**
- * Measures database round trips of the read paths the optimization plan targets (N+1 hot spots)
- * against the seeded data, and writes them to {@code target/query-baseline.txt}.
+ * Measures database round trips of the heavy read paths against the seeded data, writes them to
+ * {@code target/query-baseline.txt}, and fails when a path exceeds its budget (an N+1 regression).
  *
- * <p>These are measurements, not budgets: once a path is optimized its budget moves into that
- * module's own {@code *IT} as an assertion. Running the paths on Oracle also proves their queries
- * execute there.
+ * <p>Budgets are the optimized counts (docs/optimization-plan.md lists the before/after figures).
+ * They do not grow with the number of rows, so seed data changes should not break them.
  */
 class QueryBaselineIT extends AbstractOracleIT {
 
@@ -59,8 +58,9 @@ class QueryBaselineIT extends AbstractOracleIT {
 		Long userId = (Long) enrollment[0];
 		Long classId = (Long) enrollment[1];
 
-		record("myLearning.learningContent", measure(() -> myLearningService.learningContent(classId, userId, null)));
-		record("myLearning.progress", measure(() -> myLearningService.progress(classId, userId)));
+		// 23 and 15 before per-quiz lookups were grouped.
+		record("myLearning.learningContent", measure(() -> myLearningService.learningContent(classId, userId, null)), 12);
+		record("myLearning.progress", measure(() -> myLearningService.progress(classId, userId)), 10);
 	}
 
 	@Test
@@ -73,12 +73,13 @@ class QueryBaselineIT extends AbstractOracleIT {
 				""");
 		Long classId = (Long) row[0];
 
-		record("courseResult.list(results=" + row[1] + ")", measure(() -> courseResultService.list(classId)));
+		// 12 for 5 results (2 per result + 2) before children were read class-wide.
+		record("courseResult.list(results=" + row[1] + ")", measure(() -> courseResultService.list(classId)), 5);
 	}
 
 	@Test
 	void adminDashboard() {
-		record("adminDashboard.getDashboard", measure(() -> adminDashboardService.getDashboard()));
+		record("adminDashboard.getDashboard", measure(() -> adminDashboardService.getDashboard()), 16);
 	}
 
 	private Object[] first(String jpql) {
@@ -87,8 +88,9 @@ class QueryBaselineIT extends AbstractOracleIT {
 		return rows.get(0);
 	}
 
-	private static void record(String path, Measured<?> measured) {
+	private static void record(String path, Measured<?> measured, long statementBudget) {
 		assertThat(measured.result()).isNotNull();
 		RESULTS.put(path, measured.statements() + " | " + measured.entitiesLoaded());
+		assertThat(measured.statements()).as(path + " statements").isLessThanOrEqualTo(statementBudget);
 	}
 }

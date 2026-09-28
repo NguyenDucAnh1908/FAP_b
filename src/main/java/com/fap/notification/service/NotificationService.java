@@ -6,7 +6,6 @@ import com.fap.notification.dto.NotificationResponse;
 import com.fap.notification.entity.Notification;
 import com.fap.notification.mapper.NotificationMapper;
 import com.fap.notification.repository.NotificationRepository;
-import com.fap.user.entity.User;
 import com.fap.user.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -63,12 +62,15 @@ public class NotificationService {
 		return notificationMapper.toResponse(notification);
 	}
 
+	/**
+	 * Callers pass ids of users they just read (admins, trainers, registrants), often in a loop, so
+	 * the user is referenced by id instead of re-selected per notification; the foreign key still
+	 * rejects an unknown id at flush.
+	 */
 	@Transactional
 	public void create(Long userId, String title, String message) {
-		User user = userRepository.findById(userId)
-				.orElseThrow(() -> new NotFoundException("User not found"));
 		Notification notification = new Notification();
-		notification.setUser(user);
+		notification.setUser(userRepository.getReferenceById(userId));
 		notification.setTitle(title);
 		notification.setMessage(message);
 		notification.setRead(false);

@@ -10,7 +10,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -38,7 +37,12 @@ public class AuditLogService {
 		this.trustForwardHeaders = trustForwardHeaders;
 	}
 
-	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	/**
+	 * Joins the caller's transaction, so the audit row commits or rolls back with the change it
+	 * describes: the trail records what actually happened, and a request no longer holds a second
+	 * pooled connection for a nested transaction.
+	 */
+	@Transactional
 	public void record(String action, String entityType, Long entityId) {
 		AuditLog auditLog = new AuditLog();
 		auditLog.setUserId(currentUserId());

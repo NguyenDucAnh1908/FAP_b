@@ -29,7 +29,7 @@ import java.time.LocalDateTime;
 public class CourseResult {
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "course_results_seq")
-	@SequenceGenerator(name = "course_results_seq", sequenceName = "course_results_seq", allocationSize = 1)
+	@SequenceGenerator(name = "course_results_seq", sequenceName = "course_results_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

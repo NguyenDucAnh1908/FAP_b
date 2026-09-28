@@ -3,6 +3,7 @@ package com.fap.user.service;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.security.AuthorizationCache;
 import com.fap.common.api.PageRequestFactory;
 import com.fap.role.entity.Role;
 import com.fap.role.repository.RoleRepository;
@@ -34,18 +35,21 @@ public class UserService {
 	private final PasswordEncoder passwordEncoder;
 	private final UserMapper userMapper;
 	private final AuditLogService auditLogService;
+	private final AuthorizationCache authorizationCache;
 
 	public UserService(
 			UserRepository userRepository,
 			RoleRepository roleRepository,
 			PasswordEncoder passwordEncoder,
 			UserMapper userMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			AuthorizationCache authorizationCache) {
 		this.userRepository = userRepository;
 		this.roleRepository = roleRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.userMapper = userMapper;
 		this.auditLogService = auditLogService;
+		this.authorizationCache = authorizationCache;
 	}
 
 	@Transactional(readOnly = true)
@@ -148,6 +152,8 @@ public class UserService {
 		user.setRoles(roles);
 		user.setUpdatedAt(LocalDateTime.now());
 		auditLogService.record("UPDATE_USER", "user", user.getId());
+		// Email and roles are part of the cached token principal.
+		authorizationCache.invalidatePrincipalsAfterCommit();
 		return userMapper.toResponse(user);
 	}
 
@@ -165,6 +171,8 @@ public class UserService {
 		user.setStatus(status);
 		user.setUpdatedAt(LocalDateTime.now());
 		auditLogService.record("UPDATE_USER_STATUS:" + status.name(), "user", user.getId());
+		// A deactivated user must lose access on the next request, not when the cache expires.
+		authorizationCache.invalidatePrincipalsAfterCommit();
 		return userMapper.toResponse(user);
 	}
 

@@ -49,6 +49,12 @@ spring:
       hibernate.default_batch_fetch_size: ${JPA_BATCH_FETCH_SIZE:50}
       # Oracle's driver fetches 10 rows per round trip by default.
       hibernate.jdbc.fetch_size: ${JPA_FETCH_SIZE:100}
+      # Pooled sequence ids (allocationSize > 1) make Hibernate prepare a global temporary table per
+      # entity for HQL INSERT ... SELECT, which it would CREATE at startup: DDL outside Flyway, and a
+      # blocking connection attempt per entity where no database is reachable. The application
+      # issues no HQL inserts, so the tables are never created.
+      hibernate.query.mutation_strategy.global_temporary.create_tables: false
+      hibernate.query.mutation_strategy.global_temporary.drop_tables: false
   servlet:
     multipart:
       # Container-level guard. FileValidator re-checks the size so clients get a documented
@@ -108,6 +114,14 @@ app:
     from: ${MAIL_FROM:no-reply@fap.local}
   password-reset:
     ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:15}
+  security:
+    # How long a token owner's principal and each role's permissions are reused before re-reading
+    # the database. User, role and permission changes invalidate immediately on this instance; the
+    # TTL bounds staleness for changes made elsewhere (another instance, manual SQL).
+    authorization-cache-ttl: ${AUTHORIZATION_CACHE_TTL:60s}
+  dashboard:
+    # The admin dashboard is shared by all admins for this long; its generatedAt shows the age.
+    cache-ttl: ${DASHBOARD_CACHE_TTL:30s}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     # Bounded so a source rotating addresses cannot grow the bucket map without limit.

@@ -20,6 +20,9 @@ app:
     secret: it_only_jwt_secret_not_used_outside_integration_tests
   rate-limit:
     enabled: false
+  dashboard:
+    # Measure and verify the uncached build; caching is plain Caffeine and adds nothing to test here.
+    cache-ttl: 0s
 
 logging:
   level:

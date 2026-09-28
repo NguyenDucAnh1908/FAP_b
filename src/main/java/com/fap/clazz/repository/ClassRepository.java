@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
@@ -21,6 +22,16 @@ public interface ClassRepository extends JpaRepository<FapClass, Long> {
 	boolean existsByClassCodeIgnoreCase(String classCode);
 
 	long countByStatus(ClassStatus status);
+
+	interface StatusCount {
+		ClassStatus getStatus();
+
+		Long getTotal();
+	}
+
+	/** Row count per status in one query, for dashboards (replaces one count query per status). */
+	@Query("select c.status as status, count(c) as total from FapClass c group by c.status")
+	List<StatusCount> countGroupedByStatus();
 
 	@EntityGraph(attributePaths = "trainingProgram")
 	Optional<FapClass> findWithTrainingProgramById(Long id);

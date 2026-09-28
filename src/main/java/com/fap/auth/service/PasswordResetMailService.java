@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.mail.SimpleMailMessage;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +35,7 @@ public class PasswordResetMailService {
 		this.logOtpWhenMailDisabled = environment.acceptsProfiles(Profiles.of("local"));
 	}
 
+	@Async
 	public void sendPasswordResetOtp(User user, String otp, long ttlMinutes) {
 		JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
 		if (!mailEnabled || mailSender == null) {

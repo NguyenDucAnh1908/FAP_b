@@ -37,6 +37,8 @@ import com.fap.training.repository.TrainingRegistrationRepository;
 import com.fap.training.repository.TrainingSessionRepository;
 import com.fap.user.entity.User;
 import org.junit.jupiter.api.Test;
+import com.fap.result.entity.CourseResultQuiz;
+import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -48,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -125,21 +128,19 @@ class CourseResultServiceTest {
 		when(classRepository.findWithTrainingProgramById(CLASS_ID)).thenReturn(Optional.of(fapClass));
 		when(completionQuizRepository.findByFapClassIdOrderByIdAsc(CLASS_ID)).thenReturn(List.of(requiredQuiz));
 		when(enrollmentRepository.findByFapClassIdAndStatusInOrderByCreatedAtAscIdAsc(anyLong(), any())).thenReturn(List.of(enrollment));
-		when(resultRepository.findByClassEnrollmentId(enrollment.getId())).thenReturn(Optional.empty());
+		when(resultRepository.findByFapClassId(CLASS_ID)).thenReturn(List.of());
 		when(resultRepository.save(any(CourseResult.class))).thenAnswer(invocation -> {
 			CourseResult result = invocation.getArgument(0);
 			result.setId(500L);
 			savedResult.set(result);
 			return result;
 		});
-		when(registrationRepository.findMineByClassId(anyLong(), anyLong(), any())).thenReturn(List.of(registration));
-		when(attendanceRepository.findByTrainingSessionFapClassIdAndUserId(CLASS_ID, USER_ID)).thenReturn(List.of(attendance));
-		when(quizAttemptRepository.findFirstByQuizIdAndUserIdAndStatusOrderByScoreDescIdDesc(
-				quiz.getId(), USER_ID, QuizAttemptStatus.Submitted)).thenReturn(Optional.of(attempt));
+		when(registrationRepository.findByClassIdAndStatusIn(eq(CLASS_ID), any())).thenReturn(List.of(registration));
+		when(attendanceRepository.findByTrainingSessionFapClassId(CLASS_ID)).thenReturn(List.of(attendance));
+		when(quizAttemptRepository.findSubmittedForClassOrderByScoreDesc(CLASS_ID, List.of(quiz.getId())))
+				.thenReturn(List.of(scored(attempt.getId(), quiz.getId(), USER_ID, attempt.getScore())));
 		when(resultRepository.findByFapClassIdOrderByClassEnrollmentUserFullNameAsc(CLASS_ID))
 				.thenAnswer(invocation -> List.of(savedResult.get()));
-		when(resultQuizRepository.findByCourseResultIdOrderByIdAsc(500L)).thenReturn(List.of());
-		when(adjustmentRepository.findByCourseResultIdOrderByAdjustedAtDescIdDesc(500L)).thenReturn(List.of());
 
 		ClassCourseResultsResponse response = service.calculate(CLASS_ID, ACTOR_ID);
 
@@ -148,6 +149,55 @@ class CourseResultServiceTest {
 		assertThat(result.attendanceRate()).isEqualByComparingTo("100.00");
 		assertThat(result.attendedSessions()).isEqualTo(1);
 		assertThat(result.passedQuizCount()).isEqualTo(1);
+	}
+
+	@Test
+	void usesTheFirstRankedAttemptPerUserAndKeepsWithdrawnSnapshots() {
+		FapClass fapClass = givenClass(ClassStatus.Active);
+		ClassEnrollment active = givenEnrollment(fapClass, ClassEnrollmentStatus.Enrolled);
+		ClassEnrollment withdrawn = givenEnrollment(fapClass, ClassEnrollmentStatus.Withdrawn);
+		withdrawn.setId(201L);
+		withdrawn.getUser().setId(21L);
+		Quiz quiz = new Quiz();
+		quiz.setId(300L);
+		ClassCompletionQuiz requiredQuiz = new ClassCompletionQuiz();
+		requiredQuiz.setFapClass(fapClass);
+		requiredQuiz.setQuiz(quiz);
+		requiredQuiz.setPassingScore(70);
+		CourseResult activeResult = givenResult(fapClass, CourseResultStatus.InProgress);
+		activeResult.setClassEnrollment(active);
+		CourseResult withdrawnResult = givenResult(fapClass, CourseResultStatus.InProgress);
+		withdrawnResult.setId(501L);
+		withdrawnResult.setClassEnrollment(withdrawn);
+
+		when(classRepository.findWithTrainingProgramByIdForUpdate(CLASS_ID)).thenReturn(Optional.of(fapClass));
+		when(classRepository.findWithTrainingProgramById(CLASS_ID)).thenReturn(Optional.of(fapClass));
+		when(completionQuizRepository.findByFapClassIdOrderByIdAsc(CLASS_ID)).thenReturn(List.of(requiredQuiz));
+		when(enrollmentRepository.findByFapClassIdAndStatusInOrderByCreatedAtAscIdAsc(anyLong(), any()))
+				.thenReturn(List.of(active, withdrawn));
+		when(resultRepository.findByFapClassId(CLASS_ID)).thenReturn(List.of(activeResult, withdrawnResult));
+		// Repository order is best first; later rows for the same quiz and user are ignored.
+		when(quizAttemptRepository.findSubmittedForClassOrderByScoreDesc(CLASS_ID, List.of(300L))).thenReturn(List.of(
+				scored(402L, 300L, USER_ID, 65),
+				scored(401L, 300L, USER_ID, 90),
+				scored(403L, 300L, 21L, 100)));
+		when(resultRepository.findByFapClassIdOrderByClassEnrollmentUserFullNameAsc(CLASS_ID))
+				.thenReturn(List.of(activeResult, withdrawnResult));
+
+		service.calculate(CLASS_ID, ACTOR_ID);
+
+		ArgumentCaptor<List<CourseResultQuiz>> snapshots = ArgumentCaptor.captor();
+		verify(resultQuizRepository).saveAll(snapshots.capture());
+		assertThat(snapshots.getValue()).singleElement().satisfies(snapshot -> {
+			assertThat(snapshot.getCourseResult()).isSameAs(activeResult);
+			assertThat(snapshot.getBestAttemptId()).isEqualTo(402L);
+			assertThat(snapshot.getBestScore()).isEqualTo(65);
+			assertThat(snapshot.isPassed()).isFalse();
+		});
+		verify(resultQuizRepository).deleteForClassEnrollmentStatuses(
+				CLASS_ID, List.of(ClassEnrollmentStatus.Enrolled, ClassEnrollmentStatus.Completed));
+		assertThat(withdrawnResult.getCalculatedStatus()).isEqualTo(CourseResultStatus.Withdrawn);
+		assertThat(activeResult.getCalculatedStatus()).isEqualTo(CourseResultStatus.Failed);
 	}
 
 	@Test
@@ -200,6 +250,30 @@ class CourseResultServiceTest {
 		assertThat(response.status()).isEqualTo(CourseResultStatus.Passed);
 		assertThat(response.published()).isFalse();
 		verify(adjustmentRepository).save(any());
+	}
+
+	private static QuizAttemptRepository.ScoredAttempt scored(Long id, Long quizId, Long userId, Integer score) {
+		return new QuizAttemptRepository.ScoredAttempt() {
+			@Override
+			public Long getId() {
+				return id;
+			}
+
+			@Override
+			public Long getQuizId() {
+				return quizId;
+			}
+
+			@Override
+			public Long getUserId() {
+				return userId;
+			}
+
+			@Override
+			public Integer getScore() {
+				return score;
+			}
+		};
 	}
 
 	private FapClass givenClass(ClassStatus status) {

@@ -49,6 +49,12 @@ Use the health probes as follows:
 Both probe URLs are public and return only health status. Other Actuator endpoints remain
 authenticated.
 
+Caches (per instance, Caffeine): `AUTHORIZATION_CACHE_TTL` (token principal and role permissions,
+default `60s`, invalidated on user/role/permission changes) and `DASHBOARD_CACHE_TTL` (admin
+dashboard, default `30s`). `MAX_UPLOAD_SIZE` bounds both the multipart container and the upload
+validator. Material uploads and downloads stream between the request and the Oracle BLOB; downloads
+are spooled through a temporary file so the database connection is released before the client reads.
+
 JPA batching is environment-tunable: `JPA_BATCH_SIZE` (JDBC insert/update batch, default `50`),
 `JPA_BATCH_FETCH_SIZE` (lazy association batch fetch, default `50`) and `JPA_FETCH_SIZE` (rows per
 JDBC round trip, default `100`). JSON responses of at least 2 KB are gzip-compressed; set

@@ -1,6 +1,6 @@
 # Kế hoạch tối ưu hệ thống
 
-Branch: `feature/optimization-phase-0-1` (tách từ `feature/production-readiness-round3`).
+Branch: `feature/optimization-phase-0-1` (tách từ `feature/production-readiness-round3`), gồm giai đoạn 0–4.
 Nguồn: audit ngày 2026-09-28 (DB/JPA, cấu trúc code, cấu hình/test/build). Không thêm scope ngoài
 `docs/07_scope_freeze.md`.
 
@@ -8,25 +8,25 @@ Nguồn: audit ngày 2026-09-28 (DB/JPA, cấu trúc code, cấu hình/test/buil
 
 - ✅ xong và đã kiểm chứng
 - ⬜ chưa làm
-- ❓ chờ quyết định
 
 | Giai đoạn | Nội dung | Trạng thái |
 |---|---|---|
 | 0 | Lưới an toàn: integration test trên Oracle thật, JaCoCo, đo baseline | ✅ |
 | 1 | Quick wins: batching, index, sửa query lỗi/nặng, config, 2 lỗi bảo mật nhỏ | ✅ |
-| 2 | Hot path mỗi request: cache permission, audit/notification/mail sau commit | ⬜ ❓ |
-| 3 | Khử N+1 ở service nặng (CourseResult, MyLearning, ClassEnrollment, dashboard), pooled sequence | ⬜ ❓ |
-| 4 | File: stream download, clone BLOB phía DB, StorageService | ⬜ ❓ |
+| 2 | Hot path mỗi request: cache principal/permission, audit cùng transaction, mail sau commit | ✅ |
+| 3 | Khử N+1 ở service nặng (CourseResult, MyLearning, ClassEnrollment, dashboard), pooled sequence | ✅ |
+| 4 | File: stream upload/download, clone BLOB phía DB (giữ BLOB trong Oracle) | ✅ |
 | 5 | Tái cấu trúc: tách god service, gom logic trùng, i18n, code chết | ⬜ |
 | 6 | Build/CI/docs: loại `db/seed` khỏi jar prod, build-info, dọn `docs/.claude` | ⬜ |
 
-## Quyết định cần chốt trước Giai đoạn 2–4
+## Quyết định đã chốt (2026-09-28)
 
-1. **Audit khi transaction rollback**: hiện `REQUIRES_NEW` nên thao tác thất bại vẫn có log. Chuyển
-   sang ghi sau commit thì mất log thao tác thất bại.
-2. **Lưu file**: giữ BLOB trong Oracle (chỉ tối ưu streaming) hay chuyển object storage.
-3. **Pooled sequence** (`INCREMENT BY 50`): id sẽ nhảy cóc.
-4. **Chạy nhiều instance?** Nếu có, cache permission và rate limit cần Redis hoặc TTL ngắn.
+1. **Audit** ghi cùng transaction với nghiệp vụ: chỉ log thao tác đã commit; thao tác bị rollback
+   không còn log (trước đây có, do `REQUIRES_NEW`).
+2. **File** giữ BLOB trong Oracle, tối ưu streaming. Không thêm object storage.
+3. **Pooled sequence** chấp nhận id nhảy cóc.
+4. **Một instance**: cache Caffeine trong process, TTL ngắn + xoá ngay khi đổi dữ liệu. Nếu sau này
+   chạy nhiều instance, thay đổi quyền có hiệu lực chậm tối đa bằng TTL ở instance khác.
 
 ## Giai đoạn 0 — đã giao
 
@@ -61,22 +61,65 @@ Nguồn: audit ngày 2026-09-28 (DB/JPA, cấu trúc code, cấu hình/test/buil
 | Audit IP | Tin `X-Forwarded-For` của client → giả mạo được | Chỉ tin khi `app.rate-limit.trust-forward-headers=true` (`AuditLogServiceTest`) |
 | OTP khi mail tắt | Ghi OTP ra log ở mọi profile | Chỉ profile `local` (`PasswordResetMailServiceTest`) |
 
-## Baseline còn lại cho Giai đoạn 3
+## Giai đoạn 2 — đã giao
 
-Đo bằng `QueryBaselineIT` trên dữ liệu seed local (statements | entities):
+| Hạng mục | Trước | Sau |
+|---|---|---|
+| Principal của JWT | `loadUserByUsername` (user + roles) mỗi request | `AuthorizationCache` Caffeine, TTL `AUTHORIZATION_CACHE_TTL` (60 s), xoá sau commit khi user đổi |
+| Permission | `findByRoleIdIn` mỗi `@PreAuthorize` | Cache theo role, xoá sau commit khi đổi ma trận quyền |
+| JWT filter | Parse token 2 lần; user bị khoá vẫn dùng token cũ tới hết hạn | Parse 1 lần; kiểm tra `isEnabled()` (`JwtAuthenticationFilterTest`) |
+| Audit | `REQUIRES_NEW`: giữ 2 kết nối/request, log cả thao tác rollback | Cùng transaction (`REQUIRED`) |
+| Mail OTP | Gửi SMTP trong transaction; email tồn tại trả lời chậm hơn (lộ tài khoản qua timing) | `@Async` sau commit, dùng `AsyncConfig` vốn có sẵn |
+| Notification | `findById(user)` mỗi người nhận | `getReferenceById` |
 
-| Read path | Statements | Entities |
-|---|---:|---:|
-| `adminDashboard.getDashboard` | 27 | 5 |
-| `courseResult.list` (5 kết quả) | 12 | 17 |
-| `myLearning.learningContent` | 23 | 51 |
-| `myLearning.progress` | 15 | 47 |
+Password login vẫn đọc DB (không cache), nên đổi mật khẩu có hiệu lực ngay; bản cache không chứa hash.
 
-Batch fetch không làm giảm các số này vì N+1 ở đây là lời gọi repository trong vòng lặp, không phải
-lazy loading. Khi tối ưu path nào, chuyển số của path đó thành assertion trong `*IT` của module.
+## Giai đoạn 3 — đã giao
+
+| Read path (seed local) | Statements trước | Sau | Cách |
+|---|---:|---:|---|
+| `adminDashboard.getDashboard` | 27 | 16 (0 khi cache nóng) | `group by status` + cache `DASHBOARD_CACHE_TTL` (30 s); cache hit không mượn kết nối |
+| `courseResult.list` (5 kết quả) | 12 (2N+2) | 4 (hằng số) | Snapshot quiz và adjustment đọc theo lớp |
+| `courseResult.calculate` | ~6 + 2 × số quiz bắt buộc, mỗi học viên (+ `list` 2N+2) | 13 cho cả lớp (seed: 3 kết quả), kể cả ghi và `list`; không tăng theo số học viên | Đọc kết quả, đăng ký, điểm danh, bài làm tốt nhất (projection, không CLOB) một lần; bulk delete snapshot; ghi theo batch |
+| `myLearning.learningContent` | 23 | 11 | Thống kê bài làm + số câu hỏi theo nhóm |
+| `myLearning.progress` | 15 | 9 | Như trên + điểm danh `group by status` |
+| Danh sách tài liệu | `existsById` mỗi tài liệu | 0 | Cờ `contentStored` là `@Formula` EXISTS theo khoá chính |
+| Đồng bộ đăng ký auto-enroll | 1 lookup mỗi học viên / mỗi buổi | 1 lookup cho cả buổi / cả học viên | Prefetch + `saveAll` |
+
+Các ngân sách trên là assertion trong `QueryBaselineIT`, `CourseResultCalculationIT`, `AdminDashboardIT`.
+Truy vấn theo lô lọc theo lớp bằng subquery (không dùng IN-list id) để tránh giới hạn 1000 phần tử
+của Oracle. Thứ tự "bài làm tốt nhất" giữ nguyên ngữ nghĩa cũ (`score DESC` của Oracle xếp NULL trước).
+
+**Pooled sequence (V33):** 29 sequence `INCREMENT BY 50 CACHE 20`, entity `allocationSize = 50`.
+`hibernate.query.mutation_strategy.global_temporary.create_tables=false`: với pooled id, Hibernate 6
+chuẩn bị bảng tạm `HT_*` cho HQL `INSERT ... SELECT` và sẽ tạo chúng lúc khởi động (DDL ngoài Flyway,
+và treo 30 s/entity khi không có DB). Ứng dụng không dùng HQL insert.
+
+> Sau V33, code cũ (`allocationSize = 1`) không khởi động được trên schema đã migrate (Hibernate từ
+> chối khi increment lệch). Deploy migration và code cùng lúc.
+
+## Giai đoạn 4 — đã giao
+
+| Hạng mục | Trước | Sau |
+|---|---|---|
+| Upload tài liệu | `file.getBytes()` (tới 20 MB trên heap) | `setBinaryStream` từ file tạm của multipart vào BLOB |
+| Download tài liệu | `byte[]` + `ByteArrayResource`, kết nối DB giữ trong lúc đọc | Stream BLOB ra file tạm trong transaction, trả `InputStreamResource`, file tự xoá khi đóng stream |
+| Clone phiên bản syllabus | Tải mọi BLOB rồi `Arrays.copyOf` (2 bản trên heap) | `INSERT ... SELECT` trong Oracle, không byte nào qua JVM |
+| Update full syllabus | 2 bản mỗi BLOB | 1 bản (bỏ `copyOf`); vẫn giữ trong RAM vì dòng cũ bị xoá trước khi dòng mới tồn tại |
+| Giới hạn kích thước | `FileValidator` hardcode 20 MB | Lấy từ `spring.servlet.multipart.max-file-size` (`MAX_UPLOAD_SIZE`) |
+
+Avatar (≤ 2 MB) giữ nguyên `byte[]`. Round-trip byte chính xác được kiểm chứng trên Oracle bởi
+`MaterialContentStorageIT` (upload → download, clone → download).
+
+## Còn lại
+
+- Giai đoạn 5 (tái cấu trúc) và 6 (build/CI/docs) như bảng trạng thái.
+- Update full syllabus vẫn giữ BLOB của tài liệu được giữ lại trong RAM; bỏ hẳn cần đổi cách xoá/tạo
+  lại cây outline (giữ nguyên material thay vì xoá rồi tạo lại).
 
 ## Kiểm chứng
 
-- `./mvnw test`: 306 test, 0 lỗi.
-- `./mvnw verify` với `FAP_IT_DB_URL` trỏ Oracle XE 21 local: 14 IT, 0 lỗi.
+- `./mvnw test`: 311 test, 0 lỗi.
+- `./mvnw verify` với `FAP_IT_DB_URL` trỏ Oracle XE 21 local: 21 IT, 0 lỗi; không có bảng `HT_*`
+  nào được tạo; V32, V33 đã áp.
 - Nhánh Testcontainers (Docker) chưa chạy trên máy dev (không có Docker); CI sẽ chạy nhánh này.

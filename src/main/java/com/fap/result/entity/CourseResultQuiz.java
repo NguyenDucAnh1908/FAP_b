@@ -21,7 +21,7 @@ import lombok.Setter;
 public class CourseResultQuiz {
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "course_result_quizzes_seq")
-	@SequenceGenerator(name = "course_result_quizzes_seq", sequenceName = "course_result_quizzes_seq", allocationSize = 1)
+	@SequenceGenerator(name = "course_result_quizzes_seq", sequenceName = "course_result_quizzes_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

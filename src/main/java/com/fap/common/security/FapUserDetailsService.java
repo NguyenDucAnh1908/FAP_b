@@ -4,7 +4,6 @@ import com.fap.user.entity.User;
 import com.fap.user.enums.UserStatus;
 import com.fap.user.repository.UserRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -18,13 +17,24 @@ import java.util.stream.Collectors;
 public class FapUserDetailsService implements UserDetailsService {
 
 	private final UserRepository userRepository;
+	private final AuthorizationCache authorizationCache;
 
-	public FapUserDetailsService(UserRepository userRepository) {
+	public FapUserDetailsService(UserRepository userRepository, AuthorizationCache authorizationCache) {
 		this.userRepository = userRepository;
+		this.authorizationCache = authorizationCache;
+	}
+
+	/**
+	 * Principal for an already-verified access token, served from {@link AuthorizationCache}.
+	 * Password login keeps using the uncached {@link #loadUserByUsername}, so a changed password
+	 * is never checked against a cached hash; the cached copy carries no hash at all.
+	 */
+	public FapUserPrincipal loadPrincipalForToken(String email) {
+		return authorizationCache.principal(email, key -> withoutPassword(loadUserByUsername(key)));
 	}
 
 	@Override
-	public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+	public FapUserPrincipal loadUserByUsername(String username) throws UsernameNotFoundException {
 		User user = userRepository.findByEmailIgnoreCase(username)
 				.orElseThrow(() -> new UsernameNotFoundException("User not found"));
 		Set<String> roles = user.getRoles().stream()
@@ -42,5 +52,15 @@ public class FapUserDetailsService implements UserDetailsService {
 				roles,
 				user.getStatus() == UserStatus.Active,
 				authorities);
+	}
+
+	private static FapUserPrincipal withoutPassword(FapUserPrincipal principal) {
+		return new FapUserPrincipal(
+				principal.id(),
+				principal.email(),
+				"",
+				principal.roles(),
+				principal.enabled(),
+				principal.authorities());
 	}
 }

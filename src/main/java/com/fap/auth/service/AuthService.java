@@ -15,6 +15,7 @@ import com.fap.common.exception.UnauthorizedException;
 import com.fap.common.metrics.DomainMetrics;
 import com.fap.common.security.FapUserPrincipal;
 import com.fap.common.security.JwtService;
+import com.fap.common.util.AfterCommit;
 import com.fap.user.entity.User;
 import com.fap.user.mapper.UserMapper;
 import com.fap.user.repository.UserRepository;
@@ -140,7 +141,10 @@ public class AuthService {
 					token.setExpiresAt(now.plusMinutes(passwordResetTtlMinutes));
 					token.setCreatedAt(now);
 					passwordResetTokenRepository.save(token);
-					passwordResetMailService.sendPasswordResetOtp(user, otp, passwordResetTtlMinutes);
+					// After commit, so the OTP is only mailed once it is redeemable; asynchronously, so
+					// the SMTP round trip neither holds the transaction open nor makes a known email
+					// measurably slower to answer than an unknown one.
+					AfterCommit.run(() -> passwordResetMailService.sendPasswordResetOtp(user, otp, passwordResetTtlMinutes));
 				});
 	}
 

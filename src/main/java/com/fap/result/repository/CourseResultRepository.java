@@ -20,6 +20,8 @@ public interface CourseResultRepository extends JpaRepository<CourseResult, Long
 
 	Optional<CourseResult> findByClassEnrollmentId(Long enrollmentId);
 
+	List<CourseResult> findByFapClassId(Long classId);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@EntityGraph(attributePaths = {"fapClass", "classEnrollment", "classEnrollment.user"})
 	@Query("select r from CourseResult r where r.fapClass.id = :classId and r.classEnrollment.user.id = :userId")

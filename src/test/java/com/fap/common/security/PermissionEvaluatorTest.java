@@ -1,25 +1,30 @@
 package com.fap.common.security;
 
 import com.fap.role.entity.Permission;
+import com.fap.role.entity.Role;
 import com.fap.role.enums.PermissionLevel;
 import com.fap.role.repository.PermissionRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class PermissionEvaluatorTest {
 
 	private final PermissionRepository permissionRepository = mock(PermissionRepository.class);
-	private final PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository);
+	private final AuthorizationCache authorizationCache = new AuthorizationCache(permissionRepository, Duration.ofMinutes(1));
+	private final PermissionEvaluator evaluator = new PermissionEvaluator(authorizationCache);
 
 	@Test
 	void superAdminCanPerformAnyAction() {
@@ -45,10 +50,8 @@ class PermissionEvaluatorTest {
 
 	@Test
 	void evaluatesStoredLevelByAction() {
-		Permission permission = new Permission();
-		permission.setResource("user");
-		permission.setPermissionLevel(PermissionLevel.modify);
-		when(permissionRepository.findByRoleIdIn(anySet())).thenReturn(List.of(permission));
+		when(permissionRepository.findByRoleIdIn(anyCollection()))
+				.thenReturn(List.of(permission(10L, "user", PermissionLevel.modify)));
 		FapUserPrincipal principal = new FapUserPrincipal(
 				2L,
 				"manager@example.com",
@@ -67,10 +70,8 @@ class PermissionEvaluatorTest {
 
 	@Test
 	void evaluatesStoredLevelByRequiredPermissionLevel() {
-		Permission permission = new Permission();
-		permission.setResource("user");
-		permission.setPermissionLevel(PermissionLevel.modify);
-		when(permissionRepository.findByRoleIdIn(anySet())).thenReturn(List.of(permission));
+		when(permissionRepository.findByRoleIdIn(anyCollection()))
+				.thenReturn(List.of(permission(10L, "user", PermissionLevel.modify)));
 		FapUserPrincipal principal = new FapUserPrincipal(
 				2L,
 				"manager@example.com",
@@ -91,7 +92,7 @@ class PermissionEvaluatorTest {
 
 	@Test
 	void deniesWhenNoMatchingPermissionExists() {
-		when(permissionRepository.findByRoleIdIn(anySet())).thenReturn(List.of());
+		when(permissionRepository.findByRoleIdIn(anyCollection())).thenReturn(List.of());
 		FapUserPrincipal principal = new FapUserPrincipal(
 				2L,
 				"trainer@example.com",
@@ -105,5 +106,53 @@ class PermissionEvaluatorTest {
 				principal.getAuthorities());
 
 		assertThat(evaluator.hasAction(authentication, "class", "read")).isFalse();
+	}
+
+	@Test
+	void permissionsAreCachedPerRoleUntilInvalidated() {
+		when(permissionRepository.findByRoleIdIn(anyCollection()))
+				.thenReturn(List.of(permission(10L, "user", PermissionLevel.view)))
+				.thenReturn(List.of(permission(10L, "user", PermissionLevel.modify)));
+		UsernamePasswordAuthenticationToken authentication = classAdminWithRole(10L);
+
+		assertThat(evaluator.hasAction(authentication, "user", "update")).isFalse();
+		assertThat(evaluator.hasAction(authentication, "user", "read")).isTrue();
+		verify(permissionRepository, times(1)).findByRoleIdIn(anyCollection());
+
+		authorizationCache.invalidatePermissionsAfterCommit();
+
+		assertThat(evaluator.hasAction(authentication, "user", "update")).isTrue();
+		verify(permissionRepository, times(2)).findByRoleIdIn(anyCollection());
+	}
+
+	@Test
+	void roleWithoutPermissionsIsCachedAsEmpty() {
+		when(permissionRepository.findByRoleIdIn(anyCollection())).thenReturn(List.of());
+		UsernamePasswordAuthenticationToken authentication = classAdminWithRole(12L);
+
+		assertThat(evaluator.hasAction(authentication, "class", "read")).isFalse();
+		assertThat(evaluator.hasAction(authentication, "class", "read")).isFalse();
+		verify(permissionRepository, times(1)).findByRoleIdIn(anyCollection());
+	}
+
+	private static UsernamePasswordAuthenticationToken classAdminWithRole(Long roleId) {
+		FapUserPrincipal principal = new FapUserPrincipal(
+				3L,
+				"class-admin@example.com",
+				"",
+				Set.of("Class Admin"),
+				true,
+				List.of(new SimpleGrantedAuthority("ROLE_ID_" + roleId)));
+		return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+	}
+
+	private static Permission permission(Long roleId, String resource, PermissionLevel level) {
+		Role role = new Role();
+		role.setId(roleId);
+		Permission permission = new Permission();
+		permission.setRole(role);
+		permission.setResource(resource);
+		permission.setPermissionLevel(level);
+		return permission;
 	}
 }

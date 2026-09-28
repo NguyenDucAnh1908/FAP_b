@@ -17,6 +17,16 @@ public interface QuizRepository extends JpaRepository<Quiz, Long> {
 
 	long countByStatus(QuizStatus status);
 
+	interface StatusCount {
+		QuizStatus getStatus();
+
+		Long getTotal();
+	}
+
+	/** Row count per status in one query, for dashboards (replaces one count query per status). */
+	@Query("select q.status as status, count(q) as total from Quiz q group by q.status")
+	List<StatusCount> countGroupedByStatus();
+
 	@Query(
 			value = """
 					select *

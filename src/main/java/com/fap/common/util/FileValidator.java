@@ -1,7 +1,10 @@
 package com.fap.common.util;
 
 import com.fap.common.exception.BadRequestException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Set;
@@ -19,7 +22,7 @@ public class FileValidator {
 	/** Matches the {@code file_name VARCHAR2(255)} column on {@code material_files}. */
 	public static final int MAX_FILE_NAME_LENGTH = 255;
 
-	private static final long MAX_FILE_SIZE_BYTES = 20L * 1024 * 1024;
+	private static final DataSize DEFAULT_MAX_FILE_SIZE = DataSize.ofMegabytes(20);
 
 	/** Control characters plus the characters Windows and Oracle both dislike in a file name. */
 	private static final Pattern ILLEGAL_FILE_NAME_CHARS = Pattern.compile("[\\p{Cntrl}<>:\"|?*/\\\\]");
@@ -38,22 +41,37 @@ public class FileValidator {
 			"image/png",
 			"image/jpeg");
 
+	private final long maxFileSizeBytes;
+
+	public FileValidator() {
+		this(DEFAULT_MAX_FILE_SIZE);
+	}
+
+	/**
+	 * Uses the container's multipart limit, so raising {@code MAX_UPLOAD_SIZE} raises both checks
+	 * instead of the container accepting files this validator then rejects.
+	 */
+	@Autowired
+	public FileValidator(@Value("${spring.servlet.multipart.max-file-size:20MB}") DataSize maxFileSize) {
+		this.maxFileSizeBytes = maxFileSize.toBytes();
+	}
+
 	public boolean isPresent(MultipartFile file) {
 		return file != null && !file.isEmpty();
 	}
 
 	/**
 	 * Rejects anything that must not reach storage. Callers should treat a successful return as
-	 * permission to read {@code file.getBytes()}.
+	 * permission to read the file's content.
 	 */
 	public void validateUpload(MultipartFile file) {
 		if (!isPresent(file)) {
 			throw new BadRequestException("FILE_REQUIRED", "A non-empty file is required");
 		}
-		if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+		if (file.getSize() > maxFileSizeBytes) {
 			throw new BadRequestException(
 					"FILE_TOO_LARGE",
-					"File exceeds the maximum allowed size of " + (MAX_FILE_SIZE_BYTES / (1024 * 1024)) + "MB");
+					"File exceeds the maximum allowed size of " + DataSize.ofBytes(maxFileSizeBytes).toMegabytes() + "MB");
 		}
 		String contentType = file.getContentType();
 		if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {

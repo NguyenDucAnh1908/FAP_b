@@ -4,16 +4,10 @@ import com.fap.syllabus.dto.AssignedMaterialFileResponse;
 import com.fap.syllabus.dto.MaterialFileResponse;
 import com.fap.syllabus.entity.MaterialFile;
 import com.fap.syllabus.entity.Syllabus;
-import com.fap.syllabus.repository.MaterialFileContentRepository;
 import org.springframework.stereotype.Component;
 
 @Component
 public class MaterialFileMapper {
-	private final MaterialFileContentRepository materialFileContentRepository;
-
-	public MaterialFileMapper(MaterialFileContentRepository materialFileContentRepository) {
-		this.materialFileContentRepository = materialFileContentRepository;
-	}
 
 	public MaterialFileResponse toResponse(MaterialFile materialFile) {
 		return new MaterialFileResponse(
@@ -25,7 +19,7 @@ public class MaterialFileMapper {
 				materialFile.getContentType(),
 				materialFile.getUploadedBy(),
 				materialFile.getUploadedAt(),
-				materialFileContentRepository.existsById(materialFile.getId()));
+				materialFile.isContentStored());
 	}
 
 	public AssignedMaterialFileResponse toAssignedResponse(MaterialFile materialFile) {
@@ -43,6 +37,6 @@ public class MaterialFileMapper {
 				materialFile.getContentType(),
 				materialFile.getUploadedBy(),
 				materialFile.getUploadedAt(),
-				materialFileContentRepository.existsById(materialFile.getId()));
+				materialFile.isContentStored());
 	}
 }

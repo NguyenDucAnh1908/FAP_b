@@ -2,6 +2,7 @@ package com.fap.role.service;
 
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.security.AuthorizationCache;
 import com.fap.role.dto.PermissionResponse;
 import com.fap.role.dto.UpdatePermissionMatrixRequest;
 import com.fap.role.dto.UpdatePermissionRequest;
@@ -30,11 +31,13 @@ class RoleServiceTest {
 	private final PermissionRepository permissionRepository = mock(PermissionRepository.class);
 	private final RoleMapper roleMapper = mock(RoleMapper.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
+	private final AuthorizationCache authorizationCache = mock(AuthorizationCache.class);
 	private final RoleService roleService = new RoleService(
 			roleRepository,
 			permissionRepository,
 			roleMapper,
-			auditLogService);
+			auditLogService,
+			authorizationCache);
 
 	@Test
 	void permissionMatrixAlwaysReportsFullAccessForSuperAdmin() {

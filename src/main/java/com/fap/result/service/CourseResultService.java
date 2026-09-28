@@ -13,8 +13,6 @@ import com.fap.common.exception.NotFoundException;
 import com.fap.common.i18n.MessageService;
 import com.fap.notification.service.NotificationService;
 import com.fap.quiz.entity.Quiz;
-import com.fap.quiz.entity.QuizAttempt;
-import com.fap.quiz.enums.QuizAttemptStatus;
 import com.fap.quiz.enums.QuizStatus;
 import com.fap.quiz.repository.QuizAssignmentRepository;
 import com.fap.quiz.repository.QuizAttemptRepository;
@@ -53,12 +51,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class CourseResultService {
@@ -66,6 +67,9 @@ public class CourseResultService {
 			ClassEnrollmentStatus.Enrolled,
 			ClassEnrollmentStatus.Completed,
 			ClassEnrollmentStatus.Withdrawn);
+	private static final Collection<ClassEnrollmentStatus> RECALCULATED_ENROLLMENT_STATUSES = List.of(
+			ClassEnrollmentStatus.Enrolled,
+			ClassEnrollmentStatus.Completed);
 	private static final Collection<TrainingRegistrationStatus> ATTENDANCE_REGISTRATION_STATUSES = List.of(
 			TrainingRegistrationStatus.Registered,
 			TrainingRegistrationStatus.Completed);
@@ -167,9 +171,19 @@ public class CourseResultService {
 	@Transactional(readOnly = true)
 	public ClassCourseResultsResponse list(Long classId) {
 		FapClass fapClass = findClass(classId);
+		// Children of every result in two class-wide queries instead of two queries per result.
+		Map<Long, List<CourseResultQuiz>> quizzesByResult = resultQuizRepository
+				.findByCourseResultFapClassIdOrderByIdAsc(classId).stream()
+				.collect(Collectors.groupingBy(item -> item.getCourseResult().getId()));
+		Map<Long, List<CourseResultAdjustment>> adjustmentsByResult = adjustmentRepository
+				.findByCourseResultFapClassIdOrderByAdjustedAtDescIdDesc(classId).stream()
+				.collect(Collectors.groupingBy(item -> item.getCourseResult().getId()));
 		List<CourseResultResponse> results = courseResultRepository
 				.findByFapClassIdOrderByClassEnrollmentUserFullNameAsc(classId).stream()
-				.map(this::toResponse)
+				.map(result -> toResponse(
+						result,
+						quizzesByResult.getOrDefault(result.getId(), List.of()),
+						adjustmentsByResult.getOrDefault(result.getId(), List.of())))
 				.toList();
 		return new ClassCourseResultsResponse(
 				classId,
@@ -331,51 +345,100 @@ public class CourseResultService {
 		});
 	}
 
+	/**
+	 * Recalculates every result of the class from class-wide reads: results, registrations,
+	 * attendance and best attempts are each loaded once and grouped by user, instead of 4 queries
+	 * plus one per required quiz for every enrollment.
+	 */
 	private List<CourseResult> calculateAll(FapClass fapClass, Long currentUserId) {
-		List<ClassCompletionQuiz> requiredQuizzes = completionQuizRepository
-				.findByFapClassIdOrderByIdAsc(fapClass.getId());
+		Long classId = fapClass.getId();
+		List<ClassCompletionQuiz> requiredQuizzes = completionQuizRepository.findByFapClassIdOrderByIdAsc(classId);
 		List<ClassEnrollment> enrollments = classEnrollmentRepository
-				.findByFapClassIdAndStatusInOrderByCreatedAtAscIdAsc(fapClass.getId(), RESULT_ENROLLMENT_STATUSES);
-		return enrollments.stream()
-				.map(enrollment -> calculateOne(fapClass, enrollment, requiredQuizzes, currentUserId))
-				.toList();
-	}
+				.findByFapClassIdAndStatusInOrderByCreatedAtAscIdAsc(classId, RESULT_ENROLLMENT_STATUSES);
+		Map<Long, CourseResult> resultsByEnrollment = courseResultRepository.findByFapClassId(classId).stream()
+				.collect(Collectors.toMap(result -> result.getClassEnrollment().getId(), Function.identity()));
 
-	private CourseResult calculateOne(
-			FapClass fapClass,
-			ClassEnrollment enrollment,
-			List<ClassCompletionQuiz> requiredQuizzes,
-			Long currentUserId) {
-		CourseResult result = courseResultRepository.findByClassEnrollmentId(enrollment.getId()).orElseGet(() -> {
-			CourseResult created = new CourseResult();
-			created.setFapClass(fapClass);
-			created.setClassEnrollment(enrollment);
-			created.setUpdatedAt(LocalDateTime.now());
-			return courseResultRepository.save(created);
-		});
-
-		if (enrollment.getStatus() == ClassEnrollmentStatus.Withdrawn) {
-			result.setCalculatedStatus(CourseResultStatus.Withdrawn);
-			result.setOverrideStatus(null);
-			result.setCalculatedAt(LocalDateTime.now());
-			result.setCalculatedBy(currentUserId);
-			result.setUpdatedAt(LocalDateTime.now());
-			return result;
-		}
-
-		List<TrainingRegistration> registrations = trainingRegistrationRepository.findMineByClassId(
-				enrollment.getUser().getId(), fapClass.getId(), ATTENDANCE_REGISTRATION_STATUSES);
-		Set<Long> completedSessionIds = new HashSet<>();
-		for (TrainingRegistration registration : registrations) {
+		Map<Long, Set<Long>> completedSessionsByUser = new HashMap<>();
+		for (TrainingRegistration registration : trainingRegistrationRepository
+				.findByClassIdAndStatusIn(classId, ATTENDANCE_REGISTRATION_STATUSES)) {
 			if (registration.getTrainingSession().getStatus() == TrainingSessionStatus.Completed) {
-				completedSessionIds.add(registration.getTrainingSession().getId());
+				completedSessionsByUser.computeIfAbsent(registration.getUser().getId(), id -> new HashSet<>())
+						.add(registration.getTrainingSession().getId());
 			}
 		}
-		Map<Long, AttendanceStatus> attendanceBySession = new HashMap<>();
-		for (AttendanceRecord attendance : attendanceRecordRepository
-				.findByTrainingSessionFapClassIdAndUserId(fapClass.getId(), enrollment.getUser().getId())) {
-			attendanceBySession.put(attendance.getTrainingSession().getId(), attendance.getStatus());
+		Map<Long, Map<Long, AttendanceStatus>> attendanceByUser = new HashMap<>();
+		for (AttendanceRecord attendance : attendanceRecordRepository.findByTrainingSessionFapClassId(classId)) {
+			attendanceByUser.computeIfAbsent(attendance.getUser().getId(), id -> new HashMap<>())
+					.put(attendance.getTrainingSession().getId(), attendance.getStatus());
 		}
+		Map<String, QuizAttemptRepository.ScoredAttempt> bestAttempts = new HashMap<>();
+		if (!requiredQuizzes.isEmpty()) {
+			List<Long> quizIds = requiredQuizzes.stream().map(item -> item.getQuiz().getId()).toList();
+			// Rows arrive best first, so the first row per quiz and user is the best attempt.
+			quizAttemptRepository.findSubmittedForClassOrderByScoreDesc(classId, quizIds)
+					.forEach(attempt -> bestAttempts.putIfAbsent(
+							attemptKey(attempt.getQuizId(), attempt.getUserId()), attempt));
+		}
+
+		List<CourseResult> results = new ArrayList<>(enrollments.size());
+		for (ClassEnrollment enrollment : enrollments) {
+			CourseResult result = resultsByEnrollment.get(enrollment.getId());
+			if (result == null) {
+				result = new CourseResult();
+				result.setFapClass(fapClass);
+				result.setClassEnrollment(enrollment);
+				result.setUpdatedAt(LocalDateTime.now());
+				result = courseResultRepository.save(result);
+			}
+			results.add(result);
+		}
+
+		// Snapshots of every non-withdrawn result are rebuilt below; withdrawn ones keep theirs.
+		resultQuizRepository.deleteForClassEnrollmentStatuses(classId, RECALCULATED_ENROLLMENT_STATUSES);
+		List<CourseResultQuiz> snapshots = new ArrayList<>();
+		for (int index = 0; index < enrollments.size(); index++) {
+			ClassEnrollment enrollment = enrollments.get(index);
+			CourseResult result = results.get(index);
+			Long userId = enrollment.getUser().getId();
+			if (enrollment.getStatus() == ClassEnrollmentStatus.Withdrawn) {
+				markCalculatedWithdrawn(result, currentUserId);
+				continue;
+			}
+			calculateOne(
+					fapClass,
+					result,
+					requiredQuizzes,
+					completedSessionsByUser.getOrDefault(userId, Set.of()),
+					attendanceByUser.getOrDefault(userId, Map.of()),
+					quizId -> bestAttempts.get(attemptKey(quizId, userId)),
+					snapshots,
+					currentUserId);
+		}
+		resultQuizRepository.saveAll(snapshots);
+		return results;
+	}
+
+	private static String attemptKey(Long quizId, Long userId) {
+		return quizId + ":" + userId;
+	}
+
+	private static void markCalculatedWithdrawn(CourseResult result, Long currentUserId) {
+		result.setCalculatedStatus(CourseResultStatus.Withdrawn);
+		result.setOverrideStatus(null);
+		result.setCalculatedAt(LocalDateTime.now());
+		result.setCalculatedBy(currentUserId);
+		result.setUpdatedAt(LocalDateTime.now());
+	}
+
+	private void calculateOne(
+			FapClass fapClass,
+			CourseResult result,
+			List<ClassCompletionQuiz> requiredQuizzes,
+			Set<Long> completedSessionIds,
+			Map<Long, AttendanceStatus> attendanceBySession,
+			Function<Long, QuizAttemptRepository.ScoredAttempt> bestAttemptForQuiz,
+			List<CourseResultQuiz> snapshots,
+			Long currentUserId) {
 		int attendedSessions = (int) completedSessionIds.stream()
 				.map(attendanceBySession::get)
 				.filter(status -> status == AttendanceStatus.Present || status == AttendanceStatus.Late)
@@ -387,14 +450,9 @@ public class CourseResultService {
 						.multiply(BigDecimal.valueOf(100))
 						.divide(BigDecimal.valueOf(totalSessions), 2, RoundingMode.HALF_UP);
 
-		resultQuizRepository.deleteByCourseResultId(result.getId());
-		resultQuizRepository.flush();
 		int passedQuizCount = 0;
 		for (ClassCompletionQuiz requiredQuiz : requiredQuizzes) {
-			QuizAttempt attempt = quizAttemptRepository
-					.findFirstByQuizIdAndUserIdAndStatusOrderByScoreDescIdDesc(
-							requiredQuiz.getQuiz().getId(), enrollment.getUser().getId(), QuizAttemptStatus.Submitted)
-					.orElse(null);
+			QuizAttemptRepository.ScoredAttempt attempt = bestAttemptForQuiz.apply(requiredQuiz.getQuiz().getId());
 			boolean passed = attempt != null && attempt.getScore() != null
 					&& attempt.getScore() >= requiredQuiz.getPassingScore();
 			CourseResultQuiz snapshot = new CourseResultQuiz();
@@ -404,7 +462,7 @@ public class CourseResultService {
 			snapshot.setBestAttemptId(attempt == null ? null : attempt.getId());
 			snapshot.setBestScore(attempt == null ? null : attempt.getScore());
 			snapshot.setPassed(passed);
-			resultQuizRepository.save(snapshot);
+			snapshots.add(snapshot);
 			if (passed) {
 				passedQuizCount++;
 			}
@@ -426,7 +484,6 @@ public class CourseResultService {
 		result.setPublishedAt(null);
 		result.setPublishedBy(null);
 		result.setUpdatedAt(LocalDateTime.now());
-		return result;
 	}
 
 	private void validateSessionsForClosure(Long classId) {
@@ -459,8 +516,17 @@ public class CourseResultService {
 	}
 
 	private CourseResultResponse toResponse(CourseResult result) {
-		List<CourseResultQuizResponse> quizzes = resultQuizRepository
-				.findByCourseResultIdOrderByIdAsc(result.getId()).stream()
+		return toResponse(
+				result,
+				resultQuizRepository.findByCourseResultIdOrderByIdAsc(result.getId()),
+				adjustmentRepository.findByCourseResultIdOrderByAdjustedAtDescIdDesc(result.getId()));
+	}
+
+	private CourseResultResponse toResponse(
+			CourseResult result,
+			List<CourseResultQuiz> resultQuizzes,
+			List<CourseResultAdjustment> resultAdjustments) {
+		List<CourseResultQuizResponse> quizzes = resultQuizzes.stream()
 				.map(item -> new CourseResultQuizResponse(
 						item.getQuiz().getId(),
 						item.getQuiz().getTitle(),
@@ -469,8 +535,7 @@ public class CourseResultService {
 						item.getBestScore(),
 						item.isPassed()))
 				.toList();
-		List<CourseResultAdjustmentResponse> adjustments = adjustmentRepository
-				.findByCourseResultIdOrderByAdjustedAtDescIdDesc(result.getId()).stream()
+		List<CourseResultAdjustmentResponse> adjustments = resultAdjustments.stream()
 				.map(item -> new CourseResultAdjustmentResponse(
 						item.getId(), item.getPreviousStatus(), item.getNewStatus(), item.getReason(),
 						item.getAdjustedBy(), item.getAdjustedAt()))

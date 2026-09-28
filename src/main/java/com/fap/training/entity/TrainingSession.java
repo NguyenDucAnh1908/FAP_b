@@ -35,7 +35,7 @@ public class TrainingSession {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "training_sessions_seq")
-	@SequenceGenerator(name = "training_sessions_seq", sequenceName = "training_sessions_seq", allocationSize = 1)
+	@SequenceGenerator(name = "training_sessions_seq", sequenceName = "training_sessions_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

@@ -3,6 +3,7 @@ package com.fap.role.service;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.security.AuthorizationCache;
 import com.fap.role.dto.PermissionResponse;
 import com.fap.role.dto.RoleResponse;
 import com.fap.role.dto.UpdatePermissionRequest;
@@ -37,16 +38,19 @@ public class RoleService {
 	private final PermissionRepository permissionRepository;
 	private final RoleMapper roleMapper;
 	private final AuditLogService auditLogService;
+	private final AuthorizationCache authorizationCache;
 
 	public RoleService(
 			RoleRepository roleRepository,
 			PermissionRepository permissionRepository,
 			RoleMapper roleMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			AuthorizationCache authorizationCache) {
 		this.roleRepository = roleRepository;
 		this.permissionRepository = permissionRepository;
 		this.roleMapper = roleMapper;
 		this.auditLogService = auditLogService;
+		this.authorizationCache = authorizationCache;
 	}
 
 	@Transactional(readOnly = true)
@@ -84,6 +88,7 @@ public class RoleService {
 			permissionRepository.save(permission);
 		});
 		auditLogService.record("UPDATE_PERMISSION_MATRIX", "permission", null);
+		authorizationCache.invalidatePermissionsAfterCommit();
 		return permissionMatrix();
 	}
 

@@ -3,6 +3,7 @@ package com.fap.user.service;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.security.AuthorizationCache;
 import com.fap.role.entity.Role;
 import com.fap.role.repository.RoleRepository;
 import com.fap.user.dto.CreateUserRequest;
@@ -37,12 +38,14 @@ class UserServiceTest {
 	private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
 	private final UserMapper userMapper = mock(UserMapper.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
+	private final AuthorizationCache authorizationCache = mock(AuthorizationCache.class);
 	private final UserService userService = new UserService(
 			userRepository,
 			roleRepository,
 			passwordEncoder,
 			userMapper,
-			auditLogService);
+			auditLogService,
+			authorizationCache);
 
 	@Test
 	void listNormalizesFiltersAndDelegatesToSearchRepository() {

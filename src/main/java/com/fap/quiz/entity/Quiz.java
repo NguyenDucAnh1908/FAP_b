@@ -28,7 +28,7 @@ public class Quiz {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "quizzes_seq")
-	@SequenceGenerator(name = "quizzes_seq", sequenceName = "quizzes_seq", allocationSize = 1)
+	@SequenceGenerator(name = "quizzes_seq", sequenceName = "quizzes_seq", allocationSize = 50)
 	private Long id;
 
 	@Column(nullable = false, length = 255)

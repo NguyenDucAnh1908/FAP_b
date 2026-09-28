@@ -38,7 +38,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class ClassEnrollmentService {
@@ -277,9 +281,21 @@ public class ClassEnrollmentService {
 		if (session.getCapacity() < session.getFapClass().getCapacity()) {
 			throw new ConflictException("AUTO_ENROLL_SESSION_CAPACITY_TOO_SMALL", "Auto-enroll session capacity must cover the class capacity");
 		}
-		classEnrollmentRepository
+		Map<Long, TrainingRegistration> registrationsByUser = trainingRegistrationRepository
+				.findByTrainingSessionId(session.getId()).stream()
+				.collect(Collectors.toMap(registration -> registration.getUser().getId(), Function.identity()));
+		LocalDateTime now = LocalDateTime.now();
+		List<TrainingRegistration> changed = classEnrollmentRepository
 				.findByFapClassIdAndStatusOrderByCreatedAtAscIdAsc(session.getFapClass().getId(), ClassEnrollmentStatus.Enrolled)
-				.forEach(enrollment -> syncRegistration(session, enrollment.getUser(), LocalDateTime.now()));
+				.stream()
+				.map(enrollment -> syncRegistration(
+						session,
+						enrollment.getUser(),
+						registrationsByUser.get(enrollment.getUser().getId()),
+						now))
+				.filter(Objects::nonNull)
+				.toList();
+		trainingRegistrationRepository.saveAll(changed);
 	}
 
 	private ClassEnrollment enroll(FapClass fapClass, User user, ClassEnrollmentSource source, Long actorId) {
@@ -394,33 +410,54 @@ public class ClassEnrollmentService {
 	}
 
 	private void syncEnrollmentToAutoSessions(ClassEnrollment enrollment) {
-		trainingSessionRepository
+		List<TrainingSession> sessions = trainingSessionRepository
 				.findByFapClassIdAndRegistrationModeAndStatusOrderBySessionDateAscStartTimeAsc(
 						enrollment.getFapClass().getId(),
 						TrainingRegistrationMode.AutoEnroll,
-						TrainingSessionStatus.Upcoming)
-				.forEach(session -> syncRegistration(session, enrollment.getUser(), LocalDateTime.now()));
+						TrainingSessionStatus.Upcoming);
+		if (sessions.isEmpty()) {
+			return;
+		}
+		User user = enrollment.getUser();
+		Map<Long, TrainingRegistration> registrationsBySession = trainingRegistrationRepository
+				.findByUserIdAndTrainingSessionIdIn(user.getId(), sessions.stream().map(TrainingSession::getId).toList())
+				.stream()
+				.collect(Collectors.toMap(registration -> registration.getTrainingSession().getId(), Function.identity()));
+		LocalDateTime now = LocalDateTime.now();
+		List<TrainingRegistration> changed = sessions.stream()
+				.map(session -> syncRegistration(session, user, registrationsBySession.get(session.getId()), now))
+				.filter(Objects::nonNull)
+				.toList();
+		trainingRegistrationRepository.saveAll(changed);
 	}
 
-	private void syncRegistration(TrainingSession session, User user, LocalDateTime now) {
-		TrainingRegistration registration = trainingRegistrationRepository
-				.findByTrainingSessionIdAndUserId(session.getId(), user.getId())
-				.orElseGet(() -> {
-					TrainingRegistration created = new TrainingRegistration();
-					created.setTrainingSession(session);
-					created.setUser(user);
-					return created;
-				});
+	/**
+	 * Registers {@code user} for {@code session} unless already registered or completed.
+	 *
+	 * @param existing the user's current registration for the session, prefetched by the caller
+	 * @return the registration to save, or {@code null} when nothing changed
+	 */
+	private TrainingRegistration syncRegistration(
+			TrainingSession session,
+			User user,
+			TrainingRegistration existing,
+			LocalDateTime now) {
+		TrainingRegistration registration = existing;
+		if (registration == null) {
+			registration = new TrainingRegistration();
+			registration.setTrainingSession(session);
+			registration.setUser(user);
+		}
 		if (registration.getStatus() == TrainingRegistrationStatus.Registered
 				|| registration.getStatus() == TrainingRegistrationStatus.Completed) {
-			return;
+			return null;
 		}
 		registration.setStatus(TrainingRegistrationStatus.Registered);
 		registration.setRegisteredAt(now);
 		registration.setCancelledAt(null);
 		registration.setCompletedAt(null);
-		trainingRegistrationRepository.save(registration);
 		session.setEnrolledCount(session.getEnrolledCount() + 1);
+		return registration;
 	}
 
 	private void cancelFutureSessionRegistrations(Long classId, Long userId, LocalDateTime now) {

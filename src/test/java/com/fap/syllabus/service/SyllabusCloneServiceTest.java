@@ -133,11 +133,7 @@ class SyllabusCloneServiceTest {
 	@EnumSource(value = SyllabusStatus.class, names = {"Active", "Inactive"})
 	void clonesPublishedSyllabusWithOutlineStandardsAndBlob(SyllabusStatus status) {
 		source.setStatus(status);
-		MaterialFileContent content = new MaterialFileContent();
-		content.setMaterialFileId(SOURCE_MATERIAL_ID);
-		content.setMaterialFile(sourceMaterial);
-		content.setFileData(FILE_DATA);
-		when(contentRepository.findAllById(Set.of(SOURCE_MATERIAL_ID))).thenReturn(List.of(content));
+		when(contentRepository.findStoredMaterialIdsBySyllabusId(SOURCE_ID)).thenReturn(Set.of(SOURCE_MATERIAL_ID));
 
 		service.cloneVersion(SOURCE_ID, request(), CURRENT_USER_ID);
 
@@ -156,10 +152,11 @@ class SyllabusCloneServiceTest {
 		assertThat(clonedMaterial.getFileName()).isEqualTo("guide.pdf");
 		assertThat(clonedMaterial.getFileUrl()).isEqualTo(MaterialFileService.downloadPath(CLONED_MATERIAL_ID));
 
-		ArgumentCaptor<MaterialFileContent> contentCaptor = ArgumentCaptor.forClass(MaterialFileContent.class);
-		verify(contentRepository).save(contentCaptor.capture());
-		assertThat(contentCaptor.getValue().getFileData()).containsExactly(FILE_DATA);
-		assertThat(contentCaptor.getValue().getMaterialFile()).isSameAs(clonedMaterial);
+		assertThat(clonedMaterial.isContentStored()).isTrue();
+		// The bytes are copied inside the database; they never pass through the application.
+		verify(contentRepository).copyStoredContent(SOURCE_MATERIAL_ID, CLONED_MATERIAL_ID);
+		verify(contentRepository, never()).findAllById(any());
+		verify(contentRepository, never()).save(any());
 		verify(auditLogService).record("CLONE_SYLLABUS_VERSION:" + SOURCE_ID, "syllabus", CLONED_ID);
 	}
 
@@ -177,14 +174,14 @@ class SyllabusCloneServiceTest {
 
 	@Test
 	void keepsMissingInternalMaterialAsUnavailableForReupload() {
-		when(contentRepository.findAllById(Set.of(SOURCE_MATERIAL_ID))).thenReturn(List.of());
+		when(contentRepository.findStoredMaterialIdsBySyllabusId(SOURCE_ID)).thenReturn(Set.of());
 
 		service.cloneVersion(SOURCE_ID, request(), CURRENT_USER_ID);
 
 		MaterialFile clonedMaterial = savedDays.get().getFirst().getUnits().getFirst()
 				.getTopics().getFirst().getMaterials().getFirst();
 		assertThat(clonedMaterial.getFileUrl()).isEqualTo("unavailable");
-		verify(contentRepository, never()).save(any());
+		verify(contentRepository, never()).copyStoredContent(any(), any());
 	}
 
 	@ParameterizedTest

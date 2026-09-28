@@ -36,7 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -224,25 +223,16 @@ public class SyllabusService {
 		outputStandardRepository.saveAll(outputStandards);
 
 		List<SyllabusDay> sourceDays = dayRepository.findBySyllabusIdOrderBySortOrderAsc(sourceId);
-		Set<Long> materialIds = sourceDays.stream()
-				.flatMap(day -> day.getUnits().stream())
-				.flatMap(unit -> unit.getTopics().stream())
-				.flatMap(topic -> topic.getMaterials().stream())
-				.map(MaterialFile::getId)
-				.collect(Collectors.toSet());
-		Map<Long, byte[]> contentByMaterialId = new HashMap<>();
-		materialFileContentRepository.findAllById(materialIds).forEach(content ->
-				contentByMaterialId.put(
-						content.getMaterialFileId(),
-						Arrays.copyOf(content.getFileData(), content.getFileData().length)));
+		// Only which materials have bytes is read here; the bytes are copied inside Oracle below.
+		Set<Long> storedMaterialIds = materialFileContentRepository.findStoredMaterialIdsBySyllabusId(sourceId);
 
-		List<MaterialContentRestore> contentRestores = new ArrayList<>();
+		List<MaterialContentCopy> contentCopies = new ArrayList<>();
 		List<SyllabusDay> clonedDays = sourceDays.stream()
-				.map(day -> cloneDay(saved, day, contentByMaterialId, contentRestores))
+				.map(day -> cloneDay(saved, day, storedMaterialIds, contentCopies))
 				.toList();
 		dayRepository.saveAll(clonedDays);
 		dayRepository.flush();
-		restoreMaterialContents(contentRestores);
+		copyMaterialContents(contentCopies);
 
 		auditLogService.record("CLONE_SYLLABUS_VERSION:" + sourceId, "syllabus", saved.getId());
 		return new FullSyllabusResponse(
@@ -611,14 +601,14 @@ public class SyllabusService {
 	private SyllabusDay cloneDay(
 			Syllabus syllabus,
 			SyllabusDay source,
-			Map<Long, byte[]> contentByMaterialId,
-			List<MaterialContentRestore> contentRestores) {
+			Set<Long> storedMaterialIds,
+			List<MaterialContentCopy> contentCopies) {
 		SyllabusDay cloned = new SyllabusDay();
 		cloned.setSyllabus(syllabus);
 		cloned.setDayNumber(source.getDayNumber());
 		cloned.setSortOrder(source.getSortOrder());
 		cloned.setUnits(new ArrayList<>(source.getUnits().stream()
-				.map(unit -> cloneUnit(cloned, unit, contentByMaterialId, contentRestores))
+				.map(unit -> cloneUnit(cloned, unit, storedMaterialIds, contentCopies))
 				.toList()));
 		return cloned;
 	}
@@ -626,14 +616,14 @@ public class SyllabusService {
 	private SyllabusUnit cloneUnit(
 			SyllabusDay day,
 			SyllabusUnit source,
-			Map<Long, byte[]> contentByMaterialId,
-			List<MaterialContentRestore> contentRestores) {
+			Set<Long> storedMaterialIds,
+			List<MaterialContentCopy> contentCopies) {
 		SyllabusUnit cloned = new SyllabusUnit();
 		cloned.setDay(day);
 		cloned.setName(source.getName());
 		cloned.setSortOrder(source.getSortOrder());
 		cloned.setTopics(new ArrayList<>(source.getTopics().stream()
-				.map(topic -> cloneTopic(cloned, topic, contentByMaterialId, contentRestores))
+				.map(topic -> cloneTopic(cloned, topic, storedMaterialIds, contentCopies))
 				.toList()));
 		return cloned;
 	}
@@ -641,8 +631,8 @@ public class SyllabusService {
 	private SyllabusTopic cloneTopic(
 			SyllabusUnit unit,
 			SyllabusTopic source,
-			Map<Long, byte[]> contentByMaterialId,
-			List<MaterialContentRestore> contentRestores) {
+			Set<Long> storedMaterialIds,
+			List<MaterialContentCopy> contentCopies) {
 		SyllabusTopic cloned = new SyllabusTopic();
 		cloned.setUnit(unit);
 		cloned.setName(source.getName());
@@ -652,7 +642,7 @@ public class SyllabusService {
 		cloned.setStatus(source.getStatus());
 		cloned.setSortOrder(source.getSortOrder());
 		cloned.setMaterials(new ArrayList<>(source.getMaterials().stream()
-				.map(material -> cloneMaterial(cloned, material, contentByMaterialId, contentRestores))
+				.map(material -> cloneMaterial(cloned, material, storedMaterialIds, contentCopies))
 				.toList()));
 		return cloned;
 	}
@@ -660,8 +650,8 @@ public class SyllabusService {
 	private MaterialFile cloneMaterial(
 			SyllabusTopic topic,
 			MaterialFile source,
-			Map<Long, byte[]> contentByMaterialId,
-			List<MaterialContentRestore> contentRestores) {
+			Set<Long> storedMaterialIds,
+			List<MaterialContentCopy> contentCopies) {
 		MaterialFile cloned = new MaterialFile();
 		cloned.setTopic(topic);
 		cloned.setFileName(source.getFileName());
@@ -670,10 +660,9 @@ public class SyllabusService {
 		cloned.setUploadedBy(source.getUploadedBy());
 		cloned.setUploadedAt(source.getUploadedAt());
 
-		byte[] fileData = contentByMaterialId.get(source.getId());
-		if (fileData != null) {
+		if (storedMaterialIds.contains(source.getId())) {
 			cloned.setFileUrl("pending");
-			contentRestores.add(new MaterialContentRestore(cloned, fileData));
+			contentCopies.add(new MaterialContentCopy(cloned, source.getId()));
 		} else if (isInternalDownloadPath(source.getFileUrl())) {
 			cloned.setFileUrl(UNAVAILABLE_FILE_URL);
 		} else {
@@ -716,10 +705,11 @@ public class SyllabusService {
 			}
 		}
 
+		// The old rows are deleted before the new ones exist, so the bytes are held until then. The
+		// loaded arrays are only read, so they are kept as-is rather than copied a second time.
 		Map<Long, byte[]> contentById = new HashMap<>();
 		materialFileContentRepository.findAllById(requestedIds).forEach(content ->
-				contentById.put(content.getMaterialFileId(), Arrays.copyOf(
-						content.getFileData(), content.getFileData().length)));
+				contentById.put(content.getMaterialFileId(), content.getFileData()));
 
 		Map<Long, ExistingMaterialSnapshot> snapshots = new HashMap<>();
 		for (Long materialId : requestedIds) {
@@ -754,6 +744,16 @@ public class SyllabusService {
 			content.setMaterialFile(material);
 			content.setFileData(restore.fileData());
 			materialFileContentRepository.save(content);
+			material.setContentStored(true);
+		}
+	}
+
+	private void copyMaterialContents(List<MaterialContentCopy> contentCopies) {
+		for (MaterialContentCopy copy : contentCopies) {
+			MaterialFile material = copy.material();
+			material.setFileUrl(MaterialFileService.downloadPath(material.getId()));
+			materialFileContentRepository.copyStoredContent(copy.sourceMaterialId(), material.getId());
+			material.setContentStored(true);
 		}
 	}
 
@@ -773,6 +773,9 @@ public class SyllabusService {
 	}
 
 	private record MaterialContentRestore(MaterialFile material, byte[] fileData) {
+	}
+
+	private record MaterialContentCopy(MaterialFile material, Long sourceMaterialId) {
 	}
 
 	private void validatePercentTotals(

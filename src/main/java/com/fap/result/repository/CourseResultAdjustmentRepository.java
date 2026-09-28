@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface CourseResultAdjustmentRepository extends JpaRepository<CourseResultAdjustment, Long> {
 	List<CourseResultAdjustment> findByCourseResultIdOrderByAdjustedAtDescIdDesc(Long courseResultId);
+
+	List<CourseResultAdjustment> findByCourseResultFapClassIdOrderByAdjustedAtDescIdDesc(Long classId);
 }

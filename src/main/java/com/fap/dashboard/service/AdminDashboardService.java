@@ -7,7 +7,6 @@ import com.fap.dashboard.dto.AdminDashboardResponse;
 import com.fap.dashboard.dto.TrainingAnalyticsResponse;
 import com.fap.program.enums.TrainingProgramStatus;
 import com.fap.program.repository.TrainingProgramRepository;
-import com.fap.quiz.enums.QuizAttemptStatus;
 import com.fap.quiz.enums.QuizStatus;
 import com.fap.quiz.repository.QuizAttemptRepository;
 import com.fap.quiz.repository.QuizRepository;
@@ -19,20 +18,29 @@ import com.fap.training.mapper.TrainingSessionMapper;
 import com.fap.training.repository.TrainingSessionRepository;
 import com.fap.user.enums.UserStatus;
 import com.fap.user.repository.UserRepository;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class AdminDashboardService {
 
 	private static final String TRAINEE_ROLE = "Trainee";
 	private static final String TRAINER_ROLE = "Trainer";
+	private static final String CACHE_KEY = "admin";
 
 	private final UserRepository userRepository;
 	private final SyllabusRepository syllabusRepository;
@@ -44,6 +52,8 @@ public class AdminDashboardService {
 	private final TrainingSessionMapper trainingSessionMapper;
 	private final AuditLogRepository auditLogRepository;
 	private final TrainingAnalyticsService trainingAnalyticsService;
+	private final Cache<String, AdminDashboardResponse> cache;
+	private final TransactionTemplate readOnlyTransaction;
 
 	public AdminDashboardService(
 			UserRepository userRepository,
@@ -55,7 +65,9 @@ public class AdminDashboardService {
 			TrainingSessionRepository trainingSessionRepository,
 			TrainingSessionMapper trainingSessionMapper,
 			AuditLogRepository auditLogRepository,
-			TrainingAnalyticsService trainingAnalyticsService) {
+			TrainingAnalyticsService trainingAnalyticsService,
+			PlatformTransactionManager transactionManager,
+			@Value("${app.dashboard.cache-ttl:30s}") Duration cacheTtl) {
 		this.userRepository = userRepository;
 		this.syllabusRepository = syllabusRepository;
 		this.trainingProgramRepository = trainingProgramRepository;
@@ -66,15 +78,26 @@ public class AdminDashboardService {
 		this.trainingSessionMapper = trainingSessionMapper;
 		this.auditLogRepository = auditLogRepository;
 		this.trainingAnalyticsService = trainingAnalyticsService;
+		// The dashboard is the same for every admin and each build runs about 15 aggregate queries,
+		// so it is shared for a short TTL. generatedAt in the response shows how fresh it is.
+		this.cache = Caffeine.newBuilder().maximumSize(1).expireAfterWrite(cacheTtl).build();
+		this.readOnlyTransaction = new TransactionTemplate(transactionManager);
+		this.readOnlyTransaction.setReadOnly(true);
 	}
 
-	@Transactional(readOnly = true)
+	/**
+	 * Not {@code @Transactional}: a cache hit must not borrow a pooled connection. Only a miss opens
+	 * a read-only transaction, which the lazy associations read by the mappers need.
+	 */
 	public AdminDashboardResponse getDashboard() {
+		return cache.get(CACHE_KEY, key -> readOnlyTransaction.execute(status -> buildDashboard()));
+	}
+
+	private AdminDashboardResponse buildDashboard() {
 		TrainingAnalyticsResponse training = trainingAnalyticsService.getAnalytics(null, null, null);
-		long submittedAttempts = quizAttemptRepository.countForDashboard(
-				QuizAttemptStatus.Submitted, null, null, null);
-		long passedAttempts = quizAttemptRepository.countForDashboard(
-				QuizAttemptStatus.Submitted, true, null, null);
+		QuizAttemptRepository.SubmittedOutcomeCount attempts = quizAttemptRepository.countSubmittedOutcomes();
+		long submittedAttempts = attempts.getSubmitted();
+		long passedAttempts = attempts.getPassed();
 
 		List<TrainingSessionResponse> nextSessions = trainingSessionRepository.search(
 				TrainingSessionStatus.Upcoming,
@@ -98,33 +121,55 @@ public class AdminDashboardService {
 						log.getCreatedAt()))
 				.getContent();
 
+		Map<UserStatus, Long> users = countsBy(userRepository.countGroupedByStatus(),
+				UserRepository.StatusCount::getStatus, UserRepository.StatusCount::getTotal);
+		Map<String, Long> activeUsersByRole = countsBy(
+				userRepository.countByRoleNamesAndStatus(List.of(TRAINEE_ROLE, TRAINER_ROLE), UserStatus.Active),
+				UserRepository.RoleCount::getRoleName, UserRepository.RoleCount::getTotal);
+		Map<SyllabusStatus, Long> syllabuses = countsBy(syllabusRepository.countGroupedByStatus(),
+				SyllabusRepository.StatusCount::getStatus, SyllabusRepository.StatusCount::getTotal);
+		Map<TrainingProgramStatus, Long> programs = countsBy(trainingProgramRepository.countGroupedByStatus(),
+				TrainingProgramRepository.StatusCount::getStatus, TrainingProgramRepository.StatusCount::getTotal);
+		Map<ClassStatus, Long> classes = countsBy(classRepository.countGroupedByStatus(),
+				ClassRepository.StatusCount::getStatus, ClassRepository.StatusCount::getTotal);
+		Map<QuizStatus, Long> quizzes = countsBy(quizRepository.countGroupedByStatus(),
+				QuizRepository.StatusCount::getStatus, QuizRepository.StatusCount::getTotal);
+
 		return new AdminDashboardResponse(
 				new AdminDashboardResponse.UserSummary(
-						userRepository.count(),
-						userRepository.countByStatus(UserStatus.Active),
-						userRepository.countByStatus(UserStatus.Inactive),
-						userRepository.countByRoleNameAndStatus(TRAINEE_ROLE, UserStatus.Active),
-						userRepository.countByRoleNameAndStatus(TRAINER_ROLE, UserStatus.Active)),
+						total(users),
+						users.getOrDefault(UserStatus.Active, 0L),
+						users.getOrDefault(UserStatus.Inactive, 0L),
+						activeUsersByRole.getOrDefault(TRAINEE_ROLE, 0L),
+						activeUsersByRole.getOrDefault(TRAINER_ROLE, 0L)),
 				new AdminDashboardResponse.ContentSummary(
-						syllabusRepository.count(),
-						syllabusRepository.countByStatus(SyllabusStatus.Active),
-						syllabusRepository.countByStatus(SyllabusStatus.Pending),
-						syllabusRepository.countByStatus(SyllabusStatus.Drafting),
-						trainingProgramRepository.count(),
-						trainingProgramRepository.countByStatus(TrainingProgramStatus.Active),
-						classRepository.count(),
-						classRepository.countByStatus(ClassStatus.Active),
-						classRepository.countByStatus(ClassStatus.Planning)),
+						total(syllabuses),
+						syllabuses.getOrDefault(SyllabusStatus.Active, 0L),
+						syllabuses.getOrDefault(SyllabusStatus.Pending, 0L),
+						syllabuses.getOrDefault(SyllabusStatus.Drafting, 0L),
+						total(programs),
+						programs.getOrDefault(TrainingProgramStatus.Active, 0L),
+						total(classes),
+						classes.getOrDefault(ClassStatus.Active, 0L),
+						classes.getOrDefault(ClassStatus.Planning, 0L)),
 				training,
 				new AdminDashboardResponse.AssessmentSummary(
-						quizRepository.count(),
-						quizRepository.countByStatus(QuizStatus.Published),
+						total(quizzes),
+						quizzes.getOrDefault(QuizStatus.Published, 0L),
 						submittedAttempts,
 						passedAttempts,
 						percentage(passedAttempts, submittedAttempts)),
 				nextSessions,
 				recentActivities,
 				LocalDateTime.now());
+	}
+
+	private static <T, K> Map<K, Long> countsBy(List<T> rows, Function<T, K> key, Function<T, Long> total) {
+		return rows.stream().collect(Collectors.toMap(key, total));
+	}
+
+	private static long total(Map<?, Long> counts) {
+		return counts.values().stream().mapToLong(Long::longValue).sum();
 	}
 
 	private double percentage(long numerator, long denominator) {

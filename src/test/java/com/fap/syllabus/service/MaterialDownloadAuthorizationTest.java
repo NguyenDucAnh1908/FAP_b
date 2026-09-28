@@ -7,7 +7,6 @@ import com.fap.common.metrics.DomainMetrics;
 import com.fap.common.util.FileValidator;
 import com.fap.syllabus.dto.MaterialFileDownload;
 import com.fap.syllabus.entity.MaterialFile;
-import com.fap.syllabus.entity.MaterialFileContent;
 import com.fap.syllabus.mapper.MaterialFileMapper;
 import com.fap.syllabus.repository.MaterialFileContentRepository;
 import com.fap.syllabus.repository.MaterialFileRepository;
@@ -17,6 +16,9 @@ import com.fap.clazz.enums.ClassEnrollmentStatus;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Optional;
@@ -75,9 +77,17 @@ class MaterialDownloadAuthorizationTest {
 	}
 
 	private void givenStoredContent() {
-		MaterialFileContent content = new MaterialFileContent();
-		content.setFileData(FILE_BYTES);
-		when(materialFileContentRepository.findById(MATERIAL_ID)).thenReturn(Optional.of(content));
+		when(materialFileContentRepository.copyContent(eq(MATERIAL_ID), any())).thenAnswer(invocation -> {
+			OutputStream target = invocation.getArgument(1);
+			target.write(FILE_BYTES);
+			return true;
+		});
+	}
+
+	private static byte[] readAndClose(MaterialFileDownload download) throws IOException {
+		try (InputStream content = download.content()) {
+			return content.readAllBytes();
+		}
 	}
 
 	private void givenRegistrationProbeReturns(boolean assigned) {
@@ -86,7 +96,7 @@ class MaterialDownloadAuthorizationTest {
 	}
 
 	@Test
-	void traineeAssignedToTheMaterialReceivesTheBytes() {
+	void traineeAssignedToTheMaterialReceivesTheBytes() throws IOException {
 		givenMaterial("application/pdf");
 		givenStoredContent();
 		givenRegistrationProbeReturns(true);
@@ -95,7 +105,8 @@ class MaterialDownloadAuthorizationTest {
 
 		assertThat(download.fileName()).isEqualTo("week-1.pdf");
 		assertThat(download.contentType()).isEqualTo("application/pdf");
-		assertThat(download.data()).isEqualTo(FILE_BYTES);
+		assertThat(download.contentLength()).isEqualTo(FILE_BYTES.length);
+		assertThat(readAndClose(download)).isEqualTo(FILE_BYTES);
 	}
 
 	@Test
@@ -108,17 +119,17 @@ class MaterialDownloadAuthorizationTest {
 				.isInstanceOf(ForbiddenException.class);
 
 		// Bytes must not even be fetched for a user who fails the ownership check.
-		verify(materialFileContentRepository, never()).findById(anyLong());
+		verify(materialFileContentRepository, never()).copyContent(anyLong(), any());
 	}
 
 	@Test
-	void staffWithManagePermissionSkipsTheRegistrationProbe() {
+	void staffWithManagePermissionSkipsTheRegistrationProbe() throws IOException {
 		givenMaterial("application/pdf");
 		givenStoredContent();
 
 		MaterialFileDownload download = service.download(MATERIAL_ID, TRAINEE_ID, CAN_MANAGE);
 
-		assertThat(download.data()).isEqualTo(FILE_BYTES);
+		assertThat(readAndClose(download)).isEqualTo(FILE_BYTES);
 		verify(materialFileRepository, never())
 				.existsAssignedToUser(anyLong(), anyLong(), any());
 	}
@@ -126,7 +137,7 @@ class MaterialDownloadAuthorizationTest {
 	@Test
 	void materialWithoutStoredBytesIsNotFound() {
 		givenMaterial("application/pdf");
-		when(materialFileContentRepository.findById(MATERIAL_ID)).thenReturn(Optional.empty());
+		when(materialFileContentRepository.copyContent(eq(MATERIAL_ID), any())).thenReturn(false);
 
 		assertThatThrownBy(() -> service.download(MATERIAL_ID, TRAINEE_ID, CAN_MANAGE))
 				.isInstanceOf(NotFoundException.class);
@@ -141,22 +152,23 @@ class MaterialDownloadAuthorizationTest {
 	}
 
 	@Test
-	void materialWithoutContentTypeFallsBackToOctetStream() {
+	void materialWithoutContentTypeFallsBackToOctetStream() throws IOException {
 		givenMaterial(null);
 		givenStoredContent();
 
 		MaterialFileDownload download = service.download(MATERIAL_ID, TRAINEE_ID, CAN_MANAGE);
 
 		assertThat(download.contentType()).isEqualTo("application/octet-stream");
+		readAndClose(download);
 	}
 
 	@Test
-	void ownershipProbeOnlyAcceptsRegisteredAndCompletedRegistrations() {
+	void ownershipProbeOnlyAcceptsRegisteredAndCompletedRegistrations() throws IOException {
 		givenMaterial("application/pdf");
 		givenStoredContent();
 		givenRegistrationProbeReturns(true);
 
-		service.download(MATERIAL_ID, TRAINEE_ID, CANNOT_MANAGE);
+		readAndClose(service.download(MATERIAL_ID, TRAINEE_ID, CANNOT_MANAGE));
 
 		@SuppressWarnings("unchecked")
 		ArgumentCaptor<Collection<ClassEnrollmentStatus>> statusesCaptor =

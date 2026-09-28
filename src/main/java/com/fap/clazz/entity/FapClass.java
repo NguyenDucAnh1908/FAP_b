@@ -32,7 +32,7 @@ public class FapClass {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "classes_seq")
-	@SequenceGenerator(name = "classes_seq", sequenceName = "classes_seq", allocationSize = 1)
+	@SequenceGenerator(name = "classes_seq", sequenceName = "classes_seq", allocationSize = 50)
 	private Long id;
 
 	@Column(nullable = false)

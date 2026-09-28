@@ -13,7 +13,7 @@ import com.fap.syllabus.service.MaterialFileService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -183,7 +183,7 @@ public class MaterialController {
 	})
 	@GetMapping("/materials/{id}/download")
 	@PreAuthorize("@permissionEvaluator.hasPermission(authentication, 'learning_material', 'view')")
-	public ResponseEntity<ByteArrayResource> download(
+	public ResponseEntity<InputStreamResource> download(
 			@PathVariable Long id,
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			Authentication authentication) {
@@ -194,8 +194,8 @@ public class MaterialController {
 				.header(
 						HttpHeaders.CONTENT_DISPOSITION,
 						ContentDisposition.attachment().filename(download.fileName()).build().toString())
-				.contentLength(download.data().length)
-				.body(new ByteArrayResource(download.data()));
+				.contentLength(download.contentLength())
+				.body(new InputStreamResource(download.content()));
 	}
 
 	@Operation(summary = "List current user assigned materials")

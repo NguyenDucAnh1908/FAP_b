@@ -24,7 +24,7 @@ import java.time.LocalDateTime;
 public class ClassCompletionQuiz {
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "class_completion_quizzes_seq")
-	@SequenceGenerator(name = "class_completion_quizzes_seq", sequenceName = "class_completion_quizzes_seq", allocationSize = 1)
+	@SequenceGenerator(name = "class_completion_quizzes_seq", sequenceName = "class_completion_quizzes_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

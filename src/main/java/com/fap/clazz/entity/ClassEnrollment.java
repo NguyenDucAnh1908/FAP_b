@@ -29,7 +29,7 @@ public class ClassEnrollment {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "class_enrollments_seq")
-	@SequenceGenerator(name = "class_enrollments_seq", sequenceName = "class_enrollments_seq", allocationSize = 1)
+	@SequenceGenerator(name = "class_enrollments_seq", sequenceName = "class_enrollments_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

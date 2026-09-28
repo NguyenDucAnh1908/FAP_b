@@ -1,12 +1,16 @@
 package com.fap.syllabus.dto;
 
+import java.io.InputStream;
+
 /**
- * Bytes of a material plus the metadata the controller needs to build download headers. Not a JSON
- * response body — the controller streams {@code data} and puts the rest into headers.
+ * A material's content plus the metadata the controller needs for download headers. Not a JSON
+ * response body. {@code content} reads a spooled temporary copy that is deleted when the stream is
+ * closed, which Spring does after writing the response.
  */
 public record MaterialFileDownload(
 		String fileName,
 		String contentType,
-		byte[] data
+		long contentLength,
+		InputStream content
 ) {
 }
