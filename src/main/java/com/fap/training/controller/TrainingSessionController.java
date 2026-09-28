@@ -85,7 +85,9 @@ public class TrainingSessionController {
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
 			@RequestParam(required = false) String keyword,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
 		Page<TrainingSessionResponse> sessions = trainingSessionService.listScoped(
 				principal,
 				status,
@@ -95,7 +97,9 @@ public class TrainingSessionController {
 				toDate,
 				keyword,
 				page - 1,
-				limit);
+				limit,
+				sortBy,
+				order);
 		return PageResponse.of(sessions.getContent(), page, limit, sessions.getTotalElements());
 	}
 
@@ -114,7 +118,7 @@ public class TrainingSessionController {
 	public ApiResponse<TrainingSessionResponse> create(
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@Valid @RequestBody CreateTrainingSessionRequest request) {
-		classAccessService.assertCanManageClass(principal, request.classId());
+		classAccessService.assertCanCreateSession(principal, request.classId(), request.trainerId());
 		return ApiResponse.ok(trainingSessionService.create(request, principal.id()));
 	}
 
@@ -261,5 +265,21 @@ public class TrainingSessionController {
 			@Valid @RequestBody UpdateAttendanceRequest request) {
 		classAccessService.assertCanManageSession(principal, id);
 		return ApiResponse.ok(attendanceService.upsert(id, request, principal.id()));
+	}
+
+	@Operation(summary = "QR self check-in — trainees scan to mark themselves present")
+	@ApiResponses(value = {
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Checked in"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not registered for this session"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found"),
+		@io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Session already completed or canceled")
+	})
+	@PostMapping("/{id}/check-in")
+	@PreAuthorize("isAuthenticated()")
+	public ApiResponse<AttendanceRecordResponse> checkIn(
+			@PathVariable Long id,
+			@AuthenticationPrincipal FapUserPrincipal principal) {
+		return ApiResponse.ok(attendanceService.checkIn(id, principal.id()));
 	}
 }

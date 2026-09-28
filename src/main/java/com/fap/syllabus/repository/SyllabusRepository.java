@@ -1,5 +1,6 @@
 package com.fap.syllabus.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.syllabus.entity.Syllabus;
 import com.fap.syllabus.enums.SyllabusStatus;
 import org.springframework.data.domain.Page;
@@ -8,17 +9,35 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
+
+	default Syllabus getOrThrow(Long id) {
+		return findById(id).orElseThrow(() -> new NotFoundException("syllabus", "Syllabus not found"));
+	}
 
 	boolean existsByCodeIgnoreCase(String code);
 
 	boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
 
+	long countByStatus(SyllabusStatus status);
+
+	interface StatusCount {
+		SyllabusStatus getStatus();
+
+		Long getTotal();
+	}
+
+	/** Row count per status in one query, for dashboards (replaces one count query per status). */
+	@Query("select s.status as status, count(s) as total from Syllabus s group by s.status")
+	List<StatusCount> countGroupedByStatus();
+
 	@Query("""
 			select s
 			from Syllabus s
 			where (:status is null or s.status = :status)
-			  and (:levelName is null or lower(s.levelName) = lower(:levelName))
+			  and (:levelName is null or lower(trim(s.levelName)) = lower(:levelName))
 			  and (:keyword is null
 			       or lower(s.name) like concat(concat('%', lower(:keyword)), '%')
 			       or lower(s.code) like concat(concat('%', lower(:keyword)), '%')

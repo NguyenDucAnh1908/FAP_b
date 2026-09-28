@@ -3,6 +3,7 @@ package com.fap.training.service;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
+import com.fap.common.exception.ForbiddenException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.training.dto.AttendanceItemRequest;
 import com.fap.training.dto.AttendanceRecordResponse;
@@ -66,18 +67,23 @@ public class AttendanceService {
 
 	@Transactional
 	public List<AttendanceRecordResponse> upsert(Long trainingSessionId, UpdateAttendanceRequest request, Long currentUserId) {
-		TrainingSession session = trainingSessionRepository.findWithClassAndTrainerById(trainingSessionId)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(trainingSessionId);
 		if (session.getStatus() == TrainingSessionStatus.Canceled) {
 			throw new ConflictException("ATTENDANCE_SESSION_CANCELED", "Attendance cannot be updated for canceled training session");
 		}
+		// Post-completion corrections require an explanation on every record for audit trail (§6.5/§7.5)
+		boolean isPostCompletion = session.getStatus() == TrainingSessionStatus.Completed;
+		if (isPostCompletion) {
+			validateCorrectionReasons(request.records());
+		}
 		validateNoDuplicateUsers(request.records());
-		Map<Long, TrainingRegistration> registeredUsers = loadRegisteredUsers(trainingSessionId);
+		Map<Long, TrainingRegistration> registeredUsers = loadEligibleUsers(trainingSessionId, isPostCompletion);
 		List<AttendanceRecord> records = request.records().stream()
 				.map(item -> upsertRecord(session, item, registeredUsers, currentUserId))
 				.toList();
 		attendanceRecordRepository.saveAll(records);
-		auditLogService.record("UPSERT_ATTENDANCE", "training_session", trainingSessionId);
+		String auditAction = isPostCompletion ? "UPSERT_ATTENDANCE_CORRECTION" : "UPSERT_ATTENDANCE";
+		auditLogService.record(auditAction, "training_session", trainingSessionId);
 		return records.stream()
 				.map(attendanceRecordMapper::toResponse)
 				.toList();
@@ -93,8 +99,7 @@ public class AttendanceService {
 			throw new ConflictException("ATTENDANCE_USER_NOT_REGISTERED", "Attendance user must be registered in the training session");
 		}
 		validateAttendanceItem(item);
-		User user = userRepository.findById(item.userId())
-				.orElseThrow(() -> new NotFoundException("User not found"));
+		User user = userRepository.getUserOrThrow(item.userId());
 		LocalDateTime now = LocalDateTime.now();
 		AttendanceRecord record = attendanceRecordRepository
 				.findByTrainingSessionIdAndUserId(session.getId(), item.userId())
@@ -116,13 +121,63 @@ public class AttendanceService {
 		return record;
 	}
 
-	private Map<Long, TrainingRegistration> loadRegisteredUsers(Long trainingSessionId) {
+	private Map<Long, TrainingRegistration> loadEligibleUsers(Long trainingSessionId, boolean isPostCompletion) {
+		TrainingRegistrationStatus eligibleStatus = isPostCompletion
+				? TrainingRegistrationStatus.Completed
+				: TrainingRegistrationStatus.Registered;
 		return trainingRegistrationRepository
 				.findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
 						trainingSessionId,
-						List.of(TrainingRegistrationStatus.Registered))
+						List.of(eligibleStatus))
 				.stream()
 				.collect(Collectors.toMap(registration -> registration.getUser().getId(), Function.identity()));
+	}
+
+	/**
+	 * Self-service QR check-in for a trainee. Only trainees whose registration is in {@code Registered}
+	 * status are allowed — {@code Completed} and {@code Canceled} are explicitly rejected so a former
+	 * participant cannot scan in after the fact.
+	 *
+	 * <p>The operation is idempotent: scanning twice simply keeps the existing {@code Present} record.
+	 */
+	@Transactional
+	public AttendanceRecordResponse checkIn(Long trainingSessionId, Long currentUserId) {
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(trainingSessionId);
+		if (session.getStatus() == TrainingSessionStatus.Canceled) {
+			throw new ConflictException("ATTENDANCE_SESSION_CANCELED", "Cannot check in to a canceled training session")
+					.withMessageKey("error.ATTENDANCE_SESSION_CANCELED.check_in");
+		}
+		if (session.getStatus() == TrainingSessionStatus.Completed) {
+			throw new ConflictException("ATTENDANCE_SESSION_COMPLETED", "Cannot check in to a completed training session");
+		}
+		TrainingRegistration registration = trainingRegistrationRepository
+				.findByTrainingSessionIdAndUserIdAndStatus(
+						trainingSessionId, currentUserId, TrainingRegistrationStatus.Registered)
+				.orElseThrow(() -> new ForbiddenException("You are not registered for this training session")
+						.withMessageKey("error.ACCESS_DENIED.training_session_not_registered"));
+		User user = registration.getUser();
+		LocalDateTime now = LocalDateTime.now();
+		AttendanceRecord record = attendanceRecordRepository
+				.findByTrainingSessionIdAndUserId(trainingSessionId, currentUserId)
+				.orElseGet(() -> createRecord(session, user, now));
+		record.setStatus(AttendanceStatus.Present);
+		record.setCheckInMethod(AttendanceCheckInMethod.QR);
+		record.setCheckedInAt(now);
+		record.setUpdatedBy(currentUserId);
+		record.setUpdatedAt(now);
+		attendanceRecordRepository.save(record);
+		auditLogService.record("QR_CHECK_IN", "training_session", trainingSessionId);
+		return attendanceRecordMapper.toResponse(record);
+	}
+
+	private void validateCorrectionReasons(List<AttendanceItemRequest> records) {
+		// Every record in a post-completion correction must carry an explanation (§6.5/§7.5)
+		boolean anyMissingReason = records.stream()
+				.anyMatch(item -> item.correctionReason() == null || item.correctionReason().isBlank());
+		if (anyMissingReason) {
+			throw new BadRequestException("ATTENDANCE_CORRECTION_REASON_REQUIRED",
+					"A correction reason is required for every attendance record when the session is completed");
+		}
 	}
 
 	private void validateNoDuplicateUsers(List<AttendanceItemRequest> records) {
@@ -149,7 +204,7 @@ public class AttendanceService {
 
 	private void ensureSessionExists(Long trainingSessionId) {
 		if (!trainingSessionRepository.existsById(trainingSessionId)) {
-			throw new NotFoundException("Training session not found");
+			throw new NotFoundException("training_session", "Training session not found");
 		}
 	}
 }

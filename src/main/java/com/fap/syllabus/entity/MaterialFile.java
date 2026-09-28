@@ -11,6 +11,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.Getter;
+import org.hibernate.annotations.Formula;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
@@ -23,7 +24,7 @@ public class MaterialFile {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "material_files_seq")
-	@SequenceGenerator(name = "material_files_seq", sequenceName = "material_files_seq", allocationSize = 1)
+	@SequenceGenerator(name = "material_files_seq", sequenceName = "material_files_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -47,4 +48,12 @@ public class MaterialFile {
 
 	@Column(name = "uploaded_at", nullable = false)
 	private LocalDateTime uploadedAt;
+
+	/**
+	 * Whether bytes are stored in {@code material_file_contents}. Read with the row as a primary-key
+	 * EXISTS, so listing materials neither loads the BLOB nor runs a query per material. It is not
+	 * written back; code that stores content in the same transaction sets it for the response.
+	 */
+	@Formula("(case when exists (select 1 from material_file_contents c where c.material_file_id = id) then 1 else 0 end)")
+	private boolean contentStored;
 }

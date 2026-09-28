@@ -4,6 +4,7 @@ import com.fap.clazz.enums.ClassStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 public record ClassResponse(
 		Long id,
@@ -19,6 +20,13 @@ public record ClassResponse(
 		LocalDate startDate,
 		LocalDate endDate,
 		String duration,
+		Integer capacity,
+		long enrolledCount,
+		long waitlistCount,
+		boolean selfEnrollmentEnabled,
+		LocalDate enrollmentStartDate,
+		LocalDate enrollmentEndDate,
+		BigDecimal minimumAttendanceRate,
 		Long createdBy,
 		Long updatedBy,
 		LocalDateTime createdAt,

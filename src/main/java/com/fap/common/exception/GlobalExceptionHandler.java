@@ -2,11 +2,19 @@ package com.fap.common.exception;
 
 import com.fap.common.api.ErrorResponse;
 import com.fap.common.i18n.MessageService;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,6 +24,8 @@ import java.util.List;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+	private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
 	private final MessageService messageService;
 
@@ -60,6 +70,12 @@ public class GlobalExceptionHandler {
 				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
 	}
 
+	@ExceptionHandler(AccessDeniedException.class)
+	ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException exception) {
+		return ResponseEntity.status(HttpStatus.FORBIDDEN)
+				.body(ErrorResponse.of("FORBIDDEN", messageService.get("error.FORBIDDEN")));
+	}
+
 	@ExceptionHandler(ConflictException.class)
 	ResponseEntity<ErrorResponse> handleConflict(ConflictException exception) {
 		return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -70,6 +86,24 @@ public class GlobalExceptionHandler {
 	ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException exception) {
 		return ResponseEntity.badRequest()
 				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
+	}
+
+	@ExceptionHandler(MissingServletRequestPartException.class)
+	ResponseEntity<ErrorResponse> handleMissingRequestPart(MissingServletRequestPartException exception) {
+		return ResponseEntity.badRequest()
+				.body(ErrorResponse.of("FILE_REQUIRED", messageService.get("error.FILE_REQUIRED")));
+	}
+
+	@ExceptionHandler(MaxUploadSizeExceededException.class)
+	ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException exception) {
+		return ResponseEntity.badRequest()
+				.body(ErrorResponse.of("FILE_TOO_LARGE", messageService.get("error.FILE_TOO_LARGE")));
+	}
+
+	@ExceptionHandler(MultipartException.class)
+	ResponseEntity<ErrorResponse> handleMultipart(MultipartException exception) {
+		return ResponseEntity.badRequest()
+				.body(ErrorResponse.of("INVALID_MULTIPART", messageService.get("error.INVALID_MULTIPART")));
 	}
 
 	@ExceptionHandler(BadCredentialsException.class)
@@ -102,13 +136,40 @@ public class GlobalExceptionHandler {
 				.body(ErrorResponse.of(exception.getCode(), errorMessage(exception)));
 	}
 
+	/**
+	 * Lost-update protection surfaces here. Two concurrent writers to the same optimistically
+	 * locked row (for example two {@code submit} calls on one quiz attempt) mean the loser's
+	 * version check fails, which is a business conflict rather than a server fault.
+	 */
+	@ExceptionHandler({OptimisticLockingFailureException.class, OptimisticLockException.class})
+	ResponseEntity<ErrorResponse> handleOptimisticLock(Exception exception) {
+		return ResponseEntity.status(HttpStatus.CONFLICT)
+				.body(ErrorResponse.of(
+						"CONCURRENT_MODIFICATION",
+						messageService.get("error.CONCURRENT_MODIFICATION")));
+	}
+
+	/**
+	 * Last-resort handler. The client gets a generic message with no stack trace, so the server log
+	 * is the only place the cause survives: without this {@code log.error} an unexpected failure
+	 * would return 500 and leave nothing to diagnose. The MDC correlation id set by
+	 * {@code RequestIdFilter} ties the entry back to the request the caller reports.
+	 */
 	@ExceptionHandler(Exception.class)
 	ResponseEntity<ErrorResponse> handleUnexpected(Exception exception) {
+		log.error("Unhandled exception", exception);
 		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 				.body(ErrorResponse.of("INTERNAL_ERROR", messageService.get("error.INTERNAL_ERROR")));
 	}
 
+	/**
+	 * Most specific localized text available: the exception's own message key, then
+	 * {@code error.<code>}, then the exception's English message.
+	 */
 	private String errorMessage(BusinessException exception) {
-		return messageService.getOrDefault("error." + exception.getCode(), exception.getMessage());
+		Object[] args = exception.getMessageArgs();
+		String byCode = messageService.getOrDefault("error." + exception.getCode(), exception.getMessage(), args);
+		String messageKey = exception.getMessageKey();
+		return messageKey == null ? byCode : messageService.getOrDefault(messageKey, byCode, args);
 	}
 }

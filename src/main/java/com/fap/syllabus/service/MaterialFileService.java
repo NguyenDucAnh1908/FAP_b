@@ -1,28 +1,42 @@
 package com.fap.syllabus.service;
 
 import com.fap.common.audit.AuditLogService;
-import com.fap.common.exception.ConflictException;
+import com.fap.clazz.enums.ClassEnrollmentStatus;
+import com.fap.common.exception.BadRequestException;
+import com.fap.common.exception.ForbiddenException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.metrics.DomainMetrics;
+import com.fap.common.api.PageRequestFactory;
+import com.fap.common.util.FileValidator;
+import com.fap.common.util.TextNormalizer;
 import com.fap.syllabus.dto.AssignedMaterialFileResponse;
 import com.fap.syllabus.dto.CreateMaterialFileRequest;
 import com.fap.syllabus.dto.CreateMaterialRequest;
+import com.fap.syllabus.dto.MaterialFileDownload;
 import com.fap.syllabus.dto.MaterialFileResponse;
 import com.fap.syllabus.dto.UpdateMaterialFileRequest;
 import com.fap.syllabus.entity.MaterialFile;
 import com.fap.syllabus.entity.Syllabus;
 import com.fap.syllabus.entity.SyllabusTopic;
-import com.fap.syllabus.enums.SyllabusStatus;
 import com.fap.syllabus.mapper.MaterialFileMapper;
+import com.fap.syllabus.repository.MaterialFileContentRepository;
 import com.fap.syllabus.repository.MaterialFileRepository;
 import com.fap.syllabus.repository.SyllabusRepository;
 import com.fap.syllabus.repository.SyllabusTopicRepository;
-import com.fap.training.enums.TrainingRegistrationStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -30,32 +44,57 @@ import java.util.List;
 @Service
 public class MaterialFileService {
 
-	private static final Collection<TrainingRegistrationStatus> ELIGIBLE_REGISTRATION_STATUSES = List.of(
-			TrainingRegistrationStatus.Registered,
-			TrainingRegistrationStatus.Completed);
+	private static final Collection<ClassEnrollmentStatus> ELIGIBLE_CLASS_ENROLLMENT_STATUSES = List.of(
+			ClassEnrollmentStatus.Enrolled,
+			ClassEnrollmentStatus.Completed);
+
+	private static final String DEFAULT_DOWNLOAD_CONTENT_TYPE = "application/octet-stream";
+
+	/** Placeholder held only between save() and the id-dependent download URL being set. */
+	static final String PENDING_FILE_URL = "pending";
+
+	public static String downloadPath(Long materialId) {
+		return "/api/v1/materials/" + materialId + "/download";
+	}
+
+	/** Recognises a URL built by {@link #downloadPath}, whose bytes live in Oracle rather than elsewhere. */
+	static boolean isInternalDownloadPath(String fileUrl) {
+		return fileUrl != null
+				&& fileUrl.startsWith("/api/v1/materials/")
+				&& fileUrl.endsWith("/download");
+	}
 
 	private final SyllabusRepository syllabusRepository;
 	private final SyllabusTopicRepository topicRepository;
 	private final MaterialFileRepository materialFileRepository;
+	private final MaterialFileContentRepository materialFileContentRepository;
 	private final MaterialFileMapper materialFileMapper;
+	private final FileValidator fileValidator;
 	private final AuditLogService auditLogService;
+	private final DomainMetrics domainMetrics;
 
 	public MaterialFileService(
 			SyllabusRepository syllabusRepository,
 			SyllabusTopicRepository topicRepository,
 			MaterialFileRepository materialFileRepository,
+			MaterialFileContentRepository materialFileContentRepository,
 			MaterialFileMapper materialFileMapper,
-			AuditLogService auditLogService) {
+			FileValidator fileValidator,
+			AuditLogService auditLogService,
+			DomainMetrics domainMetrics) {
 		this.syllabusRepository = syllabusRepository;
 		this.topicRepository = topicRepository;
 		this.materialFileRepository = materialFileRepository;
+		this.materialFileContentRepository = materialFileContentRepository;
 		this.materialFileMapper = materialFileMapper;
+		this.fileValidator = fileValidator;
 		this.auditLogService = auditLogService;
+		this.domainMetrics = domainMetrics;
 	}
 
 	@Transactional(readOnly = true)
 	public List<MaterialFileResponse> list(Long syllabusId, Long topicId) {
-		findTopic(syllabusId, topicId);
+		topicRepository.getByIdAndUnitDaySyllabusIdOrThrow(topicId, syllabusId);
 		return materialFileRepository.findByTopicIdOrderByUploadedAtDesc(topicId).stream()
 				.map(materialFileMapper::toResponse)
 				.toList();
@@ -63,23 +102,58 @@ public class MaterialFileService {
 
 	@Transactional(readOnly = true)
 	public Page<MaterialFileResponse> listLibrary(Long syllabusId, Long topicId, String keyword, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "uploadedAt", "id"));
-		return materialFileRepository.search(syllabusId, topicId, normalize(keyword), pageRequest)
+		return listLibrary(syllabusId, topicId, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<MaterialFileResponse> listLibrary(
+			Long syllabusId,
+			Long topicId,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "uploadedAt", "id"),
+				"id", "uploadedAt", "fileName", "contentType", "fileSize");
+		return materialFileRepository.search(syllabusId, topicId, TextNormalizer.blankToNull(keyword), pageRequest)
 				.map(materialFileMapper::toResponse);
 	}
 
 	@Transactional(readOnly = true)
 	public MaterialFileResponse get(Long materialId) {
-		return materialFileMapper.toResponse(findMaterial(materialId));
+		return materialFileMapper.toResponse(materialFileRepository.getWithTopicOrThrow(materialId));
 	}
 
 	@Transactional(readOnly = true)
 	public Page<AssignedMaterialFileResponse> assignedToUser(Long currentUserId, String keyword, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "uploadedAt", "id"));
+		return assignedToUser(currentUserId, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<AssignedMaterialFileResponse> assignedToUser(
+			Long currentUserId,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "uploadedAt", "id"),
+				"id", "uploadedAt", "fileName", "contentType", "fileSize");
 		return materialFileRepository.searchAssignedToUser(
 						currentUserId,
-						ELIGIBLE_REGISTRATION_STATUSES,
-						normalize(keyword),
+						ELIGIBLE_CLASS_ENROLLMENT_STATUSES,
+						TextNormalizer.blankToNull(keyword),
 						pageRequest)
 				.map(materialFileMapper::toAssignedResponse);
 	}
@@ -101,7 +175,7 @@ public class MaterialFileService {
 			CreateMaterialFileRequest request,
 			Long currentUserId) {
 		findEditableSyllabus(syllabusId);
-		SyllabusTopic topic = findTopic(syllabusId, topicId);
+		SyllabusTopic topic = topicRepository.getByIdAndUnitDaySyllabusIdOrThrow(topicId, syllabusId);
 		MaterialFile materialFile = new MaterialFile();
 		materialFile.setTopic(topic);
 		applyFields(materialFile, request.fileName(), request.fileUrl(), request.fileSize(), request.contentType());
@@ -112,11 +186,129 @@ public class MaterialFileService {
 		return materialFileMapper.toResponse(saved);
 	}
 
+	/**
+	 * Stores an uploaded file's bytes inside Oracle and points {@code fileUrl} at the download
+	 * endpoint, so callers see internal uploads and external links through the same field.
+	 */
+	@Transactional
+	public MaterialFileResponse upload(Long syllabusId, Long topicId, MultipartFile file, Long currentUserId) {
+		boolean counted = false;
+		try {
+			findEditableSyllabus(syllabusId);
+			SyllabusTopic topic = topicRepository.getByIdAndUnitDaySyllabusIdOrThrow(topicId, syllabusId);
+			fileValidator.validateUpload(file);
+			String fileName = fileValidator.sanitizeFileName(file.getOriginalFilename());
+
+			long size = file.getSize();
+			MaterialFile materialFile = new MaterialFile();
+			materialFile.setTopic(topic);
+			materialFile.setFileName(fileName);
+			materialFile.setFileSize(size);
+			materialFile.setContentType(TextNormalizer.blankToNull(file.getContentType()));
+			materialFile.setUploadedBy(currentUserId);
+			materialFile.setUploadedAt(LocalDateTime.now());
+			// file_url is NOT NULL, and the download path needs the generated id — save first, then set it.
+			materialFile.setFileUrl(PENDING_FILE_URL);
+			MaterialFile saved = materialFileRepository.save(materialFile);
+			saved.setFileUrl(downloadPath(saved.getId()));
+			// The content row references material_files, so that row must exist before streaming.
+			materialFileRepository.flush();
+
+			// Streamed from the multipart's temporary storage into the BLOB, never fully on the heap.
+			try (InputStream data = file.getInputStream()) {
+				materialFileContentRepository.insertContent(saved.getId(), data, size);
+			} catch (IOException exception) {
+				domainMetrics.recordUpload(false);
+				counted = true;
+				throw new BadRequestException("FILE_UNREADABLE", "Uploaded file could not be read");
+			}
+			saved.setContentStored(true);
+
+			auditLogService.record("UPLOAD_MATERIAL_FILE", "syllabus", syllabusId);
+			domainMetrics.recordUpload(true);
+			counted = true;
+			return materialFileMapper.toResponse(saved);
+		} finally {
+			// Any early-return failure (validation, unreadable file, persistence error) is observed
+			// exactly once; the IOException path above already counted before rethrowing.
+			if (!counted) {
+				domainMetrics.recordUpload(false);
+			}
+		}
+	}
+
+	/**
+	 * Reads an internally stored material after an ownership check.
+	 *
+	 * <p>{@code canManageMaterials} is decided by the caller from an action-based permission check,
+	 * never from a role name or level comparison. Trainees hold {@code learning_material:view}
+	 * globally, so without the registration probe below any trainee could read any material.
+	 */
+	@Transactional(readOnly = true)
+	public MaterialFileDownload download(Long materialId, Long currentUserId, boolean canManageMaterials) {
+		MaterialFile materialFile = materialFileRepository.getWithTopicOrThrow(materialId);
+		if (!canManageMaterials
+				&& !materialFileRepository.existsAssignedToUser(
+						materialId, currentUserId, ELIGIBLE_CLASS_ENROLLMENT_STATUSES)) {
+			throw new ForbiddenException("You are not assigned to this material")
+					.withMessageKey("error.ACCESS_DENIED.material_not_assigned");
+		}
+		Path spool = spoolContent(materialId);
+		try {
+			return new MaterialFileDownload(
+					materialFile.getFileName(),
+					materialFile.getContentType() == null
+							? DEFAULT_DOWNLOAD_CONTENT_TYPE
+							: materialFile.getContentType(),
+					Files.size(spool),
+					Files.newInputStream(spool, StandardOpenOption.DELETE_ON_CLOSE));
+		} catch (IOException exception) {
+			deleteQuietly(spool);
+			throw new UncheckedIOException("Could not open spooled material content", exception);
+		}
+	}
+
+	/**
+	 * Copies the BLOB to a temporary file while the transaction is open. The database connection is
+	 * released as soon as that local copy finishes, instead of being held for as long as a slow client
+	 * takes to download, and the heap only ever holds a copy buffer.
+	 */
+	private Path spoolContent(Long materialId) {
+		Path spool;
+		try {
+			spool = Files.createTempFile("fap-material-", ".download");
+		} catch (IOException exception) {
+			throw new UncheckedIOException("Could not create a temporary download file", exception);
+		}
+		boolean stored = false;
+		try (OutputStream target = Files.newOutputStream(spool)) {
+			stored = materialFileContentRepository.copyContent(materialId, target);
+		} catch (IOException exception) {
+			throw new UncheckedIOException("Could not spool material content", exception);
+		} finally {
+			if (!stored) {
+				deleteQuietly(spool);
+			}
+		}
+		if (!stored) {
+			throw new NotFoundException("material_content", "Material file has no stored content");
+		}
+		return spool;
+	}
+
+	private static void deleteQuietly(Path path) {
+		try {
+			Files.deleteIfExists(path);
+		} catch (IOException ignored) {
+			// A leftover temp file is harmless; the original failure matters more.
+		}
+	}
+
 	@Transactional
 	public MaterialFileResponse update(Long materialId, UpdateMaterialFileRequest request) {
-		MaterialFile materialFile = findMaterial(materialId);
+		MaterialFile materialFile = materialFileRepository.getWithTopicOrThrow(materialId);
 		Syllabus syllabus = materialFile.getTopic().getUnit().getDay().getSyllabus();
-		ensureEditable(syllabus);
+		SyllabusRules.ensureEditable(syllabus);
 		applyFields(materialFile, request.fileName(), request.fileUrl(), request.fileSize(), request.contentType());
 		auditLogService.record("UPDATE_MATERIAL_FILE", "syllabus", syllabus.getId());
 		return materialFileMapper.toResponse(materialFile);
@@ -124,9 +316,9 @@ public class MaterialFileService {
 
 	@Transactional
 	public void delete(Long materialId) {
-		MaterialFile materialFile = findMaterial(materialId);
+		MaterialFile materialFile = materialFileRepository.getWithTopicOrThrow(materialId);
 		Syllabus syllabus = materialFile.getTopic().getUnit().getDay().getSyllabus();
-		ensureEditable(syllabus);
+		SyllabusRules.ensureEditable(syllabus);
 		materialFileRepository.delete(materialFile);
 		auditLogService.record("DELETE_MATERIAL_FILE", "syllabus", syllabus.getId());
 	}
@@ -134,34 +326,16 @@ public class MaterialFileService {
 	@Transactional
 	public void delete(Long syllabusId, Long topicId, Long materialId) {
 		findEditableSyllabus(syllabusId);
-		findTopic(syllabusId, topicId);
-		MaterialFile materialFile = materialFileRepository.findByIdAndTopicId(materialId, topicId)
-				.orElseThrow(() -> new NotFoundException("Material file not found"));
+		topicRepository.getByIdAndUnitDaySyllabusIdOrThrow(topicId, syllabusId);
+		MaterialFile materialFile = materialFileRepository.getByIdAndTopicIdOrThrow(materialId, topicId);
 		materialFileRepository.delete(materialFile);
 		auditLogService.record("DELETE_MATERIAL_FILE", "syllabus", syllabusId);
 	}
 
 	private Syllabus findEditableSyllabus(Long syllabusId) {
-		Syllabus syllabus = syllabusRepository.findById(syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus not found"));
-		ensureEditable(syllabus);
+		Syllabus syllabus = syllabusRepository.getOrThrow(syllabusId);
+		SyllabusRules.ensureEditable(syllabus);
 		return syllabus;
-	}
-
-	private void ensureEditable(Syllabus syllabus) {
-		if (syllabus.getStatus() == SyllabusStatus.Active || syllabus.getStatus() == SyllabusStatus.Inactive) {
-			throw new ConflictException("SYLLABUS_NOT_EDITABLE", "Only Drafting or Pending syllabus can be edited");
-		}
-	}
-
-	private SyllabusTopic findTopic(Long syllabusId, Long topicId) {
-		return topicRepository.findByIdAndUnitDaySyllabusId(topicId, syllabusId)
-				.orElseThrow(() -> new NotFoundException("Syllabus topic not found"));
-	}
-
-	private MaterialFile findMaterial(Long materialId) {
-		return materialFileRepository.findWithTopicById(materialId)
-				.orElseThrow(() -> new NotFoundException("Material file not found"));
 	}
 
 	private void applyFields(
@@ -173,10 +347,6 @@ public class MaterialFileService {
 		materialFile.setFileName(fileName.trim());
 		materialFile.setFileUrl(fileUrl.trim());
 		materialFile.setFileSize(fileSize);
-		materialFile.setContentType(normalize(contentType));
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
+		materialFile.setContentType(TextNormalizer.blankToNull(contentType));
 	}
 }

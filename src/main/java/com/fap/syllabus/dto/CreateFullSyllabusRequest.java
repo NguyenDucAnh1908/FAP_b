@@ -60,6 +60,7 @@ public record CreateFullSyllabusRequest(
 	}
 
 	public record MaterialRequest(
+			Long id,
 			@NotBlank @Size(max = 255) String fileName,
 			@NotBlank @Size(max = 512) String fileUrl,
 			@Min(1) Long fileSize,

@@ -1,21 +1,20 @@
 package com.fap.common.security;
 
-import com.fap.role.entity.Permission;
 import com.fap.role.enums.PermissionLevel;
-import com.fap.role.repository.PermissionRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component("permissionEvaluator")
 public class PermissionEvaluator {
 
-	private final PermissionRepository permissionRepository;
+	private final AuthorizationCache authorizationCache;
 
-	public PermissionEvaluator(PermissionRepository permissionRepository) {
-		this.permissionRepository = permissionRepository;
+	public PermissionEvaluator(AuthorizationCache authorizationCache) {
+		this.authorizationCache = authorizationCache;
 	}
 
 	public boolean hasAction(Authentication authentication, String resource, String action) {
@@ -42,7 +41,7 @@ public class PermissionEvaluator {
 		if (!(authentication.getPrincipal() instanceof FapUserPrincipal principal)) {
 			return false;
 		}
-		if (principal.roles().contains("Super Admin")) {
+		if (principal.roles().contains(RoleNames.SUPER_ADMIN)) {
 			return true;
 		}
 
@@ -55,9 +54,9 @@ public class PermissionEvaluator {
 			return false;
 		}
 
-		return permissionRepository.findByRoleIdIn(roleIds).stream()
-				.filter(permission -> permission.getResource().equals(resource))
-				.map(Permission::getPermissionLevel)
+		return authorizationCache.permissionsByRole(roleIds).values().stream()
+				.map(levels -> levels.get(resource))
+				.filter(Objects::nonNull)
 				.anyMatch(permissionMatcher);
 	}
 }

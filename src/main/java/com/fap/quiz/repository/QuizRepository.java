@@ -1,5 +1,6 @@
 package com.fap.quiz.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.quiz.entity.Quiz;
 import com.fap.quiz.enums.QuizStatus;
 import com.fap.training.enums.TrainingRegistrationStatus;
@@ -14,6 +15,24 @@ import java.util.Collection;
 import java.util.List;
 
 public interface QuizRepository extends JpaRepository<Quiz, Long> {
+
+	long countByStatus(QuizStatus status);
+
+	/** One place for the lookup so every caller fails with the same not-found message. */
+	default Quiz getQuizOrThrow(Long id) {
+		return findById(id)
+				.orElseThrow(() -> new NotFoundException("quiz", "Quiz not found"));
+	}
+
+	interface StatusCount {
+		QuizStatus getStatus();
+
+		Long getTotal();
+	}
+
+	/** Row count per status in one query, for dashboards (replaces one count query per status). */
+	@Query("select q.status as status, count(q) as total from Quiz q group by q.status")
+	List<StatusCount> countGroupedByStatus();
 
 	@Query(
 			value = """
@@ -45,49 +64,62 @@ public interface QuizRepository extends JpaRepository<Quiz, Long> {
 			@Param("keyword") String keyword,
 			Pageable pageable);
 
+	// Assignment matching is an EXISTS, not a join: a quiz assigned to several sessions/classes would
+	// repeat per assignment, and the DISTINCT that removed repeats fails on Oracle (ORA-00932)
+	// because Quiz.description is a CLOB.
 	@Query(
 			value = """
-					select distinct q
+					select q
 					from Quiz q
-					join QuizAssignment qa on qa.quiz = q
 					where q.status = :status
 					  and (q.openDate is null or q.openDate <= :today)
 					  and (q.closeDate is null or q.closeDate >= :today)
-					  and (
-					       qa.trainingSession.id in (
-					           select r.trainingSession.id
-					           from TrainingRegistration r
-					           where r.user.id = :userId
-					             and r.status in :eligibleStatuses
-					       )
-					       or qa.fapClass.id in (
-					           select r.trainingSession.fapClass.id
-					           from TrainingRegistration r
-					           where r.user.id = :userId
-					             and r.status in :eligibleStatuses
-					       )
+					  and exists (
+					      select qa.id
+					      from QuizAssignment qa
+					      where qa.quiz = q
+					        and (
+					             qa.trainingSession.id in (
+					                 select r.trainingSession.id
+					                 from TrainingRegistration r
+					                 where r.user.id = :userId
+					                   and r.status in :eligibleStatuses
+					             )
+					             or qa.fapClass.id in (
+					                 select e.fapClass.id
+					                 from ClassEnrollment e
+					                 where e.user.id = :userId
+					                   and e.status in (com.fap.clazz.enums.ClassEnrollmentStatus.Enrolled,
+					                                    com.fap.clazz.enums.ClassEnrollmentStatus.Completed)
+					             )
+					        )
 					  )
 					""",
 			countQuery = """
-					select count(distinct q)
+					select count(q)
 					from Quiz q
-					join QuizAssignment qa on qa.quiz = q
 					where q.status = :status
 					  and (q.openDate is null or q.openDate <= :today)
 					  and (q.closeDate is null or q.closeDate >= :today)
-					  and (
-					       qa.trainingSession.id in (
-					           select r.trainingSession.id
-					           from TrainingRegistration r
-					           where r.user.id = :userId
-					             and r.status in :eligibleStatuses
-					       )
-					       or qa.fapClass.id in (
-					           select r.trainingSession.fapClass.id
-					           from TrainingRegistration r
-					           where r.user.id = :userId
-					             and r.status in :eligibleStatuses
-					       )
+					  and exists (
+					      select qa.id
+					      from QuizAssignment qa
+					      where qa.quiz = q
+					        and (
+					             qa.trainingSession.id in (
+					                 select r.trainingSession.id
+					                 from TrainingRegistration r
+					                 where r.user.id = :userId
+					                   and r.status in :eligibleStatuses
+					             )
+					             or qa.fapClass.id in (
+					                 select e.fapClass.id
+					                 from ClassEnrollment e
+					                 where e.user.id = :userId
+					                   and e.status in (com.fap.clazz.enums.ClassEnrollmentStatus.Enrolled,
+					                                    com.fap.clazz.enums.ClassEnrollmentStatus.Completed)
+					             )
+					        )
 					  )
 					""")
 	Page<Quiz> searchAssignedToUser(
@@ -98,28 +130,33 @@ public interface QuizRepository extends JpaRepository<Quiz, Long> {
 			Pageable pageable);
 
 	@Query("""
-			select distinct q
+			select q
 			from Quiz q
-			join QuizAssignment qa on qa.quiz = q
 			where q.status = :status
 			  and (q.openDate is null or q.openDate <= :today)
 			  and (q.closeDate is null or q.closeDate >= :today)
-			  and (
-			       qa.fapClass.id = :classId
-			       or qa.trainingSession.id in (
-			           select r.trainingSession.id
-			           from TrainingRegistration r
-			           where r.user.id = :userId
-			             and r.trainingSession.fapClass.id = :classId
-			             and r.status in :eligibleStatuses
-			       )
+			  and exists (
+			      select qa.id
+			      from QuizAssignment qa
+			      where qa.quiz = q
+			        and (
+			             qa.fapClass.id = :classId
+			             or qa.trainingSession.id in (
+			                 select r.trainingSession.id
+			                 from TrainingRegistration r
+			                 where r.user.id = :userId
+			                   and r.trainingSession.fapClass.id = :classId
+			                   and r.status in :eligibleStatuses
+			             )
+			        )
 			  )
 			  and exists (
-			      select r.id
-			      from TrainingRegistration r
-			      where r.user.id = :userId
-			        and r.trainingSession.fapClass.id = :classId
-			        and r.status in :eligibleStatuses
+			      select e.id
+			      from ClassEnrollment e
+			      where e.user.id = :userId
+			        and e.fapClass.id = :classId
+			        and e.status in (com.fap.clazz.enums.ClassEnrollmentStatus.Enrolled,
+			                         com.fap.clazz.enums.ClassEnrollmentStatus.Completed)
 			  )
 			""")
 	List<Quiz> findAssignedToUserByClass(

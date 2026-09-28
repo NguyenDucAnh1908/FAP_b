@@ -89,6 +89,12 @@ Raw SQL is allowed only in Flyway migrations or repository-level custom queries 
 src/main/resources/
   application.yaml
   application-local.yaml
+  application-prod.yaml
   application-test.yaml
   db/migration/V1__create_fap_schema.sql
+  db/seed/V22__seed_sample_data.sql
 ```
+
+`db/migration` is the only location scanned by default, so it must contain schema
+changes and production-safe reference data only. `db/seed` holds demo/sample data and
+is added to `spring.flyway.locations` by the `local` profile alone.

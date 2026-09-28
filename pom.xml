@@ -32,6 +32,9 @@
 		<jjwt.version>0.12.6</jjwt.version>
 		<springdoc.version>2.8.6</springdoc.version>
 		<lombok.version>1.18.38</lombok.version>
+		<bucket4j.version>8.14.0</bucket4j.version>
+		<logstash-logback.version>8.1</logstash-logback.version>
+		<jacoco.version>0.8.12</jacoco.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -53,6 +56,17 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<!--
+		  Prometheus scrape format for /actuator/prometheus. Actuator already pulls in micrometer-core;
+		  this only adds the registry that renders the meters. monitoring.md mandates HTTP rate/error/
+		  duration, DB pool, auth-failure, quiz-submit latency, registration conflict/waitlist, and
+		  upload success/failure. HTTP and DB pool metrics come from Boot auto-config once a registry
+		  exists; Flyway startup status stays in Flyway logs; domain signals use DomainMetrics.
+		-->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -98,6 +112,31 @@
 			<version>${jjwt.version}</version>
 			<scope>runtime</scope>
 		</dependency>
+		<!--
+		  In-memory token buckets for authentication rate limiting. Caffeine supplies the bounded,
+		  expiring key store so abandoned client keys cannot grow the heap without limit. No Redis:
+		  tech-stack.md keeps it out until a module needs shared state, and per-instance limits are
+		  sufficient for the current single-instance deployment.
+		-->
+		<dependency>
+			<groupId>com.bucket4j</groupId>
+			<artifactId>bucket4j_jdk17-core</artifactId>
+			<version>${bucket4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
+		<!--
+		  JSON log encoder. Log aggregators cannot reliably parse the default multi-line text
+		  layout, so a stack trace arrives as a dozen unrelated entries with no correlation id
+		  attached. Only non-local profiles use it; local development keeps the readable layout.
+		-->
+		<dependency>
+			<groupId>net.logstash.logback</groupId>
+			<artifactId>logstash-logback-encoder</artifactId>
+			<version>${logstash-logback.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
@@ -127,6 +166,82 @@
 
 	<build>
 		<plugins>
+			<!--
+			  Surefire runs *Test unit tests in `test`; Failsafe runs *IT tests against a real Oracle
+			  (Testcontainers, or FAP_IT_DB_URL) in `integration-test`/`verify`. See AbstractOracleIT.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<!--
+			  Coverage for unit and integration runs, merged into target/site/jacoco-merged. Report only
+			  for now: a coverage gate is added once the baseline is known.
+			-->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco.version}</version>
+				<executions>
+					<execution>
+						<id>prepare-unit</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>prepare-integration</id>
+						<goals>
+							<goal>prepare-agent-integration</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>merge</id>
+						<phase>post-integration-test</phase>
+						<goals>
+							<goal>merge</goal>
+						</goals>
+						<configuration>
+							<fileSets>
+								<fileSet>
+									<directory>${project.build.directory}</directory>
+									<includes>
+										<include>jacoco.exec</include>
+										<include>jacoco-it.exec</include>
+									</includes>
+								</fileSet>
+							</fileSets>
+							<destFile>${project.build.directory}/jacoco-merged.exec</destFile>
+						</configuration>
+					</execution>
+					<execution>
+						<id>report-unit</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report-merged</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+						<configuration>
+							<dataFile>${project.build.directory}/jacoco-merged.exec</dataFile>
+							<outputDirectory>${project.reporting.outputDirectory}/jacoco-merged</outputDirectory>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

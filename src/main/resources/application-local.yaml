@@ -2,6 +2,18 @@ spring:
   config:
     activate:
       on-profile: local
+  datasource:
+    password: ${DB_PASSWORD:12345}
+  flyway:
+    # db/seed holds V22/V23 (sample accounts, demo classes, fake system_settings). They live
+    # outside db/migration so a production deploy, which only scans db/migration, can never
+    # apply them. Local development keeps them so the existing schema history still resolves
+    # and a fresh local database comes up with data to click through.
+    locations: classpath:db/migration,classpath:db/seed
+  jpa:
+    properties:
+      # HIBERNATE_STATS=true logs statement/entity counts per session, to spot N+1 locally.
+      hibernate.generate_statistics: ${HIBERNATE_STATS:false}
   mail:
     host: ${MAIL_HOST:}
     port: ${MAIL_PORT:587}
@@ -14,12 +26,19 @@ spring:
           starttls:
             enable: ${MAIL_SMTP_STARTTLS:true}
 
+app:
+  # Local-only fallback so developers do not have to export JWT_SECRET. Every other profile
+  # inherits the no-default ${JWT_SECRET} from application.yaml and fails fast when it is missing.
+  jwt:
+    secret: ${JWT_SECRET:local_dev_only_secret_do_not_use_in_production}
+
 logging:
   file:
     name: ${LOG_FILE:logs/fap-backend-local.log}
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{64} - %msg%n"
+  # logging.pattern.console / logging.pattern.file are intentionally NOT set here.
+  # logback-spring.xml defines the console/file patterns inline (with %X{requestId}); if this
+  # profile overrode logging.pattern.*, Boot would map it onto CONSOLE_LOG_PATTERN /
+  # FILE_LOG_PATTERN and silently drop the correlation id from local logs.
   logback:
     rollingpolicy:
       file-name-pattern: ${LOG_FILE_PATTERN:logs/fap-backend-local.%d{yyyy-MM-dd}.%i.log}

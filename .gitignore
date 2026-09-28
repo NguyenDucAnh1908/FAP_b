@@ -9,6 +9,8 @@ logs/
 ### Environment files ###
 .env
 .env.*
+# Template only: documents required variables, holds no real values.
+!.env.example
 
 ### STS ###
 .apt_generated

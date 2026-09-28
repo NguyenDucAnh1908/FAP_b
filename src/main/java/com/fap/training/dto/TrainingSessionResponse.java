@@ -2,6 +2,7 @@ package com.fap.training.dto;
 
 import com.fap.training.enums.TrainingSessionStatus;
 import com.fap.training.enums.TrainingSessionType;
+import com.fap.training.enums.TrainingRegistrationMode;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,6 +25,7 @@ public record TrainingSessionResponse(
 		String meetingLink,
 		Integer capacity,
 		Integer enrolledCount,
+		TrainingRegistrationMode registrationMode,
 		TrainingSessionStatus status,
 		LocalDateTime createdAt,
 		LocalDateTime updatedAt

@@ -1,0 +1,516 @@
+@baseUrl = http://localhost:8080/api/v1
+@password = Password@123
+
+### 01 - Login E2E Super Admin and initialize one API run
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "email": "e2e.superadmin@fap.local",
+  "password": "{{password}}"
+}
+
+> {%
+client.test("Super Admin login succeeds", function () {
+  client.assert(response.status === 200, "Expected HTTP 200");
+});
+client.global.set("accessToken", response.body.data.accessToken);
+const runId = Date.now().toString();
+const today = new Date();
+const future = new Date(today);
+const classEnd = new Date(today);
+future.setDate(today.getDate() + 14);
+classEnd.setDate(today.getDate() + 90);
+client.global.set("runId", runId);
+client.global.set("today", today.toISOString().slice(0, 10));
+client.global.set("futureDate", future.toISOString().slice(0, 10));
+client.global.set("futureStart", future.toISOString().slice(0, 10) + "T09:00:00");
+client.global.set("futureEnd", future.toISOString().slice(0, 10) + "T11:00:00");
+client.global.set("classEnd", classEnd.toISOString().slice(0, 10));
+%}
+
+### 02 - Load real role IDs
+GET {{baseUrl}}/roles
+Authorization: Bearer {{accessToken}}
+Accept-Language: vi
+
+> {%
+const roles = response.body.data;
+client.global.set("classAdminRoleId", roles.find(r => r.name === "Class Admin").id);
+client.global.set("trainerRoleId", roles.find(r => r.name === "Trainer").id);
+client.global.set("traineeRoleId", roles.find(r => r.name === "Trainee").id);
+%}
+
+### 03 - Create Class Admin for this run
+POST {{baseUrl}}/users
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "fullName": "API Flow Class Admin {{runId}}",
+  "email": "flow.classadmin.{{runId}}@fap.local",
+  "phone": "0903000001",
+  "password": "{{password}}",
+  "dateOfBirth": "1990-01-15",
+  "gender": "Male",
+  "roleIds": [{{classAdminRoleId}}]
+}
+
+> {% client.global.set("classAdminUserId", response.body.data.id); %}
+
+### 04 - Create Trainer for this run
+POST {{baseUrl}}/users
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "fullName": "API Flow Trainer {{runId}}",
+  "email": "flow.trainer.{{runId}}@fap.local",
+  "phone": "0903000002",
+  "password": "{{password}}",
+  "dateOfBirth": "1988-03-20",
+  "gender": "Female",
+  "roleIds": [{{trainerRoleId}}]
+}
+
+> {% client.global.set("trainerUserId", response.body.data.id); %}
+
+### 05 - Create Trainee for this run
+POST {{baseUrl}}/users
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "fullName": "API Flow Trainee {{runId}}",
+  "email": "flow.trainee.{{runId}}@fap.local",
+  "phone": "0903000003",
+  "password": "{{password}}",
+  "dateOfBirth": "2001-07-10",
+  "gender": "Male",
+  "roleIds": [{{traineeRoleId}}]
+}
+
+> {% client.global.set("traineeUserId", response.body.data.id); %}
+
+### 06 - Create a complete Drafting syllabus
+POST {{baseUrl}}/syllabuses/full
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "name": "API Flow Java Backend {{runId}}",
+  "code": "FLOW-JAVA-{{runId}}",
+  "version": "v1.0",
+  "levelName": "Intermediate",
+  "attendees": 20,
+  "duration": "40 hours",
+  "technicalRequirements": "JDK 21, IntelliJ IDEA, Oracle XE",
+  "courseObjectives": "Build and secure a Spring Boot REST API.",
+  "rules": "Attendance >= 80%; final score >= 60%.",
+  "timeAllocAssignmentLab": 50,
+  "timeAllocConceptLecture": 30,
+  "timeAllocGuideReview": 10,
+  "timeAllocTestQuiz": 10,
+  "assessQuizPct": 20,
+  "assessAssignmentPct": 30,
+  "assessFinalPct": 50,
+  "assessmentText": "Quiz 20%; Assignment 30%; Final 50%.",
+  "outputStandards": ["H4SD", "K6SD"],
+  "days": [
+    {
+      "dayNumber": 1,
+      "sortOrder": 1,
+      "units": [
+        {
+          "name": "REST API foundations",
+          "sortOrder": 1,
+          "topics": [
+            {
+              "name": "Controller, validation, and error handling",
+              "outputStandard": "H4SD",
+              "online": true,
+              "durationMinutes": 120,
+              "status": "Active",
+              "sortOrder": 1,
+              "materials": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+> {%
+client.global.set("syllabusId", response.body.data.syllabus.id);
+client.global.set("topicId", response.body.data.days[0].units[0].topics[0].id);
+%}
+
+### 07 - Upload material while syllabus is editable
+POST {{baseUrl}}/materials/upload?syllabusId={{syllabusId}}&topicId={{topicId}}
+Authorization: Bearer {{accessToken}}
+Accept-Language: vi
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="sample-material.txt"
+Content-Type: text/plain
+
+< ../test-data/files/sample-material.txt
+--WebAppBoundary--
+
+> {% client.global.set("materialId", response.body.data.id); %}
+
+### INVALID FILE - Rejected content type while syllabus is still editable => 400
+POST {{baseUrl}}/materials/upload?syllabusId={{syllabusId}}&topicId={{topicId}}
+Authorization: Bearer {{accessToken}}
+Accept-Language: vi
+Content-Type: multipart/form-data; boundary=InvalidFileBoundary
+
+--InvalidFileBoundary
+Content-Disposition: form-data; name="file"; filename="invalid-file-type.exe"
+Content-Type: application/octet-stream
+
+< ../test-data/files/invalid-file-type.exe
+--InvalidFileBoundary--
+
+### 08 - Submit syllabus for review
+PATCH {{baseUrl}}/syllabuses/{{syllabusId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{"status": "Pending"}
+
+### 09 - Activate syllabus
+PATCH {{baseUrl}}/syllabuses/{{syllabusId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{"status": "Active"}
+
+### 10 - Create training program
+POST {{baseUrl}}/training-programs
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "name": "API Flow Training Program {{runId}}",
+  "duration": "12 weeks",
+  "totalHours": 240,
+  "version": "v1.0"
+}
+
+> {% client.global.set("programId", response.body.data.id); %}
+
+### 11 - Attach active syllabus to program
+PUT {{baseUrl}}/training-programs/{{programId}}/syllabuses
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "syllabuses": [
+    {"syllabusId": {{syllabusId}}, "sortOrder": 1}
+  ]
+}
+
+### 12 - Activate program
+PATCH {{baseUrl}}/training-programs/{{programId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{"status": "Active"}
+
+### 13 - Create class
+POST {{baseUrl}}/classes
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "name": "API Flow Java Class {{runId}}",
+  "classCode": "FLOW-CLASS-{{runId}}",
+  "trainingProgramId": {{programId}},
+  "location": "Ho Chi Minh City",
+  "locationDetail": "F-Town 3, Room A101",
+  "fsu": "FHM",
+  "classTime": "09:00 - 11:00",
+  "startDate": "{{today}}",
+  "endDate": "{{classEnd}}",
+  "duration": "12 weeks"
+}
+
+> {% client.global.set("classId", response.body.data.id); %}
+
+### 14 - Assign Class Admin
+PUT {{baseUrl}}/classes/{{classId}}/admins
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{"userIds": [{{classAdminUserId}}]}
+
+### 15 - Assign Trainer and syllabus
+PUT {{baseUrl}}/classes/{{classId}}/trainers
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "trainers": [
+    {"userId": {{trainerUserId}}, "syllabusId": {{syllabusId}}}
+  ]
+}
+
+### 16 - Activate class
+PATCH {{baseUrl}}/classes/{{classId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{"status": "Active"}
+
+### 17 - Create training session
+POST {{baseUrl}}/training-sessions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "classId": {{classId}},
+  "title": "API Flow REST Workshop {{runId}}",
+  "description": "End-to-end session created from the HTTP collection.",
+  "trainerId": {{trainerUserId}},
+  "room": "A101",
+  "sessionDate": "{{futureDate}}",
+  "startTime": "{{futureStart}}",
+  "endTime": "{{futureEnd}}",
+  "sessionType": "Hybrid",
+  "meetingLink": "https://meet.example.com/api-flow-{{runId}}",
+  "capacity": 20
+}
+
+> {% client.global.set("sessionId", response.body.data.id); %}
+
+### 18 - Create question
+POST {{baseUrl}}/questions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "content": "API Flow: Which annotation validates a request body? {{runId}}",
+  "questionType": "single",
+  "category": "API Flow",
+  "difficulty": "Easy",
+  "optionsJson": ["@Valid", "@Bean", "@Table", "@Async"],
+  "correctAnswersJson": ["@Valid"],
+  "explanation": "Jakarta Validation is triggered by @Valid."
+}
+
+> {% client.global.set("questionId", response.body.data.id); %}
+
+### 19 - Create Draft quiz
+POST {{baseUrl}}/quizzes
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "title": "API Flow Java Readiness {{runId}}",
+  "description": "Quiz for the end-to-end API flow.",
+  "durationMinutes": 20,
+  "passingScore": 60,
+  "maxAttempts": 2,
+  "randomize": false,
+  "category": "API Flow",
+  "openDate": "{{today}}",
+  "closeDate": "{{classEnd}}"
+}
+
+> {% client.global.set("quizId", response.body.data.id); %}
+
+### 20 - Add question to quiz
+PUT {{baseUrl}}/quizzes/{{quizId}}/questions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "questions": [
+    {"questionId": {{questionId}}, "sortOrder": 1, "points": 1.0}
+  ]
+}
+
+### 21 - Publish quiz
+PATCH {{baseUrl}}/quizzes/{{quizId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{"status": "Published"}
+
+### 22 - Assign quiz to one training session
+POST {{baseUrl}}/quizzes/{{quizId}}/assignments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{"trainingSessionId": {{sessionId}}}
+
+### 23 - Login newly-created Trainee
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "email": "flow.trainee.{{runId}}@fap.local",
+  "password": "{{password}}"
+}
+
+> {% client.global.set("traineeAccessToken", response.body.data.accessToken); %}
+
+### 24 - Trainee registers for session
+POST {{baseUrl}}/training-sessions/{{sessionId}}/registrations
+Authorization: Bearer {{traineeAccessToken}}
+Accept-Language: vi
+
+### 25 - Trainee can download assigned material
+GET {{baseUrl}}/materials/{{materialId}}/download
+Authorization: Bearer {{traineeAccessToken}}
+
+### 26 - Start quiz attempt
+POST {{baseUrl}}/quizzes/{{quizId}}/attempts
+Authorization: Bearer {{traineeAccessToken}}
+Accept-Language: vi
+
+> {% client.global.set("attemptId", response.body.data.id); %}
+
+### 27 - Save quiz answer
+PUT {{baseUrl}}/quiz-attempts/{{attemptId}}/answers
+Authorization: Bearer {{traineeAccessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "answers": [
+    {"questionId": {{questionId}}, "selectedAnswersJson": ["@Valid"]}
+  ]
+}
+
+### 28 - Submit quiz
+POST {{baseUrl}}/quiz-attempts/{{attemptId}}/submit
+Authorization: Bearer {{traineeAccessToken}}
+Accept-Language: vi
+
+### 29 - Review submitted result
+GET {{baseUrl}}/quiz-attempts/{{attemptId}}/review
+Authorization: Bearer {{traineeAccessToken}}
+Accept-Language: vi
+
+### 30 - Trainee performs QR check-in
+POST {{baseUrl}}/training-sessions/{{sessionId}}/check-in
+Authorization: Bearer {{traineeAccessToken}}
+Accept-Language: vi
+
+### 31 - Admin completes session after attendance exists
+PATCH {{baseUrl}}/training-sessions/{{sessionId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{"status": "Completed"}
+
+### 32 - Trainee submits feedback
+POST {{baseUrl}}/training-sessions/{{sessionId}}/feedback
+Authorization: Bearer {{traineeAccessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "ratingContent": 5,
+  "ratingTrainer": 5,
+  "ratingOrganization": 4,
+  "comment": "The API flow completed successfully."
+}
+
+### 33 - Verify trainee dashboard
+GET {{baseUrl}}/me/training-dashboard
+Authorization: Bearer {{traineeAccessToken}}
+Accept-Language: vi
+
+### 34 - Verify admin result list
+GET {{baseUrl}}/quizzes/{{quizId}}/attempts?page=1&limit=20&sortBy=score&order=desc
+Authorization: Bearer {{accessToken}}
+Accept-Language: vi
+
+### 35 - Verify audit trail
+GET {{baseUrl}}/audit-logs?userId={{traineeUserId}}&page=1&limit=20
+Authorization: Bearer {{accessToken}}
+Accept-Language: vi
+
+### INVALID 01 - Missing token => 401
+GET {{baseUrl}}/users
+Accept-Language: vi
+
+### INVALID 02 - Trainee cannot list all users => 403
+GET {{baseUrl}}/users
+Authorization: Bearer {{traineeAccessToken}}
+Accept-Language: vi
+
+### INVALID 03 - Bean validation => 422 with Vietnamese details
+POST {{baseUrl}}/users
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "fullName": "",
+  "email": "not-an-email",
+  "password": "weak",
+  "dateOfBirth": "2099-01-01",
+  "gender": "Male",
+  "roleIds": []
+}
+
+### INVALID 04 - Unknown ID => 404
+GET {{baseUrl}}/users/999999999
+Authorization: Bearer {{accessToken}}
+Accept-Language: vi
+
+### INVALID 05 - Duplicate email => 409
+POST {{baseUrl}}/users
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{
+  "fullName": "Duplicate API Flow User",
+  "email": "flow.trainee.{{runId}}@fap.local",
+  "password": "{{password}}",
+  "dateOfBirth": "2000-01-01",
+  "gender": "Male",
+  "roleIds": [{{traineeRoleId}}]
+}
+
+### INVALID 06 - Unknown sort field => 400
+GET {{baseUrl}}/users?sortBy=notAField&order=asc
+Authorization: Bearer {{accessToken}}
+Accept-Language: vi
+
+### INVALID 07 - Completed session cannot move back to Upcoming => 409
+PATCH {{baseUrl}}/training-sessions/{{sessionId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept-Language: vi
+
+{"status": "Upcoming"}

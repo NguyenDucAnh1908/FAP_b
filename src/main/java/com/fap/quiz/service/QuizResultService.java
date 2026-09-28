@@ -6,9 +6,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fap.clazz.service.ClassAccessService;
 import com.fap.common.exception.ConflictException;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.ForbiddenException;
 import com.fap.common.exception.NotFoundException;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.common.security.RoleNames;
 import com.fap.quiz.dto.QuizAnswerItemRequest;
 import com.fap.quiz.dto.QuizAttemptResultResponse;
 import com.fap.quiz.dto.QuizAttemptReviewQuestionResponse;
@@ -20,12 +22,12 @@ import com.fap.quiz.entity.QuizAttempt;
 import com.fap.quiz.entity.QuizQuestion;
 import com.fap.quiz.enums.QuizAttemptStatus;
 import com.fap.quiz.repository.QuizAttemptRepository;
+import com.fap.quiz.repository.QuizAttemptStats;
 import com.fap.quiz.repository.QuizQuestionRepository;
 import com.fap.quiz.repository.QuizRepository;
 import com.fap.training.enums.TrainingRegistrationStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,9 +44,6 @@ import java.util.Set;
 @Service
 public class QuizResultService {
 
-	private static final String SUPER_ADMIN_ROLE = "Super Admin";
-	private static final String CLASS_ADMIN_ROLE = "Class Admin";
-	private static final String TRAINER_ROLE = "Trainer";
 	private static final Collection<TrainingRegistrationStatus> ELIGIBLE_REGISTRATION_STATUSES = List.of(
 			TrainingRegistrationStatus.Registered,
 			TrainingRegistrationStatus.Completed);
@@ -79,9 +78,31 @@ public class QuizResultService {
 			FapUserPrincipal principal,
 			int page,
 			int limit) {
+		return listAttempts(quizId, status, passed, userId, classId, trainingSessionId, principal, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<QuizAttemptResultResponse> listAttempts(
+			Long quizId,
+			QuizAttemptStatus status,
+			Boolean passed,
+			Long userId,
+			Long classId,
+			Long trainingSessionId,
+			FapUserPrincipal principal,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
 		ensureQuizExists(quizId);
 		assertCanViewResults(principal, classId, trainingSessionId);
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "id"));
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "id"),
+				"id", "startedAt", "submittedAt", "score", "passed", "status");
 		return quizAttemptRepository.searchQuizResults(
 						quizId,
 						status,
@@ -99,8 +120,7 @@ public class QuizResultService {
 	@Transactional(readOnly = true)
 	public QuizAttemptReviewResponse getAttemptDetail(Long quizId, Long attemptId, FapUserPrincipal principal) {
 		assertCanViewResults(principal, null, null);
-		QuizAttempt attempt = quizAttemptRepository.findByQuizIdAndId(quizId, attemptId)
-				.orElseThrow(() -> new NotFoundException("Quiz attempt not found"));
+		QuizAttempt attempt = quizAttemptRepository.getByQuizIdAndIdOrThrow(quizId, attemptId);
 		assertCanViewAttempt(principal, quizId, attemptId);
 		if (attempt.getStatus() != QuizAttemptStatus.Submitted) {
 			throw new ConflictException("QUIZ_ATTEMPT_REVIEW_UNAVAILABLE", "Only submitted attempt can be reviewed");
@@ -115,21 +135,16 @@ public class QuizResultService {
 			Long classId,
 			Long trainingSessionId,
 			FapUserPrincipal principal) {
-		Quiz quiz = findQuiz(quizId);
+		Quiz quiz = quizRepository.getQuizOrThrow(quizId);
 		assertCanViewResults(principal, classId, trainingSessionId);
-		List<QuizAttempt> attempts = quizAttemptRepository.searchQuizResults(
-						quizId,
-						null,
-						null,
-						null,
-						classId,
-						trainingSessionId,
-						isSuperAdmin(principal),
-						principal.id(),
-						ELIGIBLE_REGISTRATION_STATUSES,
-						Pageable.unpaged())
-				.getContent();
-		return summarize(quiz, attempts);
+		QuizAttemptStats stats = quizAttemptRepository.summarizeQuizResults(
+				quizId,
+				classId,
+				trainingSessionId,
+				isSuperAdmin(principal),
+				principal.id(),
+				ELIGIBLE_REGISTRATION_STATUSES);
+		return summarize(quiz, stats);
 	}
 
 	private QuizAttemptResultResponse toResultResponse(QuizAttempt attempt) {
@@ -151,27 +166,10 @@ public class QuizResultService {
 				attempt.getSubmittedAt());
 	}
 
-	private QuizAttemptSummaryResponse summarize(Quiz quiz, List<QuizAttempt> attempts) {
-		long submittedAttempts = attempts.stream()
-				.filter(attempt -> attempt.getStatus() == QuizAttemptStatus.Submitted)
-				.count();
-		long inProgressAttempts = attempts.stream()
-				.filter(attempt -> attempt.getStatus() == QuizAttemptStatus.InProgress)
-				.count();
-		long passedAttempts = attempts.stream()
-				.filter(attempt -> Boolean.TRUE.equals(attempt.getPassed()))
-				.count();
+	private QuizAttemptSummaryResponse summarize(Quiz quiz, QuizAttemptStats stats) {
+		long submittedAttempts = stats.submittedAttempts();
+		long passedAttempts = stats.passedAttempts();
 		long failedAttempts = submittedAttempts - passedAttempts;
-		List<Integer> scores = attempts.stream()
-				.filter(attempt -> attempt.getStatus() == QuizAttemptStatus.Submitted)
-				.map(QuizAttempt::getScore)
-				.filter(score -> score != null)
-				.toList();
-		Double averageScore = scores.isEmpty()
-				? null
-				: scores.stream().mapToInt(Integer::intValue).average().orElse(0);
-		Integer highestScore = scores.stream().max(Integer::compareTo).orElse(null);
-		Integer lowestScore = scores.stream().min(Integer::compareTo).orElse(null);
 		double passRate = submittedAttempts == 0
 				? 0
 				: BigDecimal.valueOf(passedAttempts)
@@ -181,15 +179,15 @@ public class QuizResultService {
 		return new QuizAttemptSummaryResponse(
 				quiz.getId(),
 				quiz.getTitle(),
-				attempts.size(),
-				inProgressAttempts,
+				stats.totalAttempts(),
+				stats.inProgressAttempts(),
 				submittedAttempts,
 				passedAttempts,
 				failedAttempts,
 				passRate,
-				averageScore,
-				highestScore,
-				lowestScore);
+				stats.averageScore(),
+				stats.highestScore(),
+				stats.lowestScore());
 	}
 
 	private QuizAttemptReviewResponse toReviewResponse(QuizAttempt attempt, List<QuizQuestion> quizQuestions) {
@@ -236,7 +234,8 @@ public class QuizResultService {
 
 	private void assertCanViewResults(FapUserPrincipal principal, Long classId, Long trainingSessionId) {
 		if (!isResultViewer(principal)) {
-			throw new ForbiddenException("You cannot view quiz results");
+			throw new ForbiddenException("You cannot view quiz results")
+					.withMessageKey("error.ACCESS_DENIED.quiz_results_view");
 		}
 		if (classId != null) {
 			classAccessService.assertCanViewClass(principal, classId);
@@ -253,29 +252,25 @@ public class QuizResultService {
 				isSuperAdmin(principal),
 				principal.id(),
 				ELIGIBLE_REGISTRATION_STATUSES) == 0) {
-			throw new ForbiddenException("You cannot view this quiz attempt");
+			throw new ForbiddenException("You cannot view this quiz attempt")
+					.withMessageKey("error.ACCESS_DENIED.quiz_attempt_view");
 		}
-	}
-
-	private Quiz findQuiz(Long quizId) {
-		return quizRepository.findById(quizId)
-				.orElseThrow(() -> new NotFoundException("Quiz not found"));
 	}
 
 	private void ensureQuizExists(Long quizId) {
 		if (!quizRepository.existsById(quizId)) {
-			throw new NotFoundException("Quiz not found");
+			throw new NotFoundException("quiz", "Quiz not found");
 		}
 	}
 
 	private boolean isResultViewer(FapUserPrincipal principal) {
-		return principal.roles().contains(SUPER_ADMIN_ROLE)
-				|| principal.roles().contains(CLASS_ADMIN_ROLE)
-				|| principal.roles().contains(TRAINER_ROLE);
+		return principal.roles().contains(RoleNames.SUPER_ADMIN)
+				|| principal.roles().contains(RoleNames.CLASS_ADMIN)
+				|| principal.roles().contains(RoleNames.TRAINER);
 	}
 
 	private boolean isSuperAdmin(FapUserPrincipal principal) {
-		return principal.roles().contains(SUPER_ADMIN_ROLE);
+		return principal.roles().contains(RoleNames.SUPER_ADMIN);
 	}
 
 	private Map<Long, JsonNode> readAnswers(String answersJson) {

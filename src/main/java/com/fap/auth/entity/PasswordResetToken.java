@@ -24,7 +24,7 @@ public class PasswordResetToken {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "password_reset_tokens_seq")
-	@SequenceGenerator(name = "password_reset_tokens_seq", sequenceName = "password_reset_tokens_seq", allocationSize = 1)
+	@SequenceGenerator(name = "password_reset_tokens_seq", sequenceName = "password_reset_tokens_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

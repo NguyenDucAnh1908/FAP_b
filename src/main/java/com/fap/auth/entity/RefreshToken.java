@@ -24,7 +24,7 @@ public class RefreshToken {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "refresh_tokens_seq")
-	@SequenceGenerator(name = "refresh_tokens_seq", sequenceName = "refresh_tokens_seq", allocationSize = 1)
+	@SequenceGenerator(name = "refresh_tokens_seq", sequenceName = "refresh_tokens_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

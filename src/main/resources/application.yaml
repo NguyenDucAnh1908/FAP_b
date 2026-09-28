@@ -7,13 +7,28 @@ spring:
     fallback-to-system-locale: false
   profiles:
     active: ${APP_ENV:local}
+  lifecycle:
+    # On SIGTERM, allow in-flight requests to finish before Spring stops dependent beans.
+    timeout-per-shutdown-phase: ${SERVER_SHUTDOWN_TIMEOUT:30s}
   datasource:
     url: jdbc:oracle:thin:@//${DB_HOST:localhost}:${DB_PORT:1521}/${DB_SERVICE:XEPDB1}
     username: ${DB_USERNAME:fap}
-    password: ${DB_PASSWORD:12345}
+    # No default: a fallback password would let a misconfigured deployment start and fail later
+    # at connection time instead of immediately. application-local.yaml supplies the dev default.
+    password: ${DB_PASSWORD}
     driver-class-name: oracle.jdbc.OracleDriver
     hikari:
+      # Keep the defaults explicit and environment-tunable. Across all replicas, DB_POOL_MAX
+      # must stay below the Oracle connection budget after reserving admin/background sessions.
+      minimum-idle: ${DB_POOL_MIN:5}
       maximum-pool-size: ${DB_POOL_MAX:20}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:30000}
+      validation-timeout: ${DB_POOL_VALIDATION_TIMEOUT_MS:5000}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:1800000}
+      # Pings idle connections so a firewall/NAT or Oracle idle timeout cannot silently drop them
+      # within max-lifetime. Must be >= 30000 and below max-lifetime; 0 disables it.
+      keepalive-time: ${DB_POOL_KEEPALIVE_MS:120000}
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -25,9 +40,36 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+    properties:
+      # Group inserts/updates into JDBC batches instead of one round trip per row (saveAll).
+      hibernate.jdbc.batch_size: ${JPA_BATCH_SIZE:50}
+      hibernate.order_inserts: true
+      hibernate.order_updates: true
+      # Initialize lazy to-one proxies and collections in IN-batches instead of one query each (N+1).
+      hibernate.default_batch_fetch_size: ${JPA_BATCH_FETCH_SIZE:50}
+      # Oracle's driver fetches 10 rows per round trip by default.
+      hibernate.jdbc.fetch_size: ${JPA_FETCH_SIZE:100}
+      # Pooled sequence ids (allocationSize > 1) make Hibernate prepare a global temporary table per
+      # entity for HQL INSERT ... SELECT, which it would CREATE at startup: DDL outside Flyway, and a
+      # blocking connection attempt per entity where no database is reachable. The application
+      # issues no HQL inserts, so the tables are never created.
+      hibernate.query.mutation_strategy.global_temporary.create_tables: false
+      hibernate.query.mutation_strategy.global_temporary.drop_tables: false
+  servlet:
+    multipart:
+      # Container-level guard. FileValidator re-checks the size so clients get a documented
+      # error code instead of a generic multipart failure.
+      max-file-size: ${MAX_UPLOAD_SIZE:20MB}
+      max-request-size: ${MAX_UPLOAD_REQUEST_SIZE:25MB}
 
 server:
   port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  compression:
+    # JSON list responses compress well; files are already compressed or streamed as-is.
+    enabled: ${SERVER_COMPRESSION_ENABLED:true}
+    mime-types: application/json,application/problem+json,text/plain,text/csv
+    min-response-size: 2KB
 
 management:
   health:
@@ -36,11 +78,20 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # prometheus is added for scraping. It is NOT public: SecurityConfig requires
+        # authentication for /actuator/** except health. env/beans/heapdump/threaddump stay
+        # unexposed per monitoring.md. A deployment behind a proxy should also restrict the
+        # path at the network edge, or move actuator to a separate management port.
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      # Low-cardinality identity tags so scraped series are attributable per service/env.
+      application: ${spring.application.name}
+      env: ${APP_ENV:local}
 
 springdoc:
   api-docs:
@@ -52,6 +103,10 @@ springdoc:
     display-request-duration: true
 
 app:
+  jwt:
+    # Required. Generate with: openssl rand -base64 48
+    secret: ${JWT_SECRET}
+    access-ttl-minutes: ${JWT_ACCESS_TTL_MINUTES:15}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   mail:
@@ -59,3 +114,48 @@ app:
     from: ${MAIL_FROM:no-reply@fap.local}
   password-reset:
     ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:15}
+  security:
+    # How long a token owner's principal and each role's permissions are reused before re-reading
+    # the database. User, role and permission changes invalidate immediately on this instance; the
+    # TTL bounds staleness for changes made elsewhere (another instance, manual SQL).
+    authorization-cache-ttl: ${AUTHORIZATION_CACHE_TTL:60s}
+  dashboard:
+    # The admin dashboard is shared by all admins for this long; its generatedAt shows the age.
+    cache-ttl: ${DASHBOARD_CACHE_TTL:30s}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    # Bounded so a source rotating addresses cannot grow the bucket map without limit.
+    max-tracked-keys: ${RATE_LIMIT_MAX_KEYS:50000}
+    # Must be >= the longest refill-period below, or a bucket is evicted while still drained
+    # and the caller silently gets a fresh allowance.
+    key-idle-ttl: ${RATE_LIMIT_KEY_IDLE_TTL:30m}
+    # Only enable behind a reverse proxy that overwrites X-Forwarded-For. When the app is
+    # reachable directly, a client can forge the header and get a fresh bucket per request.
+    trust-forward-headers: ${RATE_LIMIT_TRUST_PROXY:false}
+    # Matched in order, most specific path first.
+    rules:
+      # Credential guessing. BCrypt verification is deliberately expensive, so this also caps
+      # the CPU an unauthenticated caller can consume.
+      - path: /api/v1/auth/login
+        method: POST
+        capacity: ${RATE_LIMIT_LOGIN_CAPACITY:10}
+        refill-period: ${RATE_LIMIT_LOGIN_PERIOD:1m}
+      - path: /api/v1/auth/google
+        method: POST
+        capacity: ${RATE_LIMIT_LOGIN_CAPACITY:10}
+        refill-period: ${RATE_LIMIT_LOGIN_PERIOD:1m}
+      # OTP brute force: the reset token space is small, so this is the control that keeps it
+      # from being enumerated.
+      - path: /api/v1/auth/reset-password
+        method: POST
+        capacity: ${RATE_LIMIT_RESET_CAPACITY:5}
+        refill-period: ${RATE_LIMIT_RESET_PERIOD:10m}
+      # Mail sending is the cost here, plus user-visible spam to a third party's inbox.
+      - path: /api/v1/auth/forgot-password
+        method: POST
+        capacity: ${RATE_LIMIT_FORGOT_CAPACITY:3}
+        refill-period: ${RATE_LIMIT_FORGOT_PERIOD:10m}
+      - path: /api/v1/auth/refresh
+        method: POST
+        capacity: ${RATE_LIMIT_REFRESH_CAPACITY:30}
+        refill-period: ${RATE_LIMIT_REFRESH_PERIOD:1m}

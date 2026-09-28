@@ -22,7 +22,7 @@ public class ClassTrainer {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "class_trainers_seq")
-	@SequenceGenerator(name = "class_trainers_seq", sequenceName = "class_trainers_seq", allocationSize = 1)
+	@SequenceGenerator(name = "class_trainers_seq", sequenceName = "class_trainers_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

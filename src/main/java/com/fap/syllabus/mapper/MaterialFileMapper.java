@@ -18,7 +18,8 @@ public class MaterialFileMapper {
 				materialFile.getFileSize(),
 				materialFile.getContentType(),
 				materialFile.getUploadedBy(),
-				materialFile.getUploadedAt());
+				materialFile.getUploadedAt(),
+				materialFile.isContentStored());
 	}
 
 	public AssignedMaterialFileResponse toAssignedResponse(MaterialFile materialFile) {
@@ -35,6 +36,7 @@ public class MaterialFileMapper {
 				materialFile.getFileSize(),
 				materialFile.getContentType(),
 				materialFile.getUploadedBy(),
-				materialFile.getUploadedAt());
+				materialFile.getUploadedAt(),
+				materialFile.isContentStored());
 	}
 }

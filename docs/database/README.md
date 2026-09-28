@@ -32,6 +32,11 @@ Generated from:
 | `flyway/V18__create_quizzes_sequence_and_quiz_permissions.sql` | Adds Oracle sequence for quiz JPA ID generation, question points, and quiz permission seed |
 | `flyway/V19__create_quiz_assignments_sequence_and_fix_assignment_uniques.sql` | Adds Oracle sequence for quiz assignment JPA ID generation and fixes assignment uniqueness indexes |
 | `flyway/V20__create_quiz_attempts_sequence_and_support_in_progress.sql` | Adds Oracle sequence for quiz attempt JPA ID generation and supports in-progress quiz attempts |
+| `../../src/main/resources/db/migration/V29__create_class_enrollments_and_registration_modes.sql` | Adds the official class roster, enrollment settings, data migration, and session registration modes |
+| `../../src/main/resources/db/migration/V30__create_course_results_and_completion_policy.sql` | Adds class completion policy, final course results, quiz snapshots, adjustment history, and result backfill |
+| `../../src/main/resources/db/migration/V31__add_class_enrollment_approval_workflow.sql` | Adds pending approval/rejection states and enrollment review audit fields |
+| `../../src/main/resources/db/migration/V32__add_performance_indexes.sql` | Adds function-based case-insensitive lookup indexes, missing foreign-key indexes, and schedule-conflict/dashboard indexes; replaces `idx_ts_class`/`idx_ts_trainer` with composites |
+| `../../src/main/resources/db/migration/V33__use_pooled_sequence_allocation.sql` | Sets every sequence to `INCREMENT BY 50 CACHE 20` to match the entities' `allocationSize = 50` (ids are no longer contiguous) |
 | `liquibase/db.changelog-master.xml` | Liquibase changelog that executes the canonical Oracle DDL |
 | `liquibase/rollback/001_drop_fap_schema_oracle.sql` | Liquibase rollback SQL |
 | `indexes_and_constraints.md` | Human-readable inventory of indexes, constraints, and non-DDL rules |

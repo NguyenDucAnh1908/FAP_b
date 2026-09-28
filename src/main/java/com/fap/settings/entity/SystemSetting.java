@@ -21,7 +21,7 @@ public class SystemSetting {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "system_settings_seq")
-	@SequenceGenerator(name = "system_settings_seq", sequenceName = "system_settings_seq", allocationSize = 1)
+	@SequenceGenerator(name = "system_settings_seq", sequenceName = "system_settings_seq", allocationSize = 50)
 	private Long id;
 
 	@Column(nullable = false, length = 50)

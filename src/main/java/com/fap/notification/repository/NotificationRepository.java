@@ -10,7 +10,7 @@ import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
-	Page<Notification> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+	Page<Notification> findByUserId(Long userId, Pageable pageable);
 
 	@EntityGraph(attributePaths = "user")
 	Optional<Notification> findByIdAndUserId(Long id, Long userId);

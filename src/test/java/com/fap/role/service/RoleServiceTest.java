@@ -2,6 +2,10 @@ package com.fap.role.service;
 
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.exception.NotFoundException;
+import com.fap.common.security.AuthorizationCache;
+import com.fap.common.security.RoleNames;
+import com.fap.role.dto.PermissionResponse;
 import com.fap.role.dto.UpdatePermissionMatrixRequest;
 import com.fap.role.dto.UpdatePermissionRequest;
 import com.fap.role.entity.Permission;
@@ -10,6 +14,7 @@ import com.fap.role.enums.PermissionLevel;
 import com.fap.role.mapper.RoleMapper;
 import com.fap.role.repository.PermissionRepository;
 import com.fap.role.repository.RoleRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -18,7 +23,11 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,11 +37,65 @@ class RoleServiceTest {
 	private final PermissionRepository permissionRepository = mock(PermissionRepository.class);
 	private final RoleMapper roleMapper = mock(RoleMapper.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
+	private final AuthorizationCache authorizationCache = mock(AuthorizationCache.class);
 	private final RoleService roleService = new RoleService(
 			roleRepository,
 			permissionRepository,
 			roleMapper,
-			auditLogService);
+			auditLogService,
+			authorizationCache);
+
+	@BeforeEach
+	void useRealRepositoryLookups() {
+		// The default lookup must run so the findById stubs below keep driving behaviour.
+		lenient().doCallRealMethod().when(roleRepository).getRoleOrThrow(any());
+	}
+
+	@Test
+	void permissionMatrixAlwaysReportsFullAccessForSuperAdmin() {
+		Permission permission = new Permission();
+		when(permissionRepository.findAll()).thenReturn(List.of(permission));
+		when(roleMapper.toResponse(permission)).thenReturn(new PermissionResponse(
+				1L,
+				RoleNames.SUPER_ADMIN,
+				"user",
+				PermissionLevel.access_denied));
+
+		List<PermissionResponse> result = roleService.permissionMatrix();
+
+		assertThat(result).singleElement()
+				.extracting(PermissionResponse::permissionLevel)
+				.isEqualTo(PermissionLevel.full_access);
+	}
+
+	@Test
+	void updatePermissionMatrixCannotReduceSuperAdminAccess() {
+		Role role = new Role();
+		role.setId(1L);
+		role.setName(RoleNames.SUPER_ADMIN);
+		when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
+		when(permissionRepository.findByRoleIdAndResource(1L, "user")).thenReturn(Optional.empty());
+		when(permissionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+		when(permissionRepository.findAll()).thenReturn(List.of());
+
+		roleService.updatePermissionMatrix(new UpdatePermissionMatrixRequest(List.of(
+				new UpdatePermissionRequest(1L, "user", PermissionLevel.access_denied))));
+
+		verify(permissionRepository).save(argThat(permission ->
+				permission.getPermissionLevel() == PermissionLevel.full_access));
+	}
+
+	@Test
+	void updatePermissionMatrixRejectsUnknownRole() {
+		when(roleRepository.findById(404L)).thenReturn(Optional.empty());
+		UpdatePermissionMatrixRequest request = new UpdatePermissionMatrixRequest(List.of(
+				new UpdatePermissionRequest(404L, "user", PermissionLevel.view)));
+
+		assertThatThrownBy(() -> roleService.updatePermissionMatrix(request))
+				.isInstanceOf(NotFoundException.class)
+				.hasMessage("Role not found");
+		verify(permissionRepository, never()).save(any());
+	}
 
 	@Test
 	void updatePermissionMatrixRejectsUnsupportedResource() {

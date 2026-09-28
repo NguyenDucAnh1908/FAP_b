@@ -26,6 +26,21 @@ Authorization: Bearer <accessToken>
 Accept-Language: vi
 ```
 
+Creates a new editable version from an `Active` or `Inactive` syllabus.
+
+```http
+POST /api/v1/syllabuses/{id}/clone
+Authorization: Bearer <accessToken>
+Accept-Language: vi
+Content-Type: application/json
+
+{
+  "name": "IS SOFTWARE",
+  "code": "HIS_SW_V2",
+  "version": "v2.0"
+}
+```
+
 Rules:
 - Requires `syllabus:create`.
 - Creates syllabus in `Drafting`.
@@ -37,6 +52,10 @@ Rules:
 - `days`, `units`, and `topics` may be empty arrays while saving a draft tab by tab.
 - Time allocation total must be `100`.
 - Assessment total must be `100`.
+- `POST /{id}/clone` requires `syllabus:create` and accepts only an `Active` or `Inactive` source.
+- The cloned syllabus always starts in `Drafting`; the source syllabus is unchanged.
+- General info, output standards, outline, material metadata, external links, and available BLOB content are copied.
+- If an old internal material no longer has BLOB content, the cloned material is marked unavailable so an administrator can upload it again.
 
 Example:
 
