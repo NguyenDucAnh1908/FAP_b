@@ -154,7 +154,13 @@ public class QuizAttemptService {
 		return toResponse(saved);
 	}
 
-	@Transactional
+	/**
+	 * {@code noRollbackFor}: when the quiz was closed under a running attempt, the attempt is
+	 * auto-submitted and the request is then refused with {@code QUIZ_CLOSED}. The refusal must not
+	 * undo that submission, or the attempt would stay open and fail the same way on every retry.
+	 * Every other conflict on this path is raised before anything is written.
+	 */
+	@Transactional(noRollbackFor = ConflictException.class)
 	public QuizAttemptResponse saveAnswers(Long attemptId, SaveQuizAnswersRequest request, Long currentUserId) {
 		QuizAttempt attempt = quizAttemptRepository.getByIdAndUserIdOrThrow(attemptId, currentUserId);
 		ensureInProgress(attempt);
@@ -162,13 +168,15 @@ public class QuizAttemptService {
 		if (autoSubmitIfExpired(attempt, quizQuestions)) {
 			return quizAttemptMapper.toResponse(attempt, orderedQuestions(attempt, quizQuestions));
 		}
+		rejectIfQuizClosed(attempt, quizQuestions);
 		validateAnswers(request.answers(), quizQuestions);
 		attempt.setAnswersJson(writeAnswers(request.answers()));
 		auditLogService.record("SAVE_QUIZ_ATTEMPT_ANSWERS", "quiz_attempt", attempt.getId());
 		return quizAttemptMapper.toResponse(attempt, orderedQuestions(attempt, quizQuestions));
 	}
 
-	@Transactional
+	/** Same rollback rule as {@link #saveAnswers}: a closed quiz submits the attempt before refusing. */
+	@Transactional(noRollbackFor = ConflictException.class)
 	public QuizAttemptResponse submit(Long attemptId, Long currentUserId) {
 		return domainMetrics.recordQuizSubmit(() -> {
 			QuizAttempt attempt = quizAttemptRepository.getByIdAndUserIdOrThrow(attemptId, currentUserId);
@@ -177,6 +185,7 @@ public class QuizAttemptService {
 			if (autoSubmitIfExpired(attempt, quizQuestions)) {
 				return quizAttemptMapper.toResponse(attempt, orderedQuestions(attempt, quizQuestions));
 			}
+			rejectIfQuizClosed(attempt, quizQuestions);
 			submitAttempt(attempt, quizQuestions, LocalDateTime.now(clock), "SUBMIT_QUIZ_ATTEMPT");
 			return quizAttemptMapper.toResponse(attempt, orderedQuestions(attempt, quizQuestions));
 		});
@@ -185,7 +194,9 @@ public class QuizAttemptService {
 	@Transactional
 	public QuizAttemptResponse get(Long attemptId, Long currentUserId) {
 		QuizAttempt attempt = quizAttemptRepository.getByIdAndUserIdOrThrow(attemptId, currentUserId);
-		autoSubmitIfExpired(attempt, quizQuestions(attempt));
+		List<QuizQuestion> quizQuestions = quizQuestions(attempt);
+		autoSubmitIfExpired(attempt, quizQuestions);
+		autoSubmitIfQuizClosed(attempt, quizQuestions);
 		return toResponse(attempt);
 	}
 
@@ -194,6 +205,7 @@ public class QuizAttemptService {
 		QuizAttempt attempt = quizAttemptRepository.getByIdAndUserIdOrThrow(attemptId, currentUserId);
 		List<QuizQuestion> quizQuestions = quizQuestions(attempt);
 		autoSubmitIfExpired(attempt, quizQuestions);
+		autoSubmitIfQuizClosed(attempt, quizQuestions);
 		if (attempt.getStatus() != QuizAttemptStatus.Submitted) {
 			throw new ConflictException("QUIZ_ATTEMPT_REVIEW_UNAVAILABLE", "Only submitted attempt can be reviewed");
 		}
@@ -265,6 +277,34 @@ public class QuizAttemptService {
 		}
 		submitAttempt(attempt, quizQuestions, expiresAt(attempt), "AUTO_SUBMIT_QUIZ_ATTEMPT_EXPIRED");
 		return true;
+	}
+
+	/**
+	 * An admin closing the quiz ends a running attempt the way expiry does: graded with the answers
+	 * saved so far. Every caller checks expiry first, and the in-progress guard makes this a no-op
+	 * afterwards, so an attempt that is both expired and closed is submitted once, at its deadline.
+	 * The stamp is capped at the deadline for the same reason: an attempt is never recorded as
+	 * having taken longer than its duration, whatever order the checks run in.
+	 */
+	private boolean autoSubmitIfQuizClosed(QuizAttempt attempt, List<QuizQuestion> quizQuestions) {
+		if (attempt.getStatus() != QuizAttemptStatus.InProgress
+				|| attempt.getQuiz().getStatus() != QuizStatus.Closed) {
+			return false;
+		}
+		LocalDateTime now = LocalDateTime.now(clock);
+		LocalDateTime expiresAt = expiresAt(attempt);
+		submitAttempt(attempt, quizQuestions, now.isBefore(expiresAt) ? now : expiresAt, "AUTO_SUBMIT_QUIZ_CLOSED");
+		return true;
+	}
+
+	/**
+	 * Unlike expiry, which answers with the graded attempt, a closed quiz is reported as an error
+	 * after the auto-submit: a 200 would hide that the answers in this request were not kept.
+	 */
+	private void rejectIfQuizClosed(QuizAttempt attempt, List<QuizQuestion> quizQuestions) {
+		if (autoSubmitIfQuizClosed(attempt, quizQuestions)) {
+			throw new ConflictException("QUIZ_CLOSED", "Quiz is already closed");
+		}
 	}
 
 	private void submitAttempt(

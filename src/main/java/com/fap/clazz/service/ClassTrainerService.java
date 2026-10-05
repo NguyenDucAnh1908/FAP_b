@@ -79,8 +79,10 @@ public class ClassTrainerService {
 		auditLogService.record("UPDATE_CLASS_TRAINERS", "class", classId);
 		trainers.forEach(trainer -> notificationService.create(
 				trainer.getUser().getId(),
-				"Class trainer assignment",
-				"You have been assigned as trainer for " + fapClass.getClassCode() + " - " + fapClass.getName()));
+				"notification.class_trainer.assigned.title",
+				"notification.class_trainer.assigned.message",
+				fapClass.getClassCode(),
+				fapClass.getName()));
 		return trainers.stream()
 				.map(classTrainerMapper::toResponse)
 				.toList();

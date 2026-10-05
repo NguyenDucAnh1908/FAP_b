@@ -336,8 +336,9 @@ public class TrainingSessionService {
 					registration.setCompletedAt(null);
 					notificationService.create(
 							registration.getUser().getId(),
-							"Training session canceled",
-							session.getTitle() + " has been canceled");
+							"notification.training_session.cancelled.title",
+							"notification.training_session.cancelled.message",
+							session.getTitle());
 				});
 		session.setEnrolledCount(0);
 	}
@@ -352,8 +353,9 @@ public class TrainingSessionService {
 						java.util.List.of(TrainingRegistrationStatus.Registered, TrainingRegistrationStatus.Completed))
 				.forEach(registration -> notificationService.create(
 						registration.getUser().getId(),
-						"Training session " + status.name().toLowerCase(),
-						session.getTitle() + " has been marked as " + status.name()));
+						"notification.training_session.completed.title",
+						"notification.training_session.completed.message",
+						session.getTitle()));
 	}
 
 	private void ensureUpcoming(TrainingSession session) {

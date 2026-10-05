@@ -235,7 +235,9 @@ public class SyllabusImportService {
 	private String getValue(String[] row, String[] headers, String headerName) {
 		for (int i = 0; i < headers.length; i++) {
 			if (headers[i].trim().equalsIgnoreCase(headerName) && i < row.length) {
-				return row[i].isBlank() ? null : row[i].trim();
+				// A short row is padded with nulls, so a missing trailing cell must read like a blank one.
+				String cell = row[i];
+				return cell == null || cell.isBlank() ? null : cell.trim();
 			}
 		}
 		return null;

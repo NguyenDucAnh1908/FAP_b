@@ -21,6 +21,7 @@ import com.fap.user.mapper.UserMapper;
 import com.fap.user.repository.UserRepository;
 import com.fap.user.service.UserService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -37,6 +38,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Locale;
 
 @Service
 public class AuthService {
@@ -142,6 +144,9 @@ public class AuthService {
 
 	@Transactional
 	public void forgotPassword(ForgotPasswordRequest request) {
+		// Captured on the request thread: the mail is rendered after commit on an async thread, where
+		// the request's Accept-Language is no longer in the LocaleContextHolder.
+		Locale locale = LocaleContextHolder.getLocale();
 		userRepository.findByEmailIgnoreCase(request.email().trim().toLowerCase())
 				.ifPresent(user -> {
 					LocalDateTime now = LocalDateTime.now(clock);
@@ -156,7 +161,7 @@ public class AuthService {
 					// After commit, so the OTP is only mailed once it is redeemable; asynchronously, so
 					// the SMTP round trip neither holds the transaction open nor makes a known email
 					// measurably slower to answer than an unknown one.
-					AfterCommit.run(() -> passwordResetMailService.sendPasswordResetOtp(user, otp, passwordResetTtlMinutes));
+					AfterCommit.run(() -> passwordResetMailService.sendPasswordResetOtp(user, otp, passwordResetTtlMinutes, locale));
 				});
 	}
 

@@ -9,7 +9,7 @@ This document summarizes the business-rule review across database schema, state 
 | Area | Problem Found | Correction |
 |---|---|---|
 | Permission model | `create` and `modify` were treated as a simple hierarchy. | Evaluate by action map, not ordinal level comparison. |
-| Syllabus lifecycle | `Active -> Inactive` was implied despite UI disabling close. | `Active` syllabus is immutable; create a new version for changes. |
+| Syllabus lifecycle | `Active` was modelled as terminal, so a published syllabus could never be retired. | `Active` syllabus content is immutable (changes go through a cloned version), but it may be set `Inactive` to retire it. |
 | Training program lifecycle | Active programs were deletable in the inferred state machine. | Active programs cannot be deleted; close to `Inactive`. |
 | Class lifecycle | UI condition implied non-active classes, including `Closed`, can be published. | Only `Planning -> Active`; `Closed` cannot be republished. |
 | Quiz lifecycle | UI condition implied `Closed -> Published` and deleting published quizzes. | Only `Draft -> Published -> Closed`; clone for republish/revision. |
@@ -51,10 +51,11 @@ Allowed:
 - `Pending -> Active`
 - `Drafting -> Inactive`
 - `Pending -> Inactive`
+- `Active -> Inactive`
 
 Rules:
 - Submit/publish requires at least one day, unit, topic, assessment total = 100, and time allocation total = 100.
-- `Active` is immutable and cannot be deleted or closed by normal flow.
+- `Active` content is immutable and cannot be deleted; changes go through a cloned version, but it may be set `Inactive` to retire it (retiring skips the outline checks).
 - `Inactive` is read-only and terminal for content editing.
 
 ### Training Program

@@ -39,6 +39,21 @@ public class Notification {
 	@Column(nullable = false)
 	private String message;
 
+	/**
+	 * Message keys and their arguments, rendered in the reader's language when the notification is
+	 * read. Null on rows written before V34; those only have the English title/message above.
+	 */
+	@Column(name = "title_key", length = 100)
+	private String titleKey;
+
+	@Column(name = "message_key", length = 100)
+	private String messageKey;
+
+	/** JSON array of strings, one per {@code {n}} placeholder of the message key. */
+	@Lob
+	@Column(name = "message_args")
+	private String messageArgs;
+
 	@Column(name = "is_read", nullable = false)
 	private boolean read;
 

@@ -6,6 +6,13 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    ignore:
+      # 9.x is built on Jackson 3 (tools.jackson), which Spring Boot 3.x does not ship. With 9.0 on
+      # Boot 3.4 the JSON encoder still starts but MaskingJsonGeneratorDecorator no longer applies,
+      # so secrets reach the log unmasked (LogbackConfigurationTest fails). Lift this together with
+      # the Spring Boot 4 upgrade.
+      - dependency-name: "net.logstash.logback:logstash-logback-encoder"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /

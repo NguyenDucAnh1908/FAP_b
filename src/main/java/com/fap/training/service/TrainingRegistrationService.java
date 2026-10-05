@@ -37,6 +37,7 @@ public class TrainingRegistrationService {
 	private final NotificationService notificationService;
 	private final DomainMetrics domainMetrics;
 	private final ClassEnrollmentRepository classEnrollmentRepository;
+	private final WaitlistPromoter waitlistPromoter;
 
 	public TrainingRegistrationService(
 			TrainingSessionRepository trainingSessionRepository,
@@ -46,7 +47,8 @@ public class TrainingRegistrationService {
 			AuditLogService auditLogService,
 			NotificationService notificationService,
 			DomainMetrics domainMetrics,
-			ClassEnrollmentRepository classEnrollmentRepository) {
+			ClassEnrollmentRepository classEnrollmentRepository,
+			WaitlistPromoter waitlistPromoter) {
 		this.trainingSessionRepository = trainingSessionRepository;
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
 		this.userRepository = userRepository;
@@ -55,6 +57,7 @@ public class TrainingRegistrationService {
 		this.notificationService = notificationService;
 		this.domainMetrics = domainMetrics;
 		this.classEnrollmentRepository = classEnrollmentRepository;
+		this.waitlistPromoter = waitlistPromoter;
 	}
 
 	@Transactional
@@ -69,10 +72,16 @@ public class TrainingRegistrationService {
 				.orElseGet(() -> createRegistration(session, user, now));
 		TrainingRegistration saved = trainingRegistrationRepository.save(registration);
 		auditLogService.record("REGISTER_TRAINING_SESSION:" + saved.getStatus().name(), "training_session", trainingSessionId);
+		boolean seated = saved.getStatus() == TrainingRegistrationStatus.Registered;
 		notificationService.create(
 				currentUserId,
-				"Training session registration",
-				"Your registration for " + session.getTitle() + " is " + saved.getStatus().name());
+				seated
+						? "notification.training_registration.registered.title"
+						: "notification.training_registration.waitlisted.title",
+				seated
+						? "notification.training_registration.registered.message"
+						: "notification.training_registration.waitlisted.message",
+				session.getTitle());
 		return trainingRegistrationMapper.toResponse(saved);
 	}
 
@@ -89,7 +98,7 @@ public class TrainingRegistrationService {
 			registration.setStatus(TrainingRegistrationStatus.Cancelled);
 			registration.setCancelledAt(LocalDateTime.now());
 			session.setEnrolledCount(Math.max(0, session.getEnrolledCount() - 1));
-			promoteFirstWaitlisted(session);
+			waitlistPromoter.promoteFirstWaitlisted(session);
 		}
 		else if (registration.getStatus() == TrainingRegistrationStatus.Waitlist) {
 			registration.setStatus(TrainingRegistrationStatus.Cancelled);
@@ -101,8 +110,9 @@ public class TrainingRegistrationService {
 		auditLogService.record("CANCEL_TRAINING_REGISTRATION", "training_session", trainingSessionId);
 		notificationService.create(
 				currentUserId,
-				"Training registration cancelled",
-				"Your registration for " + session.getTitle() + " has been cancelled");
+				"notification.training_registration.cancelled.title",
+				"notification.training_registration.cancelled.message",
+				session.getTitle());
 		return trainingRegistrationMapper.toResponse(registration);
 	}
 
@@ -168,27 +178,6 @@ public class TrainingRegistrationService {
 			registration.setStatus(TrainingRegistrationStatus.Waitlist);
 			domainMetrics.recordRegistrationOutcome(DomainMetrics.RegistrationOutcome.WAITLISTED);
 		}
-	}
-
-	private void promoteFirstWaitlisted(TrainingSession session) {
-		if (session.getEnrolledCount() >= session.getCapacity()) {
-			return;
-		}
-		trainingRegistrationRepository
-				.findFirstByTrainingSessionIdAndStatusOrderByRegisteredAtAscIdAsc(
-						session.getId(),
-						TrainingRegistrationStatus.Waitlist)
-				.ifPresent(waitlisted -> {
-					waitlisted.setStatus(TrainingRegistrationStatus.Registered);
-					waitlisted.setCancelledAt(null);
-					waitlisted.setCompletedAt(null);
-					session.setEnrolledCount(session.getEnrolledCount() + 1);
-					domainMetrics.recordRegistrationOutcome(DomainMetrics.RegistrationOutcome.PROMOTED);
-					notificationService.create(
-							waitlisted.getUser().getId(),
-							"Waitlist promoted",
-							"You have been moved from waitlist to registered for " + session.getTitle());
-				});
 	}
 
 	private TrainingSession findUpcomingSessionForUpdate(Long trainingSessionId) {

@@ -8,7 +8,6 @@ import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
-import com.fap.common.i18n.MessageService;
 import com.fap.notification.service.NotificationService;
 import com.fap.quiz.enums.QuizStatus;
 import com.fap.result.dto.ClassCourseResultsResponse;
@@ -47,7 +46,6 @@ public class CourseResultService {
 	private final CourseResultMapper courseResultMapper;
 	private final AuditLogService auditLogService;
 	private final NotificationService notificationService;
-	private final MessageService messageService;
 
 	public CourseResultService(
 			ClassRepository classRepository,
@@ -59,8 +57,7 @@ public class CourseResultService {
 			CourseResultCalculator courseResultCalculator,
 			CourseResultMapper courseResultMapper,
 			AuditLogService auditLogService,
-			NotificationService notificationService,
-			MessageService messageService) {
+			NotificationService notificationService) {
 		this.classRepository = classRepository;
 		this.completionQuizRepository = completionQuizRepository;
 		this.courseResultRepository = courseResultRepository;
@@ -71,7 +68,6 @@ public class CourseResultService {
 		this.courseResultMapper = courseResultMapper;
 		this.auditLogService = auditLogService;
 		this.notificationService = notificationService;
-		this.messageService = messageService;
 	}
 
 	@Transactional(readOnly = true)
@@ -181,13 +177,14 @@ public class CourseResultService {
 			result.setPublishedAt(now);
 			result.setPublishedBy(currentUserId);
 			result.setUpdatedAt(now);
+			// The status goes in as its message key: the notification is rendered in the trainee's
+			// language when read, and the mapper resolves arguments that are keys the same way.
 			notificationService.create(
 					result.getClassEnrollment().getUser().getId(),
-					messageService.get("notification.course_result.title"),
-					messageService.get(
-							"notification.course_result.message",
-							fapClass.getName(),
-							messageService.get("course_result.status." + result.effectiveStatus().name().toLowerCase())));
+					"notification.course_result.title",
+					"notification.course_result.message",
+					fapClass.getName(),
+					"course_result.status." + result.effectiveStatus().name().toLowerCase());
 		}
 		if (!unpublished.isEmpty()) {
 			auditLogService.record("PUBLISH_COURSE_RESULTS", "class", classId);

@@ -21,10 +21,14 @@ class SyllabusStatusTest {
 				.containsExactlyInAnyOrder(SyllabusStatus.Active, SyllabusStatus.Inactive);
 	}
 
-	@ParameterizedTest
-	@EnumSource(value = SyllabusStatus.class, names = {"Active", "Inactive"})
-	void publishedAndRetiredAreTerminal(SyllabusStatus status) {
-		assertThat(status.allowedTargets()).isEmpty();
+	@Test
+	void publishedMayOnlyRetire() {
+		assertThat(SyllabusStatus.Active.allowedTargets()).containsExactly(SyllabusStatus.Inactive);
+	}
+
+	@Test
+	void retiredIsTerminal() {
+		assertThat(SyllabusStatus.Inactive.allowedTargets()).isEmpty();
 	}
 
 	@ParameterizedTest(name = "{0} -> {1} is allowed")
@@ -32,7 +36,8 @@ class SyllabusStatusTest {
 			"Drafting, Pending",
 			"Drafting, Inactive",
 			"Pending, Active",
-			"Pending, Inactive"
+			"Pending, Inactive",
+			"Active, Inactive"
 	})
 	void allowsListedTransitions(SyllabusStatus current, SyllabusStatus target) {
 		assertThat(current.canTransitionTo(target)).isTrue();
@@ -44,7 +49,6 @@ class SyllabusStatusTest {
 			"Pending, Drafting",
 			"Active, Drafting",
 			"Active, Pending",
-			"Active, Inactive",
 			"Inactive, Drafting",
 			"Inactive, Pending",
 			"Inactive, Active"

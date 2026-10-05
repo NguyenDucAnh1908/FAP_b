@@ -130,13 +130,8 @@ Làm theo module trong bản sao riêng, mỗi module build + unit test, review 
 Thay đổi có chủ đích ở message HTTP (mã lỗi không đổi): 404 và 403 trả message theo tài nguyên/lý do,
 refresh token sai trả "Invalid refresh token", trùng email trả "Email already exists"; bản vi có bản dịch.
 
-Lỗi phát hiện nhưng chưa sửa (ngoài phạm vi tái cấu trúc, cần quyết định nghiệp vụ):
-- `ClassEnrollmentService.approve` không kiểm tra lại user còn Active.
-- Hai bản thăng hạng waitlist khác nhau (lớp vs buổi học): metric PROMOTED, `completedAt`, tiêu đề thông báo.
-- `SyllabusImportService`: dòng CSV thiếu cột cuối gây "Unexpected error" thay vì dùng mặc định.
-- Syllabus Active → Inactive bị chặn (khớp `06_business_logic_review.md`, trái `BUSINESS_FLOW.md`).
-- Bài làm quiz InProgress vẫn nộp được sau khi quiz Closed; GET attempt có thể tự nộp.
-- Thông báo/email vẫn là tiếng Anh cứng (cần locale người nhận).
+Sáu lỗi nghiệp vụ phát hiện trong giai đoạn 5 đã được chốt và sửa ngày 2026-10-05 (xem mục
+"Sửa lỗi nghiệp vụ" bên dưới).
 
 ## Giai đoạn 6 — đã giao
 
@@ -155,6 +150,30 @@ Lỗi phát hiện nhưng chưa sửa (ngoài phạm vi tái cấu trúc, cần 
 Không đổi: `docs/database/oracle/*` và `liquibase/*` giữ làm tài liệu tham chiếu cho DBA (rule tech-stack
 cho phép), kèm ghi chú migration là nguồn chuẩn.
 
+## Sửa lỗi nghiệp vụ (2026-10-05)
+
+| Lỗi | Quyết định | Thay đổi |
+|---|---|---|
+| Duyệt ghi danh không kiểm tra lại user | Kiểm tra lại khi duyệt | `ClassEnrollmentService.approve` chạy `validateActiveTrainee` như `add`/`selfEnroll`; user khoá hoặc mất role Trainee → 409 `CLASS_ENROLLMENT_USER_NOT_ACTIVE` / `CLASS_ENROLLMENT_TRAINEE_REQUIRED`, không đổi trạng thái |
+| Hai bản thăng hạng waitlist | Dùng chung một bản | `training.WaitlistPromoter` (xoá `cancelledAt`/`completedAt`, metric PROMOTED, thông báo "Waitlist promoted") dùng cho cả huỷ đăng ký buổi học và rút khỏi lớp |
+| Import CSV thiếu cột cuối | Coi cột thiếu là trống | `SyllabusImportService.getValue` null-safe: cột tuỳ chọn dùng mặc định, cột bắt buộc báo lỗi theo dòng thay vì "Unexpected error" |
+| Syllabus Active → Inactive bị chặn | Cho phép | `SyllabusStatus`: Active → {Inactive}; nội dung vẫn bất biến (đổi qua clone), chuyển Inactive bỏ qua kiểm tra outline; `06_business_logic_review.md` cập nhật |
+| Bài quiz dở nộp được sau khi quiz Closed | Chặn khi admin Closed; qua `closeDate` vẫn được làm hết giờ | `QuizAttemptService`: quiz Closed → bài InProgress tự nộp với câu đã lưu (audit `AUTO_SUBMIT_QUIZ_CLOSED`), `saveAnswers`/`submit` trả 409 `QUIZ_CLOSED`, `get`/`review` trả bài đã nộp. `noRollbackFor = ConflictException` để bài tự nộp được lưu dù trả 409 (`QuizAttemptClosedQuizIT` kiểm chứng trên Oracle). `closeDate` chỉ chặn bắt đầu bài mới |
+| Thông báo/email tiếng Anh cứng | Lưu key + tham số, render theo `Accept-Language` khi đọc | V34 thêm `title_key`, `message_key`, `message_args` (CLOB IS JSON) vào `notifications`; `NotificationService.create(userId, titleKey, messageKey, args…)` lưu key, tham số và bản tiếng Anh dự phòng; `NotificationMapper` render theo locale người đọc, dòng cũ giữ nguyên văn bản; 36 key `notification.*` en/vi; email OTP dùng `mail.password_reset.*` theo locale của request lúc gửi; `ErrorMessageKeysTest` kiểm tra cả key thông báo/email |
+
+Thay đổi hành vi hiển thị: chính tả "canceled" thống nhất thành "cancelled" trong thông báo tiếng Anh.
+
+## Rà soát Dependabot (2026-10-05)
+
+| PR | Nâng cấp | Kết luận |
+|---|---|---|
+| #4 | JaCoCo 0.8.12 → 0.8.15 | OK: 1036 test, report sinh bình thường |
+| #5 | jjwt 0.12.6 → 0.13.0 | OK: đủ unit test |
+| #7 | bucket4j 8.14.0 → 8.20.0 | OK: đủ unit test |
+| #8 | Maven wrapper 3.9.15 → 3.10.0 | OK: build đủ unit test bằng Maven 3.10.0 |
+| #3, #6 | setup-java v6.0.1, upload-artifact v7.0.1 | SHA khớp tag; cần CI xác nhận (runner Node 24) |
+| #2 | logstash-logback-encoder 8.1 → **9.0** | **Không merge.** 9.x dựa trên Jackson 3 (`tools.jackson`), Boot 3.4 dùng Jackson 2: encoder vẫn chạy nhưng `MaskingJsonGeneratorDecorator` không còn áp dụng, secret ra log không che (`LogbackConfigurationTest` fail). Đã thêm `ignore` major cho dependency này trong `dependabot.yml`; mở lại khi lên Spring Boot 4 |
+
 ## Còn lại
 
 - CI chạy hai lần cho mỗi commit trên PR (`push` + `pull_request`); nếu muốn, giới hạn `push` về
@@ -164,6 +183,8 @@ cho phép), kèm ghi chú migration là nguồn chuẩn.
 
 ## Kiểm chứng
 
+- Sau sửa lỗi nghiệp vụ (2026-10-05): `./mvnw clean verify` với Oracle XE 21 local: 1072 unit test,
+  33 IT, 0 lỗi; V34 đã áp; ngân sách truy vấn không đổi.
 - Sau giai đoạn 6: `./mvnw clean verify` với Oracle XE 21 local: 1036 unit test, 31 IT, 0 lỗi; jar
   không chứa `db/seed/`, có `META-INF/build-info.properties`.
 - Sau giai đoạn 5: `./mvnw test` 1036 test, 0 lỗi; `./mvnw verify` với Oracle XE 21 local: 22 IT,

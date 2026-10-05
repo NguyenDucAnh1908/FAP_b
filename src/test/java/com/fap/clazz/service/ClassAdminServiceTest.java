@@ -36,8 +36,6 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
@@ -124,7 +122,12 @@ class ClassAdminServiceTest {
 		InOrder inOrder = inOrder(classAdminRepository, notificationService);
 		inOrder.verify(classAdminRepository).deleteByFapClassId(CLASS_ID);
 		inOrder.verify(classAdminRepository).saveAll(any());
-		inOrder.verify(notificationService).create(eq(7L), anyString(), anyString());
+		inOrder.verify(notificationService).create(
+				7L,
+				"notification.class_admin.assigned.title",
+				"notification.class_admin.assigned.message",
+				CLASS_CODE,
+				CLASS_NAME);
 		List<ClassAdmin> saved = captureSavedAdmins();
 		assertThat(saved)
 				.extracting(ClassAdmin::getId)
@@ -134,7 +137,7 @@ class ClassAdminServiceTest {
 				.extracting(admin -> admin.getUser().getId())
 				.containsExactly(7L, 8L);
 		verify(auditLogService).record("UPDATE_CLASS_ADMINS", "class", CLASS_ID);
-		assertThat(notifiedMessages(7L, 8L)).allSatisfy(message -> assertThat(message).contains(CLASS_CODE, CLASS_NAME));
+		verifyAssignmentNotified(7L, 8L);
 		assertThat(responses).containsExactly(
 				new ClassAdminResponse(7L, "User 7", "user7@fap.local"),
 				new ClassAdminResponse(8L, "User 8", "user8@fap.local"));
@@ -310,13 +313,16 @@ class ClassAdminServiceTest {
 		return saved;
 	}
 
-	/** Exactly one notification per listed user, in order; returns the message bodies. */
-	private List<String> notifiedMessages(Long... userIds) {
-		ArgumentCaptor<String> messages = ArgumentCaptor.forClass(String.class);
+	/** Exactly one assignment notification per listed user, naming the class by code and name. */
+	private void verifyAssignmentNotified(Long... userIds) {
 		for (Long userId : userIds) {
-			verify(notificationService).create(eq(userId), anyString(), messages.capture());
+			verify(notificationService).create(
+					userId,
+					"notification.class_admin.assigned.title",
+					"notification.class_admin.assigned.message",
+					CLASS_CODE,
+					CLASS_NAME);
 		}
 		verifyNoMoreInteractions(notificationService);
-		return messages.getAllValues();
 	}
 }

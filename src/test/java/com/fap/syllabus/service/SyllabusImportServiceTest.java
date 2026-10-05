@@ -7,6 +7,7 @@ import com.fap.syllabus.entity.Syllabus;
 import com.fap.syllabus.mapper.SyllabusMapper;
 import com.fap.syllabus.repository.SyllabusRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.nio.charset.StandardCharsets;
@@ -121,6 +122,63 @@ class SyllabusImportServiceTest {
 
 		assertThat(response.failedCount()).isEqualTo(1);
 		assertThat(response.errors().get(0).field()).isEqualTo("time_allocation");
+	}
+
+	@Test
+	void importCsvImportsRowWithOnlyNameAndCodeUsingDefaults() {
+		// Only the two required columns are present; every optional trailing cell is missing, not blank.
+		String csv = buildCsvHeaders() + "\nMinimal Syllabus,MIN001";
+		MockMultipartFile file = new MockMultipartFile(
+				"file", "test.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
+
+		when(syllabusRepository.existsByCodeIgnoreCase("MIN001")).thenReturn(false);
+		when(syllabusRepository.save(any(Syllabus.class))).thenAnswer(inv -> {
+			Syllabus s = inv.getArgument(0);
+			s.setId(2L);
+			return s;
+		});
+
+		SyllabusImportResponse response = service.importCsv(file, 1L);
+
+		assertThat(response.successCount()).isEqualTo(1);
+		assertThat(response.failedCount()).isEqualTo(0);
+		assertThat(response.errors()).isNull();
+
+		ArgumentCaptor<Syllabus> captor = ArgumentCaptor.forClass(Syllabus.class);
+		verify(syllabusRepository).save(captor.capture());
+		Syllabus saved = captor.getValue();
+		assertThat(saved.getName()).isEqualTo("Minimal Syllabus");
+		assertThat(saved.getCode()).isEqualTo("MIN001");
+		assertThat(saved.getVersion()).isEqualTo("v1.0");
+		assertThat(saved.getLevelName()).isEqualTo("All levels");
+		assertThat(saved.getAttendees()).isEqualTo(30);
+		assertThat(saved.getDuration()).isEqualTo("1 day");
+		assertThat(saved.getTechnicalRequirements()).isNull();
+		assertThat(saved.getTimeAllocAssignmentLab()).isEqualTo(25);
+		assertThat(saved.getTimeAllocConceptLecture()).isEqualTo(25);
+		assertThat(saved.getTimeAllocGuideReview()).isEqualTo(25);
+		assertThat(saved.getTimeAllocTestQuiz()).isEqualTo(25);
+		assertThat(saved.getAssessQuizPct()).isEqualTo(30);
+		assertThat(saved.getAssessAssignmentPct()).isEqualTo(30);
+		assertThat(saved.getAssessFinalPct()).isEqualTo(40);
+		assertThat(saved.getAssessmentText()).isNull();
+	}
+
+	@Test
+	void importCsvReportsMissingCodeColumnAsRowError() {
+		// The row stops after the name, so the code cell is absent rather than empty.
+		String csv = buildCsvHeaders() + "\nName Only";
+		MockMultipartFile file = new MockMultipartFile(
+				"file", "test.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
+
+		SyllabusImportResponse response = service.importCsv(file, 1L);
+
+		assertThat(response.successCount()).isEqualTo(0);
+		assertThat(response.failedCount()).isEqualTo(1);
+		assertThat(response.errors()).hasSize(1);
+		assertThat(response.errors().get(0).field()).isEqualTo("code");
+		assertThat(response.errors().get(0).message()).isEqualTo("Code is required");
+		verify(syllabusRepository, never()).save(any(Syllabus.class));
 	}
 
 	private String buildCsvHeaders() {

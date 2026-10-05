@@ -1,5 +1,6 @@
 package com.fap.common.i18n;
 
+import com.fap.result.enums.CourseResultStatus;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -47,6 +48,11 @@ class ErrorMessageKeysTest {
 	private static final Pattern NOT_FOUND_RESOURCE = Pattern.compile("\\s*\"([a-z][a-z0-9_]*)\"\\s*,");
 	/** Literal keys, e.g. in {@code withMessageKey("error.X.variant")} or {@code messageService.get("error.X")}. */
 	private static final Pattern ERROR_KEY_LITERAL = Pattern.compile("\"(error\\.[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*)\"");
+	/** Literal notification and mail keys, e.g. in {@code notificationService.create(userId, "notification.x.title", ...)}. */
+	private static final Pattern MESSAGE_KEY_LITERAL = Pattern.compile(
+			"\"((?:notification|mail)\\.[a-z0-9_]+(?:\\.[a-z0-9_]+)*)\"");
+	/** {@code "course_result.status." + status.name().toLowerCase()}: one key per {@link CourseResultStatus}. */
+	private static final Pattern STATUS_KEY_PREFIX = Pattern.compile("\"course_result\\.status\\.\"\\s*\\+");
 	private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\d+}");
 
 	private static Map<String, String> englishMessages;
@@ -71,6 +77,19 @@ class ErrorMessageKeysTest {
 
 		// Guards against the scan itself breaking (wrong directory, pattern drift) and passing vacuously.
 		assertThat(referencedKeys).hasSizeGreaterThan(100);
+		assertThat(englishMessages.keySet()).containsAll(referencedKeys);
+		assertThat(vietnameseMessages.keySet()).containsAll(referencedKeys);
+	}
+
+	/**
+	 * Notifications and the password-reset mail fall back just as silently (to the stored English
+	 * text, or to the key itself), so their keys are held to the same rule as error keys.
+	 */
+	@Test
+	void everyNotificationAndMailKeyReferencedInMainCodeExistsInBothFiles() {
+		Set<String> referencedKeys = referencedMessageKeys();
+
+		assertThat(referencedKeys).hasSizeGreaterThan(30);
 		assertThat(englishMessages.keySet()).containsAll(referencedKeys);
 		assertThat(vietnameseMessages.keySet()).containsAll(referencedKeys);
 	}
@@ -129,6 +148,19 @@ class ErrorMessageKeysTest {
 				Matcher resource = NOT_FOUND_RESOURCE.matcher(source).region(constructor.end(), source.length());
 				if (resource.lookingAt()) {
 					keys.add("error.RESOURCE_NOT_FOUND." + resource.group(1));
+				}
+			}
+		});
+		return keys;
+	}
+
+	private static Set<String> referencedMessageKeys() {
+		Set<String> keys = new TreeSet<>();
+		sources.values().forEach(source -> {
+			collect(MESSAGE_KEY_LITERAL, source, keys::add);
+			if (STATUS_KEY_PREFIX.matcher(source).find()) {
+				for (CourseResultStatus status : CourseResultStatus.values()) {
+					keys.add("course_result.status." + status.name().toLowerCase());
 				}
 			}
 		});

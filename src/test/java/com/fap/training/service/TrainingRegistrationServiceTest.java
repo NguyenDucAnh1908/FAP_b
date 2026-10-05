@@ -36,7 +36,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -74,7 +73,8 @@ class TrainingRegistrationServiceTest {
 			auditLogService,
 			notificationService,
 			domainMetrics,
-			classEnrollmentRepository);
+			classEnrollmentRepository,
+			new WaitlistPromoter(trainingRegistrationRepository, notificationService, domainMetrics));
 
 	@BeforeEach
 	void returnSavedEntity() {
@@ -106,7 +106,11 @@ class TrainingRegistrationServiceTest {
 		assertThat(session.getEnrolledCount()).isEqualTo(6);
 		verify(auditLogService).record(
 				"REGISTER_TRAINING_SESSION:Registered", "training_session", SESSION_ID);
-		verify(notificationService).create(eq(USER_ID), anyString(), anyString());
+		verify(notificationService).create(
+				USER_ID,
+				"notification.training_registration.registered.title",
+				"notification.training_registration.registered.message",
+				"Kubernetes basics");
 	}
 
 	/**
@@ -126,6 +130,11 @@ class TrainingRegistrationServiceTest {
 		assertThat(session.getEnrolledCount()).isEqualTo(10);
 		verify(auditLogService).record(
 				"REGISTER_TRAINING_SESSION:Waitlist", "training_session", SESSION_ID);
+		verify(notificationService).create(
+				USER_ID,
+				"notification.training_registration.waitlisted.title",
+				"notification.training_registration.waitlisted.message",
+				"Kubernetes basics");
 	}
 
 	@Test
@@ -229,7 +238,16 @@ class TrainingRegistrationServiceTest {
 
 		assertThat(waitlisted.getStatus()).isEqualTo(TrainingRegistrationStatus.Registered);
 		assertThat(session.getEnrolledCount()).isEqualTo(10);
-		verify(notificationService).create(eq(777L), anyString(), anyString());
+		verify(notificationService).create(
+				USER_ID,
+				"notification.training_registration.cancelled.title",
+				"notification.training_registration.cancelled.message",
+				"Kubernetes basics");
+		verify(notificationService).create(
+				777L,
+				"notification.training_registration.promoted.title",
+				"notification.training_registration.promoted.message",
+				"Kubernetes basics");
 		verify(auditLogService).record("CANCEL_TRAINING_REGISTRATION", "training_session", SESSION_ID);
 	}
 

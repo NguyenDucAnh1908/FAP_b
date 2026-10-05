@@ -25,6 +25,9 @@ All endpoints require a valid JWT access token.
 - `maxAttempts` limits total attempts per user per quiz.
 - `durationMinutes` is enforced from `startedAt`.
 - If an in-progress attempt is already expired when the user calls detail, save, submit, or review, the backend auto-submits the last saved answers.
+- Passing `closeDate` only blocks new attempts. An attempt started before the deadline may still be saved and submitted until its own `durationMinutes` run out.
+- Setting the quiz to `Closed` (admin action) ends every in-progress attempt. On the next detail, save, submit, or review call the backend auto-submits the last saved answers (audit action `AUTO_SUBMIT_QUIZ_CLOSED`, `submittedAt` = the time of that call). Detail and review then return the submitted attempt; save and submit return `409 QUIZ_CLOSED` so the client knows the answers in that request were not kept. Attempts submitted before the quiz was closed are unchanged.
+- An attempt that is both expired and on a `Closed` quiz is auto-submitted once, under the expiry rule (stamped at its deadline).
 - Submitted attempts are immutable.
 - Answers must use JSON arrays, for example `["A"]` or `["A", "C"]`.
 - Multiple-choice grading is order-insensitive.
@@ -257,7 +260,7 @@ Common errors:
 | `404` | `RESOURCE_NOT_FOUND` | Quiz or attempt was not found. |
 | `409` | `QUIZ_NOT_AVAILABLE` | Quiz is not `Published`. |
 | `409` | `QUIZ_NOT_OPEN` | Quiz is not open yet. |
-| `409` | `QUIZ_CLOSED` | Quiz is already closed. |
+| `409` | `QUIZ_CLOSED` | Start: today is after `closeDate`. Save/submit: the quiz was set to `Closed`; the in-progress attempt has been auto-submitted with the last saved answers and the answers in this request were not kept. |
 | `409` | `QUIZ_ASSIGNMENT_REQUIRED` | Current user is not eligible for this quiz. |
 | `409` | `QUIZ_ATTEMPT_IN_PROGRESS` | User already has an in-progress attempt for this quiz. |
 | `409` | `QUIZ_ATTEMPT_LIMIT_REACHED` | User has reached `maxAttempts`. |

@@ -41,9 +41,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
@@ -52,6 +49,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -137,14 +135,19 @@ class ClassTrainerServiceTest {
 		InOrder inOrder = inOrder(classTrainerRepository, notificationService);
 		inOrder.verify(classTrainerRepository).deleteByFapClassId(CLASS_ID);
 		inOrder.verify(classTrainerRepository).saveAll(any());
-		inOrder.verify(notificationService).create(eq(7L), anyString(), anyString());
+		inOrder.verify(notificationService).create(
+				7L,
+				"notification.class_trainer.assigned.title",
+				"notification.class_trainer.assigned.message",
+				CLASS_CODE,
+				CLASS_NAME);
 		ClassTrainer saved = captureSavedTrainers().getFirst();
 		assertThat(saved.getFapClass()).isSameAs(fapClass);
 		assertThat(saved.getUser().getId()).isEqualTo(7L);
 		assertThat(saved.getSyllabus()).isNull();
 		verifyNoInteractions(trainingProgramSyllabusRepository, syllabusRepository);
 		verify(auditLogService).record("UPDATE_CLASS_TRAINERS", "class", CLASS_ID);
-		assertThat(notifiedMessage(7L)).contains(CLASS_CODE, CLASS_NAME);
+		verifyAssignmentNotified(7L);
 		assertThat(responses).containsExactly(
 				new ClassTrainerResponse(null, 7L, "User 7", "user7@fap.local", null, null, null));
 	}
@@ -181,7 +184,12 @@ class ClassTrainerServiceTest {
 				.containsExactly(
 						tuple(7L, true),
 						tuple(7L, false));
-		verify(notificationService, times(2)).create(eq(7L), anyString(), anyString());
+		verify(notificationService, times(2)).create(
+				7L,
+				"notification.class_trainer.assigned.title",
+				"notification.class_trainer.assigned.message",
+				CLASS_CODE,
+				CLASS_NAME);
 	}
 
 	@Test
@@ -196,8 +204,7 @@ class ClassTrainerServiceTest {
 		assertThat(captureSavedTrainers())
 				.extracting(trainer -> trainer.getUser().getId())
 				.containsExactly(7L, 8L);
-		verify(notificationService).create(eq(7L), anyString(), anyString());
-		verify(notificationService).create(eq(8L), anyString(), anyString());
+		verifyAssignmentNotified(7L, 8L);
 	}
 
 	@Test
@@ -348,8 +355,7 @@ class ClassTrainerServiceTest {
 				.isEqualTo("CLASS_TRAINER_ROLE_REQUIRED");
 
 		verify(classTrainerRepository, never()).saveAll(any());
-		verify(notificationService, never()).create(anyLong(), anyString(), anyString());
-		verifyNoInteractions(auditLogService);
+		verifyNoInteractions(notificationService, auditLogService);
 	}
 
 	static Stream<List<ClassTrainerItemRequest>> duplicateScopes() {
@@ -439,9 +445,16 @@ class ClassTrainerServiceTest {
 		return saved;
 	}
 
-	private String notifiedMessage(long userId) {
-		ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-		verify(notificationService).create(eq(userId), anyString(), message.capture());
-		return message.getValue();
+	/** Exactly one assignment notification per listed user, naming the class by code and name. */
+	private void verifyAssignmentNotified(Long... userIds) {
+		for (Long userId : userIds) {
+			verify(notificationService).create(
+					userId,
+					"notification.class_trainer.assigned.title",
+					"notification.class_trainer.assigned.message",
+					CLASS_CODE,
+					CLASS_NAME);
+		}
+		verifyNoMoreInteractions(notificationService);
 	}
 }

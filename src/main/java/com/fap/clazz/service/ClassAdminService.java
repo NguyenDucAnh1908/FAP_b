@@ -70,8 +70,10 @@ public class ClassAdminService {
 		auditLogService.record("UPDATE_CLASS_ADMINS", "class", classId);
 		admins.forEach(admin -> notificationService.create(
 				admin.getUser().getId(),
-				"Class admin assignment",
-				"You have been assigned as class admin for " + fapClass.getClassCode() + " - " + fapClass.getName()));
+				"notification.class_admin.assigned.title",
+				"notification.class_admin.assigned.message",
+				fapClass.getClassCode(),
+				fapClass.getName()));
 		return admins.stream()
 				.map(classAdminMapper::toResponse)
 				.toList();

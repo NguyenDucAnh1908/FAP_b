@@ -159,6 +159,9 @@ public class ClassEnrollmentService {
 		FapClass fapClass = classRepository.getWithTrainingProgramForUpdateOrThrow(classId);
 		ensureClassAcceptsManagedEnrollment(fapClass);
 		ClassEnrollment enrollment = findPendingApproval(classId, userId);
+		// Re-validate at review time: the requester may have been deactivated or lost the Trainee
+		// role after requesting, and approval is the same admission gate as add/selfEnroll.
+		validateActiveTrainee(findTrainee(userId));
 		LocalDateTime now = LocalDateTime.now(clock);
 		ClassEnrollmentStatus nextStatus = classEnrollmentRepository.countByFapClassIdAndStatus(
 				classId, ClassEnrollmentStatus.Enrolled) < fapClass.getCapacity()
@@ -176,12 +179,16 @@ public class ClassEnrollmentService {
 			classRosterRegistrationService.registerInAutoEnrollSessions(classId, enrollment.getUser());
 		}
 		auditLogService.record("APPROVE_CLASS_ENROLLMENT:" + nextStatus.name(), "class_enrollment", enrollment.getId());
+		boolean seated = nextStatus == ClassEnrollmentStatus.Enrolled;
 		notificationService.create(
 				enrollment.getUser().getId(),
-				"Class enrollment approved",
-				nextStatus == ClassEnrollmentStatus.Enrolled
-						? "Your request for " + fapClass.getName() + " has been approved"
-						: "Your request for " + fapClass.getName() + " has been approved and added to the waitlist");
+				seated
+						? "notification.class_enrollment.approved.title"
+						: "notification.class_enrollment.approved_waitlisted.title",
+				seated
+						? "notification.class_enrollment.approved.message"
+						: "notification.class_enrollment.approved_waitlisted.message",
+				fapClass.getName());
 		return classEnrollmentMapper.toResponse(enrollment);
 	}
 
@@ -200,8 +207,9 @@ public class ClassEnrollmentService {
 		auditLogService.record("REJECT_CLASS_ENROLLMENT", "class_enrollment", enrollment.getId());
 		notificationService.create(
 				enrollment.getUser().getId(),
-				"Class enrollment rejected",
-				"Your request for " + fapClass.getName() + " was not approved");
+				"notification.class_enrollment.rejected.title",
+				"notification.class_enrollment.rejected.message",
+				fapClass.getName());
 		return classEnrollmentMapper.toResponse(enrollment);
 	}
 
@@ -236,10 +244,13 @@ public class ClassEnrollmentService {
 				enrollment.getId());
 		notificationService.create(
 				userId,
-				pendingApproval ? "Class enrollment request canceled" : "Class enrollment withdrawn",
 				pendingApproval
-						? "Your request for " + fapClass.getName() + " has been canceled"
-						: "You have left " + fapClass.getName());
+						? "notification.class_enrollment.request_cancelled.title"
+						: "notification.class_enrollment.withdrawn.title",
+				pendingApproval
+						? "notification.class_enrollment.request_cancelled.message"
+						: "notification.class_enrollment.withdrawn.message",
+				fapClass.getName());
 
 		if (releasedSeat) {
 			promoteFirstWaitlisted(fapClass, currentUserId, now);
@@ -294,8 +305,13 @@ public class ClassEnrollmentService {
 		auditLogService.record("CREATE_CLASS_ENROLLMENT:" + nextStatus.name(), "class_enrollment", saved.getId());
 		notificationService.create(
 				user.getId(),
-				"Class enrollment " + nextStatus.name().toLowerCase(),
-				"Your enrollment for " + fapClass.getName() + " is " + nextStatus.name());
+				nextStatus == ClassEnrollmentStatus.Enrolled
+						? "notification.class_enrollment.enrolled.title"
+						: "notification.class_enrollment.waitlisted.title",
+				nextStatus == ClassEnrollmentStatus.Enrolled
+						? "notification.class_enrollment.enrolled.message"
+						: "notification.class_enrollment.waitlisted.message",
+				fapClass.getName());
 		return saved;
 	}
 
@@ -326,8 +342,9 @@ public class ClassEnrollmentService {
 		auditLogService.record("REQUEST_CLASS_ENROLLMENT_APPROVAL", "class_enrollment", saved.getId());
 		notificationService.create(
 				user.getId(),
-				"Class enrollment request submitted",
-				"Your request for " + fapClass.getName() + " is waiting for approval");
+				"notification.class_enrollment.request_submitted.title",
+				"notification.class_enrollment.request_submitted.message",
+				fapClass.getName());
 		return saved;
 	}
 
@@ -363,8 +380,9 @@ public class ClassEnrollmentService {
 					auditLogService.record("PROMOTE_CLASS_WAITLIST", "class_enrollment", enrollment.getId());
 					notificationService.create(
 							enrollment.getUser().getId(),
-							"Class waitlist promoted",
-							"You have been enrolled in " + fapClass.getName());
+							"notification.class_enrollment.promoted.title",
+							"notification.class_enrollment.promoted.message",
+							fapClass.getName());
 				});
 	}
 
