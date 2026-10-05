@@ -118,6 +118,7 @@ Calendar:
 
 System:
 - Boolean-like flags are `NUMBER(1)` with `CHECK (... IN (0, 1))`
+- `notifications.message_args IS JSON` (`ck_notifications_args_json`; NULL on rows written before V34)
 
 ---
 

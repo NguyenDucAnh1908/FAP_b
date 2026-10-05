@@ -19,6 +19,7 @@ Generated from:
 | `../../src/main/resources/db/migration/V31__add_class_enrollment_approval_workflow.sql` | Adds pending approval/rejection states and enrollment review audit fields |
 | `../../src/main/resources/db/migration/V32__add_performance_indexes.sql` | Adds function-based case-insensitive lookup indexes, missing foreign-key indexes, and schedule-conflict/dashboard indexes; replaces `idx_ts_class`/`idx_ts_trainer` with composites |
 | `../../src/main/resources/db/migration/V33__use_pooled_sequence_allocation.sql` | Sets every sequence to `INCREMENT BY 50 CACHE 20` to match the entities' `allocationSize = 50` (ids are no longer contiguous) |
+| `../../src/main/resources/db/migration/V34__add_notification_message_keys.sql` | Adds nullable `notifications.title_key`, `message_key` and `message_args` (JSON array of strings, `IS JSON` check) so notifications are rendered in the reader's language; `title`/`message` keep the English rendering as the fallback for older rows |
 | `liquibase/db.changelog-master.xml` | Liquibase changelog that executes the canonical Oracle DDL |
 | `liquibase/rollback/001_drop_fap_schema_oracle.sql` | Liquibase rollback SQL |
 | `indexes_and_constraints.md` | Human-readable inventory of indexes, constraints, and non-DDL rules |

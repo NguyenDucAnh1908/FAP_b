@@ -24,6 +24,7 @@ import com.fap.training.enums.TrainingSessionStatus;
 import com.fap.training.repository.TrainingRegistrationRepository;
 import com.fap.training.repository.TrainingSessionRepository;
 import com.fap.training.service.ClassRosterRegistrationService;
+import com.fap.training.service.WaitlistPromoter;
 import com.fap.user.entity.User;
 import com.fap.user.enums.UserStatus;
 import com.fap.user.repository.UserRepository;
@@ -45,7 +46,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doCallRealMethod;
@@ -53,6 +53,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class ClassEnrollmentServiceTest {
@@ -73,11 +74,13 @@ class ClassEnrollmentServiceTest {
 	private final CourseResultService courseResultService = mock(CourseResultService.class);
 	// Real training-side collaborator over the same mocks, so these tests still cover the roster
 	// sync that ClassEnrollmentService triggers; its own cases are in ClassRosterRegistrationServiceTest.
+	// Session-waitlist promotion is stubbed: the only seat freed here belongs to an auto-enroll
+	// session, which never offers its waitlist.
 	private final ClassRosterRegistrationService classRosterRegistrationService = new ClassRosterRegistrationService(
 			trainingSessionRepository,
 			trainingRegistrationRepository,
 			classEnrollmentRepository,
-			notificationService,
+			mock(WaitlistPromoter.class),
 			CLOCK);
 	private final ClassEnrollmentService service = new ClassEnrollmentService(
 			classRepository,
@@ -117,7 +120,11 @@ class ClassEnrollmentServiceTest {
 		assertThat(response.status()).isEqualTo(ClassEnrollmentStatus.PendingApproval);
 		assertThat(response.enrolledAt()).isNull();
 		verify(auditLogService).record("REQUEST_CLASS_ENROLLMENT_APPROVAL", "class_enrollment", 900L);
-		verify(notificationService).create(eq(USER_ID), anyString(), anyString());
+		verify(notificationService).create(
+				USER_ID,
+				"notification.class_enrollment.request_submitted.title",
+				"notification.class_enrollment.request_submitted.message",
+				"Java Backend");
 	}
 
 	@Test
@@ -147,6 +154,11 @@ class ClassEnrollmentServiceTest {
 		assertThat(response.reviewedBy()).isEqualTo(1L);
 		verify(courseResultService).initializeForEnrollment(pending, 1L);
 		verify(auditLogService).record("APPROVE_CLASS_ENROLLMENT:Enrolled", "class_enrollment", 901L);
+		verify(notificationService).create(
+				USER_ID,
+				"notification.class_enrollment.approved.title",
+				"notification.class_enrollment.approved.message",
+				"Java Backend");
 	}
 
 	@Test
@@ -162,6 +174,11 @@ class ClassEnrollmentServiceTest {
 		assertThat(response.status()).isEqualTo(ClassEnrollmentStatus.Waitlisted);
 		assertThat(response.enrolledAt()).isNull();
 		verify(courseResultService, never()).initializeForEnrollment(any(), anyLong());
+		verify(notificationService).create(
+				USER_ID,
+				"notification.class_enrollment.approved_waitlisted.title",
+				"notification.class_enrollment.approved_waitlisted.message",
+				"Java Backend");
 	}
 
 	@Test
@@ -176,6 +193,11 @@ class ClassEnrollmentServiceTest {
 		assertThat(response.status()).isEqualTo(ClassEnrollmentStatus.Rejected);
 		assertThat(response.reviewedBy()).isEqualTo(1L);
 		verify(auditLogService).record("REJECT_CLASS_ENROLLMENT", "class_enrollment", 901L);
+		verify(notificationService).create(
+				USER_ID,
+				"notification.class_enrollment.rejected.title",
+				"notification.class_enrollment.rejected.message",
+				"Java Backend");
 	}
 
 	@Test
@@ -192,6 +214,46 @@ class ClassEnrollmentServiceTest {
 	}
 
 	@Test
+	void approveRejectsInactiveUserAndLeavesRequestPending() {
+		FapClass fapClass = givenOpenClass(30);
+		User user = trainee(UserStatus.Inactive);
+		when(userRepository.findWithRolesById(USER_ID)).thenReturn(Optional.of(user));
+		ClassEnrollment pending = enrollment(fapClass, user, ClassEnrollmentStatus.PendingApproval, 901L);
+		when(classEnrollmentRepository.findByFapClassIdAndUserId(CLASS_ID, USER_ID)).thenReturn(Optional.of(pending));
+
+		assertThatThrownBy(() -> service.approve(CLASS_ID, USER_ID, 1L))
+				.isInstanceOf(ConflictException.class)
+				.extracting("code")
+				.isEqualTo("CLASS_ENROLLMENT_USER_NOT_ACTIVE");
+		assertThat(pending.getStatus()).isEqualTo(ClassEnrollmentStatus.PendingApproval);
+		assertThat(pending.getReviewedAt()).isNull();
+		assertThat(pending.getReviewedBy()).isNull();
+		verify(courseResultService, never()).initializeForEnrollment(any(), anyLong());
+		verify(trainingRegistrationRepository, never()).saveAll(any());
+		verify(auditLogService, never()).record(any(), any(), any());
+		verifyNoInteractions(notificationService);
+	}
+
+	@Test
+	void approveRejectsUserWithoutTraineeRole() {
+		FapClass fapClass = givenOpenClass(30);
+		User user = new User();
+		user.setId(USER_ID);
+		user.setStatus(UserStatus.Active);
+		when(userRepository.findWithRolesById(USER_ID)).thenReturn(Optional.of(user));
+		ClassEnrollment pending = enrollment(fapClass, user, ClassEnrollmentStatus.PendingApproval, 901L);
+		when(classEnrollmentRepository.findByFapClassIdAndUserId(CLASS_ID, USER_ID)).thenReturn(Optional.of(pending));
+
+		assertThatThrownBy(() -> service.approve(CLASS_ID, USER_ID, 1L))
+				.isInstanceOf(ConflictException.class)
+				.extracting("code")
+				.isEqualTo("CLASS_ENROLLMENT_TRAINEE_REQUIRED");
+		assertThat(pending.getStatus()).isEqualTo(ClassEnrollmentStatus.PendingApproval);
+		verify(auditLogService, never()).record(any(), any(), any());
+		verifyNoInteractions(notificationService);
+	}
+
+	@Test
 	void pendingRequestCanBeCancelledWithoutCreatingCourseResult() {
 		FapClass fapClass = givenOpenClass(30);
 		User user = givenActiveTrainee();
@@ -204,6 +266,11 @@ class ClassEnrollmentServiceTest {
 		assertThat(response.withdrawnAt()).isNotNull();
 		verify(courseResultService, never()).markWithdrawn(any(), anyLong());
 		verify(trainingRegistrationRepository, never()).findFutureByClassAndUser(anyLong(), anyLong(), any(), any());
+		verify(notificationService).create(
+				USER_ID,
+				"notification.class_enrollment.request_cancelled.title",
+				"notification.class_enrollment.request_cancelled.message",
+				"Java Backend");
 	}
 
 	@Test
@@ -360,7 +427,11 @@ class ClassEnrollmentServiceTest {
 		assertThat(waitlisted.getStatus()).isEqualTo(ClassEnrollmentStatus.Enrolled);
 		assertThat(waitlisted.getEnrolledAt()).isNotNull();
 		verify(auditLogService).record("PROMOTE_CLASS_WAITLIST", "class_enrollment", 903L);
-		verify(notificationService).create(eq(701L), anyString(), anyString());
+		verify(notificationService).create(
+				701L,
+				"notification.class_enrollment.promoted.title",
+				"notification.class_enrollment.promoted.message",
+				"Java Backend");
 	}
 
 	@Test

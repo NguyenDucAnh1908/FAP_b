@@ -11,15 +11,17 @@ public enum SyllabusStatus implements TransitionalStatus<SyllabusStatus> {
 	Inactive;
 
 	/**
-	 * Active and Inactive are terminal: a published syllabus is never edited in place, it is cloned
-	 * as a new Drafting version instead.
+	 * The content of a published syllabus is never edited in place (changes go through a cloned
+	 * Drafting version), but it can still be retired, so Active may move to Inactive. Only Inactive
+	 * is terminal.
 	 */
 	@Override
 	public Set<SyllabusStatus> allowedTargets() {
 		return switch (this) {
 			case Drafting -> Set.of(Pending, Inactive);
 			case Pending -> Set.of(Active, Inactive);
-			case Active, Inactive -> Set.of();
+			case Active -> Set.of(Inactive);
+			case Inactive -> Set.of();
 		};
 	}
 }

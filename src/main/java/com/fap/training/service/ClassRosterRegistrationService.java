@@ -3,7 +3,6 @@ package com.fap.training.service;
 import com.fap.clazz.enums.ClassEnrollmentStatus;
 import com.fap.clazz.repository.ClassEnrollmentRepository;
 import com.fap.common.exception.ConflictException;
-import com.fap.notification.service.NotificationService;
 import com.fap.training.entity.TrainingRegistration;
 import com.fap.training.entity.TrainingSession;
 import com.fap.training.enums.TrainingRegistrationMode;
@@ -30,8 +29,9 @@ import java.util.stream.Collectors;
  *
  * <p>Kept apart from {@link TrainingRegistrationService}, which serves a trainee's own requests.
  * The roster path registers without a per-trainee capacity check (an auto-enroll session must
- * cover the class capacity up front), records no registration metrics, and promotes the session
- * waitlist its own way: it leaves {@code completedAt} alone and sends a different notification.
+ * cover the class capacity up front) and records no registration metrics. A seat it frees is
+ * offered to the waitlist through the same {@link WaitlistPromoter} as a trainee's own
+ * cancellation, so the promoted trainee sees one behaviour whichever path released the seat.
  */
 @Service
 public class ClassRosterRegistrationService {
@@ -43,19 +43,19 @@ public class ClassRosterRegistrationService {
 	private final TrainingSessionRepository trainingSessionRepository;
 	private final TrainingRegistrationRepository trainingRegistrationRepository;
 	private final ClassEnrollmentRepository classEnrollmentRepository;
-	private final NotificationService notificationService;
+	private final WaitlistPromoter waitlistPromoter;
 	private final Clock clock;
 
 	public ClassRosterRegistrationService(
 			TrainingSessionRepository trainingSessionRepository,
 			TrainingRegistrationRepository trainingRegistrationRepository,
 			ClassEnrollmentRepository classEnrollmentRepository,
-			NotificationService notificationService,
+			WaitlistPromoter waitlistPromoter,
 			Clock clock) {
 		this.trainingSessionRepository = trainingSessionRepository;
 		this.trainingRegistrationRepository = trainingRegistrationRepository;
 		this.classEnrollmentRepository = classEnrollmentRepository;
-		this.notificationService = notificationService;
+		this.waitlistPromoter = waitlistPromoter;
 		this.clock = clock;
 	}
 
@@ -133,7 +133,7 @@ public class ClassRosterRegistrationService {
 					registration.setStatus(TrainingRegistrationStatus.Cancelled);
 					registration.setCancelledAt(cancelledAt);
 					if (session.getRegistrationMode() == TrainingRegistrationMode.SelfEnroll) {
-						promoteSessionWaitlist(session);
+						waitlistPromoter.promoteFirstWaitlisted(session);
 					}
 				});
 	}
@@ -165,23 +165,5 @@ public class ClassRosterRegistrationService {
 		registration.setCompletedAt(null);
 		session.setEnrolledCount(session.getEnrolledCount() + 1);
 		return registration;
-	}
-
-	private void promoteSessionWaitlist(TrainingSession session) {
-		if (session.getEnrolledCount() >= session.getCapacity()) {
-			return;
-		}
-		trainingRegistrationRepository
-				.findFirstByTrainingSessionIdAndStatusOrderByRegisteredAtAscIdAsc(
-						session.getId(), TrainingRegistrationStatus.Waitlist)
-				.ifPresent(waitlisted -> {
-					waitlisted.setStatus(TrainingRegistrationStatus.Registered);
-					waitlisted.setCancelledAt(null);
-					session.setEnrolledCount(session.getEnrolledCount() + 1);
-					notificationService.create(
-							waitlisted.getUser().getId(),
-							"Training waitlist promoted",
-							"You have been registered for " + session.getTitle());
-				});
 	}
 }

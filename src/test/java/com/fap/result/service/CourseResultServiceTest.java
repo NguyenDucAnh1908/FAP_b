@@ -9,7 +9,6 @@ import com.fap.clazz.repository.ClassRepository;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
-import com.fap.common.i18n.MessageService;
 import com.fap.notification.service.NotificationService;
 import com.fap.quiz.repository.QuizAttemptRepository;
 import com.fap.quiz.entity.Quiz;
@@ -56,6 +55,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CourseResultServiceTest {
@@ -75,7 +75,6 @@ class CourseResultServiceTest {
 	private final AttendanceRecordRepository attendanceRepository = mock(AttendanceRecordRepository.class);
 	private final AuditLogService auditLogService = mock(AuditLogService.class);
 	private final NotificationService notificationService = mock(NotificationService.class);
-	private final MessageService messageService = mock(MessageService.class);
 
 	// Real collaborators: the tests assert calculated statuses and the mapped responses.
 	private final CourseResultCalculator calculator = new CourseResultCalculator(
@@ -96,8 +95,7 @@ class CourseResultServiceTest {
 			calculator,
 			new CourseResultMapper(),
 			auditLogService,
-			notificationService,
-			messageService);
+			notificationService);
 
 	@BeforeEach
 	void callRealRepositoryDefaults() {
@@ -242,8 +240,35 @@ class CourseResultServiceTest {
 
 		service.publish(CLASS_ID, ACTOR_ID);
 
-		verify(notificationService, never()).create(anyLong(), any(), any());
+		verifyNoInteractions(notificationService);
 		verify(auditLogService, never()).record("PUBLISH_COURSE_RESULTS", "class", CLASS_ID);
+	}
+
+	/**
+	 * The status travels as its message key, not as text: the notification is rendered in the
+	 * trainee's language when read, so "Passed" and "Đạt" are both still possible at publish time.
+	 */
+	@Test
+	void publishingNotifiesEachTraineeWithTheirResultStatusAsAKey() {
+		FapClass fapClass = givenClass(ClassStatus.Closed);
+		CourseResult result = givenResult(fapClass, CourseResultStatus.Passed);
+		when(classRepository.findWithTrainingProgramByIdForUpdate(CLASS_ID)).thenReturn(Optional.of(fapClass));
+		when(classRepository.findWithTrainingProgramById(CLASS_ID)).thenReturn(Optional.of(fapClass));
+		when(resultRepository.findByFapClassIdOrderByClassEnrollmentUserFullNameAsc(CLASS_ID)).thenReturn(List.of(result));
+		when(resultQuizRepository.findByCourseResultIdOrderByIdAsc(result.getId())).thenReturn(List.of());
+		when(adjustmentRepository.findByCourseResultIdOrderByAdjustedAtDescIdDesc(result.getId())).thenReturn(List.of());
+
+		service.publish(CLASS_ID, ACTOR_ID);
+
+		assertThat(result.getPublishedAt()).isNotNull();
+		assertThat(result.getPublishedBy()).isEqualTo(ACTOR_ID);
+		verify(notificationService).create(
+				USER_ID,
+				"notification.course_result.title",
+				"notification.course_result.message",
+				"Java Fundamentals",
+				"course_result.status.passed");
+		verify(auditLogService).record("PUBLISH_COURSE_RESULTS", "class", CLASS_ID);
 	}
 
 	@Test

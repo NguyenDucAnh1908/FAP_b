@@ -63,6 +63,10 @@ Error:
   and `.withMessageArgs(...)` with `{0}` placeholders for runtime values.
 - Login failures stay generic (`error.UNAUTHORIZED`) so a response never reveals whether an email
   exists.
+- Notifications store message keys (`notification.<module>.<outcome>.title|message`) plus their
+  arguments and are rendered per `Accept-Language` when read (`NotificationMapper`); the password
+  reset mail uses `mail.password_reset.*` with the requester's locale. `ErrorMessageKeysTest` checks
+  these keys exist in both files too.
 
 ## Rules
 

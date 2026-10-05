@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Guards the syllabus status lifecycle: Drafting -> Pending -> Active, with Inactive reachable
- * from Drafting and Pending. Every other move must be rejected.
+ * from Drafting, Pending and Active. Every other move must be rejected.
  */
 class SyllabusStateMachineTest {
 
@@ -54,7 +54,8 @@ class SyllabusStateMachineTest {
 			"Drafting, Pending",
 			"Pending, Active",
 			"Drafting, Inactive",
-			"Pending, Inactive"
+			"Pending, Inactive",
+			"Active, Inactive"
 	})
 	void allowsValidTransition(SyllabusStatus current, SyllabusStatus target) {
 		Syllabus syllabus = givenSyllabus(current);
@@ -159,18 +160,20 @@ class SyllabusStateMachineTest {
 	}
 
 	@Test
-	void rejectsDeactivatingActiveSyllabus() {
+	void deactivatesActiveSyllabusWithoutOutlineChecks() {
+		// No outline stubs on purpose: the bare mock reports zero topics, which would fail readiness
+		// if retiring consulted it.
 		Syllabus syllabus = givenSyllabus(SyllabusStatus.Active);
-		givenOutlineAndOutputStandardsArePresent();
 
-		assertThatThrownBy(() -> service.updateStatus(SYLLABUS_ID, SyllabusStatus.Inactive, CURRENT_USER_ID))
-				.isInstanceOf(ConflictException.class)
-				.hasMessage("Invalid syllabus status transition")
-				.extracting("code")
-				.isEqualTo("INVALID_SYLLABUS_STATUS_TRANSITION");
+		service.updateStatus(SYLLABUS_ID, SyllabusStatus.Inactive, CURRENT_USER_ID);
 
-		assertThat(syllabus.getStatus()).isEqualTo(SyllabusStatus.Active);
-		verify(auditLogService, never()).record(anyString(), anyString(), anyLong());
+		assertThat(syllabus.getStatus()).isEqualTo(SyllabusStatus.Inactive);
+		assertThat(syllabus.getUpdatedAt()).isNotNull();
+		assertThat(syllabus.getUpdatedBy()).isEqualTo(CURRENT_USER_ID);
+		verify(auditLogService).record("UPDATE_SYLLABUS_STATUS:Inactive", "syllabus", SYLLABUS_ID);
+		verify(syllabusRepository, never()).countTopicsBySyllabusId(anyLong());
+		verify(syllabusRepository, never()).countOutputStandardsBySyllabusId(anyLong());
+		verify(syllabusRepository, never()).countTopicsWithoutSelectedOutputStandard(anyLong());
 	}
 
 	@Test

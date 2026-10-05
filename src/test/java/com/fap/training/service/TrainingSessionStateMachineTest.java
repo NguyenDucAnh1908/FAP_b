@@ -159,7 +159,11 @@ class TrainingSessionStateMachineTest {
 		service.updateStatus(SESSION_ID, TrainingSessionStatus.Completed, CURRENT_USER_ID);
 
 		verify(trainingRegistrationRepository, never()).findUserIdsByTrainingSessionIdAndStatus(anyLong(), any());
-		verify(notificationService).create(eq(101L), anyString(), anyString());
+		verify(notificationService).create(
+				101L,
+				"notification.training_session.completed.title",
+				"notification.training_session.completed.message",
+				"Spring Boot fundamentals");
 		verify(auditLogService).record("UPDATE_TRAINING_SESSION_STATUS:Completed", "training_session", SESSION_ID);
 	}
 
@@ -207,7 +211,11 @@ class TrainingSessionStateMachineTest {
 
 		assertThat(registration.getStatus()).isEqualTo(TrainingRegistrationStatus.Completed);
 		assertThat(registration.getCompletedAt()).isNotNull();
-		verify(notificationService).create(eq(101L), anyString(), anyString());
+		verify(notificationService).create(
+				101L,
+				"notification.training_session.completed.title",
+				"notification.training_session.completed.message",
+				"Spring Boot fundamentals");
 	}
 
 	@Test
@@ -227,8 +235,16 @@ class TrainingSessionStateMachineTest {
 		assertThat(registered.getCancelledAt()).isNotNull();
 		assertThat(waitlisted.getCancelledAt()).isNotNull();
 		assertThat(session.getEnrolledCount()).isZero();
-		verify(notificationService).create(eq(102L), anyString(), anyString());
-		verify(notificationService).create(eq(103L), anyString(), anyString());
+		verify(notificationService).create(
+				102L,
+				"notification.training_session.cancelled.title",
+				"notification.training_session.cancelled.message",
+				"Spring Boot fundamentals");
+		verify(notificationService).create(
+				103L,
+				"notification.training_session.cancelled.title",
+				"notification.training_session.cancelled.message",
+				"Spring Boot fundamentals");
 	}
 
 	private TrainingSession givenSession(TrainingSessionStatus status) {

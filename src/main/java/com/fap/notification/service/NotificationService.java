@@ -14,6 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 
 @Service
 public class NotificationService {
@@ -63,16 +66,28 @@ public class NotificationService {
 	}
 
 	/**
-	 * Callers pass ids of users they just read (admins, trainers, registrants), often in a loop, so
-	 * the user is referenced by id instead of re-selected per notification; the foreign key still
+	 * Stores {@code titleKey}/{@code messageKey} and {@code args} (names, codes and titles for the
+	 * key's {@code {n}} placeholders); the text is rendered in the reader's language on read. The
+	 * English rendering is stored as well, as the fallback for a key that later leaves the bundles
+	 * and for anything reading the table directly.
+	 *
+	 * <p>Callers pass ids of users they just read (admins, trainers, registrants), often in a loop,
+	 * so the user is referenced by id instead of re-selected per notification; the foreign key still
 	 * rejects an unknown id at flush.
 	 */
 	@Transactional
-	public void create(Long userId, String title, String message) {
+	public void create(Long userId, String titleKey, String messageKey, Object... args) {
+		// A null argument renders as an empty placeholder rather than the literal "null".
+		List<String> texts = Arrays.stream(args)
+				.map(arg -> arg == null ? "" : arg.toString())
+				.toList();
 		Notification notification = new Notification();
 		notification.setUser(userRepository.getReferenceById(userId));
-		notification.setTitle(title);
-		notification.setMessage(message);
+		notification.setTitleKey(titleKey);
+		notification.setMessageKey(messageKey);
+		notification.setMessageArgs(notificationMapper.writeArgs(texts));
+		notification.setTitle(notificationMapper.render(Locale.ENGLISH, titleKey, titleKey, List.of()));
+		notification.setMessage(notificationMapper.render(Locale.ENGLISH, messageKey, messageKey, texts));
 		notification.setRead(false);
 		notification.setCreatedAt(LocalDateTime.now());
 		notificationRepository.save(notification);

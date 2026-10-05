@@ -21,6 +21,7 @@ import com.fap.user.repository.UserRepository;
 import com.fap.user.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -28,6 +29,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -184,7 +186,27 @@ class AuthServiceTest {
 		assertThat(saved.getValue().getUser()).isSameAs(user);
 		assertThat(saved.getValue().getCreatedAt()).isEqualTo(NOW);
 		assertThat(saved.getValue().getExpiresAt()).isEqualTo(NOW.plusMinutes(15));
-		verify(passwordResetMailService).sendPasswordResetOtp(eq(user), anyString(), eq(15L));
+		verify(passwordResetMailService).sendPasswordResetOtp(eq(user), anyString(), eq(15L), any(Locale.class));
+	}
+
+	/**
+	 * The mail is rendered after commit on another thread, where the request's locale context no
+	 * longer exists, so the requester's language has to be captured here and handed over.
+	 */
+	@Test
+	void forgotPasswordMailsTheOtpInTheRequestersLocale() {
+		Locale vietnamese = Locale.forLanguageTag("vi");
+		User user = new User();
+		user.setId(1000L);
+		when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+		LocaleContextHolder.setLocale(vietnamese);
+		try {
+			authService.forgotPassword(new ForgotPasswordRequest("user@example.com"));
+		} finally {
+			LocaleContextHolder.resetLocaleContext();
+		}
+
+		verify(passwordResetMailService).sendPasswordResetOtp(eq(user), anyString(), eq(15L), eq(vietnamese));
 	}
 
 	@Test

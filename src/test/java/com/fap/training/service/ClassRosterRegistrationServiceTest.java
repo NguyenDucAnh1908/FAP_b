@@ -5,6 +5,7 @@ import com.fap.clazz.entity.FapClass;
 import com.fap.clazz.enums.ClassEnrollmentStatus;
 import com.fap.clazz.repository.ClassEnrollmentRepository;
 import com.fap.common.exception.ConflictException;
+import com.fap.common.metrics.DomainMetrics;
 import com.fap.notification.service.NotificationService;
 import com.fap.training.entity.TrainingRegistration;
 import com.fap.training.entity.TrainingSession;
@@ -28,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -36,8 +36,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Session registrations that follow the class roster. The waitlist promotion here is not the same
- * as {@link TrainingRegistrationService}'s, so its exact effects are pinned down below.
+ * Session registrations that follow the class roster. Waitlist promotion itself belongs to
+ * {@link WaitlistPromoter} and is pinned in {@link WaitlistPromoterTest}; the roster-side tests
+ * run a real promoter over the same mocks to show that a freed seat is offered to the waitlist
+ * only for self-enroll sessions, and only after the seat has actually been released.
  */
 class ClassRosterRegistrationServiceTest {
 
@@ -51,11 +53,12 @@ class ClassRosterRegistrationServiceTest {
 	private final TrainingRegistrationRepository trainingRegistrationRepository = mock(TrainingRegistrationRepository.class);
 	private final ClassEnrollmentRepository classEnrollmentRepository = mock(ClassEnrollmentRepository.class);
 	private final NotificationService notificationService = mock(NotificationService.class);
+	private final DomainMetrics domainMetrics = mock(DomainMetrics.class);
 	private final ClassRosterRegistrationService service = new ClassRosterRegistrationService(
 			trainingSessionRepository,
 			trainingRegistrationRepository,
 			classEnrollmentRepository,
-			notificationService,
+			new WaitlistPromoter(trainingRegistrationRepository, notificationService, domainMetrics),
 			CLOCK);
 
 	@Test
@@ -173,7 +176,7 @@ class ClassRosterRegistrationServiceTest {
 		assertThat(fullSelfSession.getEnrolledCount()).isEqualTo(5);
 		verify(trainingRegistrationRepository, never())
 				.findFirstByTrainingSessionIdAndStatusOrderByRegisteredAtAscIdAsc(anyLong(), any());
-		verifyNoInteractions(notificationService);
+		verifyNoInteractions(notificationService, domainMetrics);
 	}
 
 	@Test
@@ -193,10 +196,15 @@ class ClassRosterRegistrationServiceTest {
 		assertThat(leaving.getStatus()).isEqualTo(TrainingRegistrationStatus.Cancelled);
 		assertThat(waitlisted.getStatus()).isEqualTo(TrainingRegistrationStatus.Registered);
 		assertThat(waitlisted.getCancelledAt()).isNull();
-		// Unlike TrainingRegistrationService's promotion, this path leaves completedAt as it was.
-		assertThat(waitlisted.getCompletedAt()).isEqualTo(EARLIER);
+		assertThat(waitlisted.getCompletedAt()).isNull();
+		// Back at capacity: the seat was released before the promoter's capacity guard looked at it.
 		assertThat(session.getEnrolledCount()).isEqualTo(2);
-		verify(notificationService).create(800L, "Training waitlist promoted", "You have been registered for Spring Boot");
+		verify(domainMetrics).recordRegistrationOutcome(DomainMetrics.RegistrationOutcome.PROMOTED);
+		verify(notificationService).create(
+				800L,
+				"notification.training_registration.promoted.title",
+				"notification.training_registration.promoted.message",
+				"Spring Boot");
 	}
 
 	@Test
@@ -209,7 +217,7 @@ class ClassRosterRegistrationServiceTest {
 		assertThat(session.getEnrolledCount()).isEqualTo(9);
 		verify(trainingRegistrationRepository, never())
 				.findFirstByTrainingSessionIdAndStatusOrderByRegisteredAtAscIdAsc(anyLong(), any());
-		verify(notificationService, never()).create(anyLong(), anyString(), anyString());
+		verifyNoInteractions(notificationService, domainMetrics);
 	}
 
 	private void givenFutureRegistrations(TrainingRegistration... registrations) {
