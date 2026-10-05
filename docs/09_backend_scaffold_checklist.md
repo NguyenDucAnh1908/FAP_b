@@ -9,7 +9,7 @@ Use this checklist when creating the Java Spring backend project.
 - `07_scope_freeze.md` for frozen modules, entities, APIs, roles, workflows.
 - `06_business_logic_review.md` for corrected business rules.
 - `08_backend_spring_boot_project_blueprint.md` for Java Spring project conventions.
-- `database/flyway/V1__create_fap_schema.sql` for first migration.
+- `../src/main/resources/db/migration/V1__create_fap_schema.sql` for the first migration.
 
 ---
 
@@ -58,8 +58,7 @@ Testcontainers
 ## 9.3 Files to Copy from Docs
 
 ```text
-docs/database/flyway/V1__create_fap_schema.sql
--> fap-backend/src/main/resources/db/migration/V1__create_fap_schema.sql
+src/main/resources/db/migration/   (canonical; nothing is copied from docs any more)
 ```
 
 Optional DBA/reference files:

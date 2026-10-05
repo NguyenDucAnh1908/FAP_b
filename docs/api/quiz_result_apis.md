@@ -161,5 +161,5 @@ Common errors:
 | HTTP | Code | Meaning |
 |---|---|---|
 | `403` | `ACCESS_DENIED` | Current user is not allowed to view this result scope. |
-| `404` | `NOT_FOUND` | Quiz, attempt, class, or training session was not found. |
+| `404` | `RESOURCE_NOT_FOUND` | Quiz, attempt, class, or training session was not found. |
 | `409` | `QUIZ_ATTEMPT_REVIEW_UNAVAILABLE` | Attempt is still in progress. |

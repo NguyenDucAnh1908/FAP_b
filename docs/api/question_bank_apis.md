@@ -161,4 +161,4 @@ Common errors:
 | `400` | `INVALID_QUESTION_OPTIONS_JSON` | `optionsJson` is not a non-empty JSON array. |
 | `400` | `INVALID_QUESTION_CORRECT_ANSWERS_JSON` | `correctAnswersJson` is not a non-empty JSON array. |
 | `400` | `INVALID_SINGLE_QUESTION_ANSWER` | Single-choice question has zero or multiple correct answers. |
-| `404` | `NOT_FOUND` | Question does not exist or was soft-deleted. |
+| `404` | `RESOURCE_NOT_FOUND` | Question does not exist or was soft-deleted. |

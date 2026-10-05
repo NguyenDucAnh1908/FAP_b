@@ -151,10 +151,10 @@ Common errors:
 
 | HTTP | Code | Meaning |
 |---|---|---|
-| `404` | `NOT_FOUND` | Syllabus, topic, or material was not found. |
+| `404` | `RESOURCE_NOT_FOUND` | Syllabus, topic, or material was not found. |
 | `409` | `SYLLABUS_NOT_EDITABLE` | Active/Inactive syllabus material cannot be changed. |
 | `400` | `FILE_REQUIRED` | Multipart field `file` is missing or empty. |
-| `400` | `FILE_TOO_LARGE` | File exceeds the 20 MB limit. |
+| `400` | `FILE_TOO_LARGE` | File exceeds the configured limit (`MAX_UPLOAD_SIZE`, 20 MB by default). |
 | `400` | `FILE_TYPE_NOT_ALLOWED` | Content type is not in the upload whitelist. |
 | `400` | `INVALID_MULTIPART` | Multipart body cannot be parsed. |
-| `403` | `FORBIDDEN` | The caller is not assigned to the requested material. |
+| `403` | `ACCESS_DENIED` | The caller is not assigned to the requested material. |

@@ -22,9 +22,7 @@ export interface PageResponse<T> {
 
 export interface ErrorResponse {
   success: false;
-  code: string;
-  message: string;
-  details?: { field: string; message: string }[];
+  error: ErrorBody;
 }
 
 export interface ApiEndpoint {

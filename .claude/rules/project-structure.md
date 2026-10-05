@@ -38,14 +38,17 @@ com.fap/
   syllabus/
   program/
   clazz/
+  training/
   quiz/
-  calendar/
+  result/
+  dashboard/
   notification/
   settings/
-  storage/
 ```
 
-Use `clazz` because `class` is a Java keyword.
+Use `clazz` because `class` is a Java keyword. The training calendar (sessions, registrations,
+attendance, feedback) lives in `training`; uploaded files are Oracle BLOBs owned by `syllabus`
+(materials) and `user` (avatars), so there is no separate `calendar` or `storage` package.
 
 ## Per-Feature Layout
 

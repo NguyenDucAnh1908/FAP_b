@@ -242,6 +242,21 @@
 					</execution>
 				</executions>
 			</plugin>
+			<!--
+			  db/seed (demo accounts, sample classes, e2e fixtures) stays in target/classes so the local
+			  profile, spring-boot:run and the *IT suite can load it, but is left out of the deployable
+			  jar: only the local profile ever scans it, and a shipped jar must not carry test accounts.
+			  PackagedJarIT verifies the exclusion.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<excludes>
+						<exclude>db/seed/**</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
@@ -253,6 +268,14 @@
 						</exclude>
 					</excludes>
 				</configuration>
+				<executions>
+					<!-- META-INF/build-info.properties, served by /actuator/info, so a running instance names its version. -->
+					<execution>
+						<goals>
+							<goal>build-info</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

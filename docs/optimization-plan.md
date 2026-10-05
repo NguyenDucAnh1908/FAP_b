@@ -17,7 +17,7 @@ Nguồn: audit ngày 2026-09-28 (DB/JPA, cấu trúc code, cấu hình/test/buil
 | 3 | Khử N+1 ở service nặng (CourseResult, MyLearning, ClassEnrollment, dashboard), pooled sequence | ✅ |
 | 4 | File: stream upload/download, clone BLOB phía DB (giữ BLOB trong Oracle) | ✅ |
 | 5 | Tái cấu trúc: tách god service, gom logic trùng, i18n, code chết, test cho service chưa có test | ✅ |
-| 6 | Build/CI/docs: loại `db/seed` khỏi jar prod, build-info, dọn `docs/.claude` | ⬜ |
+| 6 | Build/CI/docs: loại `db/seed` khỏi jar, build-info, dọn `docs/.claude` và bản sao migration, sinh lại OpenAPI inventory, sửa docs API | ✅ |
 
 ## Quyết định đã chốt (2026-09-28)
 
@@ -138,15 +138,34 @@ Lỗi phát hiện nhưng chưa sửa (ngoài phạm vi tái cấu trúc, cần 
 - Bài làm quiz InProgress vẫn nộp được sau khi quiz Closed; GET attempt có thể tự nộp.
 - Thông báo/email vẫn là tiếng Anh cứng (cần locale người nhận).
 
+## Giai đoạn 6 — đã giao
+
+| Hạng mục | Kết quả |
+|---|---|
+| Jar triển khai | `maven-jar-plugin` loại `db/seed/**`; `target/classes` vẫn có seed cho `spring-boot:run`, profile `local` và `*IT`. `PackagedJarIT` mở jar và khẳng định không còn entry `db/seed/`, migration V1 có mặt |
+| Build info | `spring-boot:build-info` → `META-INF/build-info.properties`, `/actuator/info` trả `build.artifact/version/time` (vẫn yêu cầu đăng nhập); `PackagedJarIT` kiểm tra |
+| Context test | `FapApplicationTests` dùng đúng bộ annotation của 3 `*IntegrationTest` nên dùng chung một context (bớt một lần khởi động Spring ~15 s mỗi lần `mvnw test`) |
+| `docs/.claude` | Xoá 38 file bản sao đã lệch so với `.claude` |
+| `docs/database/flyway` | Xoá 14 bản sao migration cũ (V16 sai tên cột, thiếu V5–V11 và V21+) và `reset_flyway_state.sql` đã lỗi thời (thiếu bảng/sequence mới). `docs/database/README.md`, blueprint 08, checklist 09 trỏ về `src/main/resources/db/migration` |
+| Package rỗng | Xoá `calendar`, `storage` (chỉ có `package-info`); rules `project-structure`, `naming-conventions`, `testing` liệt kê đúng 12 module hiện có |
+| OpenAPI inventory | `scripts/generate-openapi-endpoints.js` sinh luôn mục "Pagination and sorting" (trước viết tay nên bị mất khi sinh lại); `openapi-endpoints.md` cập nhật 115 → 143 operation |
+| Docs API | `NOT_FOUND` → `RESOURCE_NOT_FOUND` (6 file); `material_apis.md`: 403 là `ACCESS_DENIED`, giới hạn file theo `MAX_UPLOAD_SIZE`; `frontend_api_contract.ts`: `ErrorResponse` đúng dạng lồng `{ success: false, error: {...} }` |
+| Rule error-handling | Bảng mapping đủ các handler thực tế (400/401/403 FORBIDDEN/405/409 CONCURRENT_MODIFICATION) và quy ước i18n (message key, `NotFoundException(resource, …)`, `ErrorMessageKeysTest`) |
+
+Không đổi: `docs/database/oracle/*` và `liquibase/*` giữ làm tài liệu tham chiếu cho DBA (rule tech-stack
+cho phép), kèm ghi chú migration là nguồn chuẩn.
+
 ## Còn lại
 
-- Giai đoạn 6 (build/CI/docs), gồm `docs/api/openapi-endpoints.md` đã cũ so với code (thiếu endpoint
-  lớp/kết quả/avatar/check-in) và docs API ghi `NOT_FOUND` thay vì `RESOURCE_NOT_FOUND`.
+- CI chạy hai lần cho mỗi commit trên PR (`push` + `pull_request`); nếu muốn, giới hạn `push` về
+  `main` để tiết kiệm phút chạy.
 - Update full syllabus vẫn giữ BLOB của tài liệu được giữ lại trong RAM; bỏ hẳn cần đổi cách xoá/tạo
   lại cây outline (giữ nguyên material thay vì xoá rồi tạo lại).
 
 ## Kiểm chứng
 
+- Sau giai đoạn 6: `./mvnw clean verify` với Oracle XE 21 local: 1036 unit test, 31 IT, 0 lỗi; jar
+  không chứa `db/seed/`, có `META-INF/build-info.properties`.
 - Sau giai đoạn 5: `./mvnw test` 1036 test, 0 lỗi; `./mvnw verify` với Oracle XE 21 local: 22 IT,
   0 lỗi, ngân sách truy vấn không đổi (dashboard 16, courseResult.list 4, myLearning 11/9).
 - Sau giai đoạn 4: `./mvnw test` 311 test; 21 IT; không có bảng `HT_*` nào được tạo; V32, V33 đã áp.

@@ -11,7 +11,7 @@
 ## Java
 
 - Root package: `com.fap`.
-- Feature packages: `auth`, `user`, `role`, `syllabus`, `program`, `clazz`, `quiz`, `calendar`, `notification`, `settings`, `storage`.
+- Feature packages: `auth`, `user`, `role`, `syllabus`, `program`, `clazz`, `training`, `quiz`, `result`, `dashboard`, `notification`, `settings`.
 - DTOs: `CreateUserRequest`, `UserResponse`.
 - Exceptions: `NotFoundException`, `ConflictException`.
 - Tests: class name plus `Test`, for example `PermissionEvaluatorTest`.

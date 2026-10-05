@@ -254,7 +254,7 @@ Common errors:
 | `400` | `DUPLICATE_QUIZ_ANSWER` | Request contains duplicate question answers. |
 | `400` | `QUIZ_ANSWER_ARRAY_REQUIRED` | `selectedAnswersJson` must be a JSON array. |
 | `400` | `QUIZ_ANSWER_QUESTION_NOT_FOUND` | Answer references a question outside the quiz. |
-| `404` | `NOT_FOUND` | Quiz or attempt was not found. |
+| `404` | `RESOURCE_NOT_FOUND` | Quiz or attempt was not found. |
 | `409` | `QUIZ_NOT_AVAILABLE` | Quiz is not `Published`. |
 | `409` | `QUIZ_NOT_OPEN` | Quiz is not open yet. |
 | `409` | `QUIZ_CLOSED` | Quiz is already closed. |

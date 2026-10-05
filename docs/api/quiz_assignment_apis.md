@@ -90,7 +90,7 @@ Common errors:
 | HTTP | Code | Meaning |
 |---|---|---|
 | `400` | `INVALID_QUIZ_ASSIGNMENT_SCOPE` | Provide exactly one of `classId` or `trainingSessionId`. |
-| `404` | `NOT_FOUND` | Quiz, class, training session, or assignment was not found. |
+| `404` | `RESOURCE_NOT_FOUND` | Quiz, class, training session, or assignment was not found. |
 | `409` | `QUIZ_NOT_ASSIGNABLE` | Quiz is not `Published`. |
 | `409` | `DUPLICATE_QUIZ_CLASS_ASSIGNMENT` | Quiz is already assigned to this class. |
 | `409` | `DUPLICATE_QUIZ_SESSION_ASSIGNMENT` | Quiz is already assigned to this training session. |
