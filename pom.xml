@@ -34,7 +34,7 @@
 		<lombok.version>1.18.38</lombok.version>
 		<bucket4j.version>8.14.0</bucket4j.version>
 		<logstash-logback.version>8.1</logstash-logback.version>
-		<jacoco.version>0.8.12</jacoco.version>
+		<jacoco.version>0.8.15</jacoco.version>
 	</properties>
 	<dependencies>
 		<dependency>
