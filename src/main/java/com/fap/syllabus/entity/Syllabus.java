@@ -27,7 +27,7 @@ public class Syllabus {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "syllabuses_seq")
-	@SequenceGenerator(name = "syllabuses_seq", sequenceName = "syllabuses_seq", allocationSize = 1)
+	@SequenceGenerator(name = "syllabuses_seq", sequenceName = "syllabuses_seq", allocationSize = 50)
 	private Long id;
 
 	@Column(nullable = false)

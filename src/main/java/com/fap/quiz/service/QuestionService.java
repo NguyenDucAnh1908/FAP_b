@@ -5,7 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
-import com.fap.common.exception.NotFoundException;
+import com.fap.common.api.PageRequestFactory;
+import com.fap.common.util.TextNormalizer;
 import com.fap.quiz.dto.CreateQuestionRequest;
 import com.fap.quiz.dto.QuestionResponse;
 import com.fap.quiz.dto.UpdateQuestionRequest;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Service
 public class QuestionService {
@@ -49,19 +51,41 @@ public class QuestionService {
 			String keyword,
 			int page,
 			int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "id"));
+		return list(questionType, difficulty, category, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<QuestionResponse> list(
+			QuestionType questionType,
+			QuestionDifficulty difficulty,
+			String category,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "id"),
+				"id", "category", "questionType", "difficulty", "createdAt");
+		PageRequest nativePageRequest = PageRequestFactory.mapSortFields(pageRequest, Map.of(
+				"questionType", "question_type",
+				"createdAt", "created_at"));
 		return questionRepository.search(
-						enumName(questionType),
-						enumName(difficulty),
-						normalize(category),
-						normalize(keyword),
-						pageRequest)
+						NativeQueryParameters.enumName(questionType),
+						NativeQueryParameters.enumName(difficulty),
+						TextNormalizer.blankToNull(category),
+						TextNormalizer.blankToNull(keyword),
+						nativePageRequest)
 				.map(questionMapper::toResponse);
 	}
 
 	@Transactional(readOnly = true)
 	public QuestionResponse get(Long id) {
-		return questionMapper.toResponse(findQuestion(id));
+		return questionMapper.toResponse(questionRepository.getQuestionOrThrow(id));
 	}
 
 	@Transactional
@@ -80,7 +104,7 @@ public class QuestionService {
 
 	@Transactional
 	public QuestionResponse update(Long id, UpdateQuestionRequest request, Long currentUserId) {
-		Question question = findQuestion(id);
+		Question question = questionRepository.getQuestionOrThrow(id);
 		applyFields(question, request);
 		question.setUpdatedAt(LocalDateTime.now());
 		question.setUpdatedBy(currentUserId);
@@ -90,7 +114,7 @@ public class QuestionService {
 
 	@Transactional
 	public void delete(Long id, Long currentUserId) {
-		Question question = findQuestion(id);
+		Question question = questionRepository.getQuestionOrThrow(id);
 		LocalDateTime now = LocalDateTime.now();
 		question.setDeleted(true);
 		question.setDeletedAt(now);
@@ -105,9 +129,17 @@ public class QuestionService {
 		question.setQuestionType(request.questionType());
 		question.setCategory(request.category().trim());
 		question.setDifficulty(request.difficulty());
-		question.setOptionsJson(writeJson(request.optionsJson(), "INVALID_QUESTION_OPTIONS_JSON", "Question options must be valid JSON"));
-		question.setCorrectAnswersJson(writeJson(request.correctAnswersJson(), "INVALID_QUESTION_CORRECT_ANSWERS_JSON", "Question correct answers must be valid JSON"));
-		question.setExplanation(normalize(request.explanation()));
+		question.setOptionsJson(writeJson(
+				request.optionsJson(),
+				"INVALID_QUESTION_OPTIONS_JSON",
+				"error.INVALID_QUESTION_OPTIONS_JSON.invalid_json",
+				"Question options must be valid JSON"));
+		question.setCorrectAnswersJson(writeJson(
+				request.correctAnswersJson(),
+				"INVALID_QUESTION_CORRECT_ANSWERS_JSON",
+				"error.INVALID_QUESTION_CORRECT_ANSWERS_JSON.invalid_json",
+				"Question correct answers must be valid JSON"));
+		question.setExplanation(TextNormalizer.blankToNull(request.explanation()));
 	}
 
 	private void applyFields(Question question, UpdateQuestionRequest request) {
@@ -116,9 +148,17 @@ public class QuestionService {
 		question.setQuestionType(request.questionType());
 		question.setCategory(request.category().trim());
 		question.setDifficulty(request.difficulty());
-		question.setOptionsJson(writeJson(request.optionsJson(), "INVALID_QUESTION_OPTIONS_JSON", "Question options must be valid JSON"));
-		question.setCorrectAnswersJson(writeJson(request.correctAnswersJson(), "INVALID_QUESTION_CORRECT_ANSWERS_JSON", "Question correct answers must be valid JSON"));
-		question.setExplanation(normalize(request.explanation()));
+		question.setOptionsJson(writeJson(
+				request.optionsJson(),
+				"INVALID_QUESTION_OPTIONS_JSON",
+				"error.INVALID_QUESTION_OPTIONS_JSON.invalid_json",
+				"Question options must be valid JSON"));
+		question.setCorrectAnswersJson(writeJson(
+				request.correctAnswersJson(),
+				"INVALID_QUESTION_CORRECT_ANSWERS_JSON",
+				"error.INVALID_QUESTION_CORRECT_ANSWERS_JSON.invalid_json",
+				"Question correct answers must be valid JSON"));
+		question.setExplanation(TextNormalizer.blankToNull(request.explanation()));
 	}
 
 	private void validateJsonFields(QuestionType questionType, JsonNode optionsJson, JsonNode correctAnswersJson) {
@@ -133,24 +173,15 @@ public class QuestionService {
 		}
 	}
 
-	private String writeJson(JsonNode value, String code, String message) {
+	/**
+	 * @param messageKey the localized text for this failure, which shares {@code code} with the
+	 *                   "non-empty JSON array" check but not its wording
+	 */
+	private String writeJson(JsonNode value, String code, String messageKey, String message) {
 		try {
 			return objectMapper.writeValueAsString(value);
 		} catch (JsonProcessingException exception) {
-			throw new BadRequestException(code, message);
+			throw new BadRequestException(code, message).withMessageKey(messageKey);
 		}
-	}
-
-	private Question findQuestion(Long id) {
-		return questionRepository.findById(id)
-				.orElseThrow(() -> new NotFoundException("Question not found"));
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
-	}
-
-	private String enumName(Enum<?> value) {
-		return value == null ? null : value.name();
 	}
 }

@@ -14,6 +14,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -27,7 +28,7 @@ public class TrainingRegistration {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "training_registrations_seq")
-	@SequenceGenerator(name = "training_registrations_seq", sequenceName = "training_registrations_seq", allocationSize = 1)
+	@SequenceGenerator(name = "training_registrations_seq", sequenceName = "training_registrations_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -50,4 +51,8 @@ public class TrainingRegistration {
 
 	@Column(name = "completed_at")
 	private LocalDateTime completedAt;
+
+	@Version
+	@Column(name = "version_no", nullable = false)
+	private Long versionNo;
 }

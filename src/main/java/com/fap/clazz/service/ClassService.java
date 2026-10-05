@@ -10,19 +10,25 @@ import com.fap.clazz.repository.ClassAdminRepository;
 import com.fap.clazz.repository.ClassRepository;
 import com.fap.clazz.repository.ClassTrainerRepository;
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
-import com.fap.common.exception.NotFoundException;
 import com.fap.program.entity.TrainingProgram;
 import com.fap.program.enums.TrainingProgramStatus;
 import com.fap.program.repository.TrainingProgramRepository;
 import com.fap.common.security.FapUserPrincipal;
+import com.fap.common.security.RoleNames;
+import com.fap.common.util.StatusTransitions;
+import com.fap.common.util.TextNormalizer;
+import com.fap.result.service.CourseResultService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 
 @Service
@@ -34,6 +40,8 @@ public class ClassService {
 	private final TrainingProgramRepository trainingProgramRepository;
 	private final ClassMapper classMapper;
 	private final AuditLogService auditLogService;
+	private final ClassEnrollmentService classEnrollmentService;
+	private final CourseResultService courseResultService;
 
 	public ClassService(
 			ClassRepository classRepository,
@@ -41,13 +49,17 @@ public class ClassService {
 			ClassTrainerRepository classTrainerRepository,
 			TrainingProgramRepository trainingProgramRepository,
 			ClassMapper classMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			ClassEnrollmentService classEnrollmentService,
+			CourseResultService courseResultService) {
 		this.classRepository = classRepository;
 		this.classAdminRepository = classAdminRepository;
 		this.classTrainerRepository = classTrainerRepository;
 		this.trainingProgramRepository = trainingProgramRepository;
 		this.classMapper = classMapper;
 		this.auditLogService = auditLogService;
+		this.classEnrollmentService = classEnrollmentService;
+		this.courseResultService = courseResultService;
 	}
 
 	@Transactional(readOnly = true)
@@ -57,7 +69,7 @@ public class ClassService {
 			String keyword,
 			int page,
 			int limit) {
-		return listScoped(null, status, trainingProgramId, keyword, page, limit);
+		return listScoped(null, status, trainingProgramId, keyword, page, limit, null, null);
 	}
 
 	@Transactional(readOnly = true)
@@ -68,8 +80,27 @@ public class ClassService {
 			String keyword,
 			int page,
 			int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-		return classRepository.searchScoped(scopeUserId(principal), status, trainingProgramId, normalize(keyword), pageRequest)
+		return listScoped(principal, status, trainingProgramId, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<ClassResponse> listScoped(
+			FapUserPrincipal principal,
+			ClassStatus status,
+			Long trainingProgramId,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "name", "classCode", "startDate", "endDate", "status");
+		return classRepository.searchScoped(scopeUserId(principal), status, trainingProgramId, TextNormalizer.blankToNull(keyword), pageRequest)
 				.map(classMapper::toResponse);
 	}
 
@@ -79,8 +110,8 @@ public class ClassService {
 			throw new ConflictException("CLASS_CODE_EXISTS", "Class code already exists");
 		}
 		validateDateRange(request.startDate(), request.endDate());
-		TrainingProgram program = trainingProgramRepository.findById(request.trainingProgramId())
-				.orElseThrow(() -> new NotFoundException("Training program not found"));
+		validateEnrollmentDateRange(request.enrollmentStartDate(), request.enrollmentEndDate());
+		TrainingProgram program = trainingProgramRepository.getTrainingProgramOrThrow(request.trainingProgramId());
 		if (program.getStatus() != TrainingProgramStatus.Active) {
 			throw new ConflictException("CLASS_TRAINING_PROGRAM_NOT_ACTIVE", "Class requires an active training program");
 		}
@@ -102,14 +133,18 @@ public class ClassService {
 
 	@Transactional(readOnly = true)
 	public ClassResponse get(Long id) {
-		return classMapper.toResponse(findClass(id));
+		return classMapper.toResponse(classRepository.getWithTrainingProgramOrThrow(id));
 	}
 
 	@Transactional
 	public ClassResponse update(Long id, UpdateClassRequest request, Long currentUserId) {
-		FapClass fapClass = findClass(id);
+		FapClass fapClass = classRepository.getWithTrainingProgramOrThrow(id);
 		ensurePlanning(fapClass);
 		validateDateRange(request.startDate(), request.endDate());
+		validateEnrollmentDateRange(request.enrollmentStartDate(), request.enrollmentEndDate());
+		if (request.capacity() != null) {
+			classEnrollmentService.validateCapacity(id, request.capacity());
+		}
 		applyFields(fapClass, request);
 		fapClass.setUpdatedAt(LocalDateTime.now());
 		fapClass.setUpdatedBy(currentUserId);
@@ -119,10 +154,17 @@ public class ClassService {
 
 	@Transactional
 	public ClassResponse updateStatus(Long id, ClassStatus status, Long currentUserId) {
-		FapClass fapClass = findClass(id);
-		validateTransition(fapClass.getStatus(), status);
+		FapClass fapClass = classRepository.getWithTrainingProgramForUpdateOrThrow(id);
+		StatusTransitions.requireAllowed(
+				fapClass.getStatus(),
+				status,
+				"INVALID_CLASS_STATUS_TRANSITION",
+				"Invalid class status transition");
 		if (fapClass.getStatus() == ClassStatus.Planning && status == ClassStatus.Active) {
 			validateReadyForActivation(fapClass);
+		}
+		if (fapClass.getStatus() == ClassStatus.Active && status == ClassStatus.Closed) {
+			courseResultService.finalizeForClosure(fapClass, currentUserId);
 		}
 		fapClass.setStatus(status);
 		fapClass.setUpdatedAt(LocalDateTime.now());
@@ -133,7 +175,7 @@ public class ClassService {
 
 	@Transactional
 	public void delete(Long id, Long currentUserId) {
-		FapClass fapClass = findClass(id);
+		FapClass fapClass = classRepository.getWithTrainingProgramOrThrow(id);
 		ensurePlanning(fapClass);
 		fapClass.setDeleted(true);
 		fapClass.setDeletedAt(LocalDateTime.now());
@@ -142,9 +184,24 @@ public class ClassService {
 		auditLogService.record("DELETE_CLASS", "class", fapClass.getId());
 	}
 
-	private FapClass findClass(Long id) {
-		return classRepository.findWithTrainingProgramById(id)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
+	/**
+	 * Sets the minimum attendance rate of the class's completion policy.
+	 *
+	 * <p>Takes the instance the caller has already locked with {@code PESSIMISTIC_WRITE} rather than
+	 * an id, so the write happens under that lock without reading the class again. The caller
+	 * records the audit entry because the rate is only one part of its policy change, and passes
+	 * the timestamp so the class and the rest of that change are stamped alike.
+	 */
+	@Transactional
+	public void updateMinimumAttendanceRate(
+			FapClass lockedClass,
+			BigDecimal minimumAttendanceRate,
+			Long currentUserId,
+			LocalDateTime updatedAt) {
+		// The column holds two decimals; round here so the returned entity matches what is stored.
+		lockedClass.setMinimumAttendanceRate(minimumAttendanceRate.setScale(2, RoundingMode.HALF_UP));
+		lockedClass.setUpdatedAt(updatedAt);
+		lockedClass.setUpdatedBy(currentUserId);
 	}
 
 	private void applyFields(FapClass fapClass, CreateClassRequest request) {
@@ -155,6 +212,10 @@ public class ClassService {
 		fapClass.setStartDate(request.startDate());
 		fapClass.setEndDate(request.endDate());
 		fapClass.setDuration(request.duration());
+		fapClass.setCapacity(request.capacity());
+		fapClass.setSelfEnrollmentEnabled(request.selfEnrollmentEnabled());
+		fapClass.setEnrollmentStartDate(request.enrollmentStartDate());
+		fapClass.setEnrollmentEndDate(request.enrollmentEndDate());
 	}
 
 	private void applyFields(FapClass fapClass, UpdateClassRequest request) {
@@ -168,17 +229,14 @@ public class ClassService {
 		fapClass.setStartDate(request.startDate());
 		fapClass.setEndDate(request.endDate());
 		fapClass.setDuration(request.duration());
-	}
-
-	private void validateTransition(ClassStatus current, ClassStatus target) {
-		if (current == target) {
-			return;
+		if (request.capacity() != null) {
+			fapClass.setCapacity(request.capacity());
 		}
-		boolean allowed = (current == ClassStatus.Planning && target == ClassStatus.Active)
-				|| (current == ClassStatus.Active && target == ClassStatus.Closed);
-		if (!allowed) {
-			throw new ConflictException("INVALID_CLASS_STATUS_TRANSITION", "Invalid class status transition");
+		if (request.selfEnrollmentEnabled() != null) {
+			fapClass.setSelfEnrollmentEnabled(request.selfEnrollmentEnabled());
 		}
+		fapClass.setEnrollmentStartDate(request.enrollmentStartDate());
+		fapClass.setEnrollmentEndDate(request.enrollmentEndDate());
 	}
 
 	private void validateReadyForActivation(FapClass fapClass) {
@@ -209,11 +267,13 @@ public class ClassService {
 		}
 	}
 
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
+	private void validateEnrollmentDateRange(java.time.LocalDate startDate, java.time.LocalDate endDate) {
+		if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+			throw new BadRequestException("INVALID_CLASS_ENROLLMENT_DATE_RANGE", "Enrollment start date must be before or equal to end date");
+		}
 	}
 
 	private Long scopeUserId(FapUserPrincipal principal) {
-		return principal == null || principal.roles().contains("Super Admin") ? null : principal.id();
+		return principal == null || principal.roles().contains(RoleNames.SUPER_ADMIN) ? null : principal.id();
 	}
 }

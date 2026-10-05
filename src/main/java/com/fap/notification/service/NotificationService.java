@@ -1,11 +1,11 @@
 package com.fap.notification.service;
 
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.NotFoundException;
 import com.fap.notification.dto.NotificationResponse;
 import com.fap.notification.entity.Notification;
 import com.fap.notification.mapper.NotificationMapper;
 import com.fap.notification.repository.NotificationRepository;
-import com.fap.user.entity.User;
 import com.fap.user.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -33,25 +33,44 @@ public class NotificationService {
 
 	@Transactional(readOnly = true)
 	public Page<NotificationResponse> listMyNotifications(Long userId, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-		return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageRequest)
+		return listMyNotifications(userId, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<NotificationResponse> listMyNotifications(
+			Long userId,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "title", "read");
+		return notificationRepository.findByUserId(userId, pageRequest)
 				.map(notificationMapper::toResponse);
 	}
 
 	@Transactional
 	public NotificationResponse markRead(Long notificationId, Long userId) {
 		Notification notification = notificationRepository.findByIdAndUserId(notificationId, userId)
-				.orElseThrow(() -> new NotFoundException("Notification not found"));
+				.orElseThrow(() -> new NotFoundException("notification", "Notification not found"));
 		notification.setRead(true);
 		return notificationMapper.toResponse(notification);
 	}
 
+	/**
+	 * Callers pass ids of users they just read (admins, trainers, registrants), often in a loop, so
+	 * the user is referenced by id instead of re-selected per notification; the foreign key still
+	 * rejects an unknown id at flush.
+	 */
 	@Transactional
 	public void create(Long userId, String title, String message) {
-		User user = userRepository.findById(userId)
-				.orElseThrow(() -> new NotFoundException("User not found"));
 		Notification notification = new Notification();
-		notification.setUser(user);
+		notification.setUser(userRepository.getReferenceById(userId));
 		notification.setTitle(title);
 		notification.setMessage(message);
 		notification.setRead(false);

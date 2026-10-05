@@ -80,6 +80,12 @@ Rules:
 - Publishing requires active program, class admin, trainer assignments, and valid dates.
 - Active classes cannot be deleted.
 - Closed classes cannot be republished.
+- Closing requires every session to be `Completed` or `Canceled`, at least one completed session, and every required quiz to be `Closed`.
+- Closing calculates authoritative `course_results`; it does not mass-convert class enrollments to `Completed`.
+- Default minimum attendance is 80%; `Present` and `Late` count as attended.
+- Required class quizzes use the best submitted attempt and the class policy passing score.
+- Manual result adjustment is limited to `Passed`/`Failed`, requires a reason, retains history, and invalidates prior publication.
+- Result publication is allowed only for a closed class and sends an audit event plus trainee notifications.
 
 ### Quiz
 

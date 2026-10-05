@@ -202,6 +202,11 @@ CREATE TABLE classes (
                          start_date DATE,
                          end_date DATE,
                          duration VARCHAR2(50),
+                         capacity NUMBER(10) DEFAULT 30 NOT NULL,
+                         self_enrollment_enabled NUMBER(1) DEFAULT 0 NOT NULL,
+                         enrollment_start_date DATE,
+                         enrollment_end_date DATE,
+                         minimum_attendance_rate NUMBER(5,2) DEFAULT 80 NOT NULL,
                          is_deleted NUMBER(1) DEFAULT 0 NOT NULL,
                          deleted_at TIMESTAMP,
                          version_no NUMBER(19) DEFAULT 0 NOT NULL,
@@ -215,7 +220,14 @@ CREATE TABLE classes (
                          CONSTRAINT fk_classes_updated_by FOREIGN KEY (updated_by) REFERENCES users(id),
                          CONSTRAINT ck_classes_status CHECK (status IN ('Planning', 'Active', 'Closed')),
                          CONSTRAINT ck_classes_deleted CHECK (is_deleted IN (0, 1)),
-                         CONSTRAINT ck_classes_dates CHECK (start_date IS NULL OR end_date IS NULL OR start_date <= end_date)
+                         CONSTRAINT ck_classes_dates CHECK (start_date IS NULL OR end_date IS NULL OR start_date <= end_date),
+                         CONSTRAINT ck_classes_capacity CHECK (capacity > 0),
+                         CONSTRAINT ck_classes_self_enrollment CHECK (self_enrollment_enabled IN (0, 1)),
+                         CONSTRAINT ck_classes_enrollment_dates CHECK (
+                             enrollment_start_date IS NULL OR enrollment_end_date IS NULL
+                                 OR enrollment_start_date <= enrollment_end_date
+                         ),
+                         CONSTRAINT ck_classes_min_attendance CHECK (minimum_attendance_rate BETWEEN 0 AND 100)
 );
 
 CREATE TABLE class_trainers (
@@ -307,6 +319,34 @@ CREATE TABLE quiz_questions (
                                 CONSTRAINT ck_qq_points CHECK (points > 0)
 );
 
+CREATE TABLE class_enrollments (
+                                    id NUMBER(19) PRIMARY KEY,
+                                    class_id NUMBER(19) NOT NULL,
+                                    user_id NUMBER(19) NOT NULL,
+                                    status VARCHAR2(20) NOT NULL,
+                                    source VARCHAR2(20) NOT NULL,
+                                    enrolled_at TIMESTAMP,
+                                    withdrawn_at TIMESTAMP,
+                                    completed_at TIMESTAMP,
+                                    reviewed_at TIMESTAMP,
+                                    reviewed_by NUMBER(19),
+                                    version_no NUMBER(19) DEFAULT 0 NOT NULL,
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                                    created_by NUMBER(19),
+                                    updated_by NUMBER(19),
+                                    CONSTRAINT fk_class_enrollments_class FOREIGN KEY (class_id) REFERENCES classes(id),
+                                    CONSTRAINT fk_class_enrollments_user FOREIGN KEY (user_id) REFERENCES users(id),
+                                    CONSTRAINT fk_class_enrollments_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+                                    CONSTRAINT fk_class_enrollments_updated_by FOREIGN KEY (updated_by) REFERENCES users(id),
+                                    CONSTRAINT fk_class_enrollments_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES users(id),
+                                    CONSTRAINT uk_class_enrollments_class_user UNIQUE (class_id, user_id),
+                                    CONSTRAINT ck_class_enrollments_status CHECK (status IN ('PendingApproval', 'Enrolled', 'Waitlisted', 'Rejected', 'Withdrawn', 'Completed')),
+                                    CONSTRAINT ck_class_enrollments_source CHECK (source IN ('AdminAdded', 'SelfRegistered', 'Migration')),
+                                    CONSTRAINT ck_class_enrollments_withdrawn CHECK ((status = 'Withdrawn' AND withdrawn_at IS NOT NULL) OR status <> 'Withdrawn'),
+                                    CONSTRAINT ck_class_enrollments_completed CHECK ((status = 'Completed' AND completed_at IS NOT NULL) OR status <> 'Completed')
+);
+
 CREATE TABLE training_sessions (
                                    id NUMBER(19) PRIMARY KEY,
                                    class_id NUMBER(19),
@@ -321,6 +361,7 @@ CREATE TABLE training_sessions (
                                    meeting_link VARCHAR2(512),
                                    capacity NUMBER(10) DEFAULT 30 NOT NULL,
                                    enrolled_count NUMBER(10) DEFAULT 0 NOT NULL,
+                                   registration_mode VARCHAR2(20) DEFAULT 'SelfEnroll' NOT NULL,
                                    status VARCHAR2(20) DEFAULT 'Upcoming' NOT NULL,
                                    is_deleted NUMBER(1) DEFAULT 0 NOT NULL,
                                    deleted_at TIMESTAMP,
@@ -338,6 +379,7 @@ CREATE TABLE training_sessions (
                                    CONSTRAINT ck_ts_deleted CHECK (is_deleted IN (0, 1)),
                                    CONSTRAINT ck_ts_capacity CHECK (capacity > 0),
                                    CONSTRAINT ck_ts_enrolled CHECK (enrolled_count >= 0 AND enrolled_count <= capacity),
+                                   CONSTRAINT ck_ts_registration_mode CHECK (registration_mode IN ('AutoEnroll', 'SelfEnroll')),
                                    CONSTRAINT ck_ts_time CHECK (end_time > start_time)
 );
 
@@ -402,6 +444,85 @@ CREATE TABLE quiz_attempts (
                                            AND submitted_at IS NOT NULL
                                        )
                                    )
+);
+
+CREATE TABLE class_completion_quizzes (
+    id NUMBER(19) PRIMARY KEY,
+    class_id NUMBER(19) NOT NULL,
+    quiz_id NUMBER(19) NOT NULL,
+    passing_score NUMBER(3) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    created_by NUMBER(19),
+    updated_by NUMBER(19),
+    CONSTRAINT fk_completion_quiz_class FOREIGN KEY (class_id) REFERENCES classes(id),
+    CONSTRAINT fk_completion_quiz_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes(id),
+    CONSTRAINT fk_completion_quiz_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT fk_completion_quiz_updated_by FOREIGN KEY (updated_by) REFERENCES users(id),
+    CONSTRAINT uk_completion_quiz_class_quiz UNIQUE (class_id, quiz_id),
+    CONSTRAINT ck_completion_quiz_score CHECK (passing_score BETWEEN 0 AND 100)
+);
+
+CREATE TABLE course_results (
+    id NUMBER(19) PRIMARY KEY,
+    class_id NUMBER(19) NOT NULL,
+    class_enrollment_id NUMBER(19) NOT NULL,
+    calculated_status VARCHAR2(20) DEFAULT 'InProgress' NOT NULL,
+    override_status VARCHAR2(20),
+    attendance_rate NUMBER(5,2) DEFAULT 0 NOT NULL,
+    attended_sessions NUMBER(10) DEFAULT 0 NOT NULL,
+    total_sessions NUMBER(10) DEFAULT 0 NOT NULL,
+    required_quiz_count NUMBER(10) DEFAULT 0 NOT NULL,
+    passed_quiz_count NUMBER(10) DEFAULT 0 NOT NULL,
+    calculated_at TIMESTAMP,
+    calculated_by NUMBER(19),
+    override_reason VARCHAR2(1000),
+    overridden_at TIMESTAMP,
+    overridden_by NUMBER(19),
+    published_at TIMESTAMP,
+    published_by NUMBER(19),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    version_no NUMBER(19) DEFAULT 0 NOT NULL,
+    CONSTRAINT fk_course_result_class FOREIGN KEY (class_id) REFERENCES classes(id),
+    CONSTRAINT fk_course_result_enrollment FOREIGN KEY (class_enrollment_id) REFERENCES class_enrollments(id),
+    CONSTRAINT fk_course_result_calculated_by FOREIGN KEY (calculated_by) REFERENCES users(id),
+    CONSTRAINT fk_course_result_overridden_by FOREIGN KEY (overridden_by) REFERENCES users(id),
+    CONSTRAINT fk_course_result_published_by FOREIGN KEY (published_by) REFERENCES users(id),
+    CONSTRAINT uk_course_result_enrollment UNIQUE (class_enrollment_id),
+    CONSTRAINT ck_course_result_calculated CHECK (calculated_status IN ('InProgress', 'Passed', 'Failed', 'Withdrawn')),
+    CONSTRAINT ck_course_result_override CHECK (override_status IS NULL OR override_status IN ('Passed', 'Failed')),
+    CONSTRAINT ck_course_result_attendance CHECK (attendance_rate BETWEEN 0 AND 100)
+);
+
+CREATE TABLE course_result_quizzes (
+    id NUMBER(19) PRIMARY KEY,
+    course_result_id NUMBER(19) NOT NULL,
+    quiz_id NUMBER(19) NOT NULL,
+    required_score NUMBER(3) NOT NULL,
+    best_attempt_id NUMBER(19),
+    best_score NUMBER(3),
+    passed NUMBER(1) DEFAULT 0 NOT NULL,
+    CONSTRAINT fk_result_quiz_result FOREIGN KEY (course_result_id) REFERENCES course_results(id) ON DELETE CASCADE,
+    CONSTRAINT fk_result_quiz_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes(id),
+    CONSTRAINT fk_result_quiz_attempt FOREIGN KEY (best_attempt_id) REFERENCES quiz_attempts(id),
+    CONSTRAINT uk_result_quiz_result_quiz UNIQUE (course_result_id, quiz_id),
+    CONSTRAINT ck_result_quiz_required_score CHECK (required_score BETWEEN 0 AND 100),
+    CONSTRAINT ck_result_quiz_best_score CHECK (best_score IS NULL OR best_score BETWEEN 0 AND 100),
+    CONSTRAINT ck_result_quiz_passed CHECK (passed IN (0, 1))
+);
+
+CREATE TABLE course_result_adjustments (
+    id NUMBER(19) PRIMARY KEY,
+    course_result_id NUMBER(19) NOT NULL,
+    previous_status VARCHAR2(20) NOT NULL,
+    new_status VARCHAR2(20) NOT NULL,
+    reason VARCHAR2(1000) NOT NULL,
+    adjusted_by NUMBER(19) NOT NULL,
+    adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT fk_result_adjustment_result FOREIGN KEY (course_result_id) REFERENCES course_results(id),
+    CONSTRAINT fk_result_adjustment_user FOREIGN KEY (adjusted_by) REFERENCES users(id),
+    CONSTRAINT ck_result_adjustment_previous CHECK (previous_status IN ('InProgress', 'Passed', 'Failed', 'Withdrawn')),
+    CONSTRAINT ck_result_adjustment_new CHECK (new_status IN ('Passed', 'Failed'))
 );
 
 CREATE TABLE training_registrations (
@@ -503,6 +624,12 @@ CREATE INDEX idx_classes_dates ON classes(start_date, end_date);
 CREATE INDEX idx_classes_deleted ON classes(is_deleted);
 CREATE INDEX idx_class_trainers_user ON class_trainers(user_id);
 CREATE INDEX idx_class_admins_user ON class_admins(user_id);
+CREATE INDEX idx_class_enrollments_class_status ON class_enrollments(class_id, status);
+CREATE INDEX idx_class_enrollments_user_status ON class_enrollments(user_id, status);
+CREATE INDEX idx_completion_quizzes_class ON class_completion_quizzes(class_id);
+CREATE INDEX idx_course_results_class_status ON course_results(class_id, calculated_status);
+CREATE INDEX idx_course_results_publish ON course_results(class_id, published_at);
+CREATE INDEX idx_result_adjustments_result ON course_result_adjustments(course_result_id, adjusted_at);
 
 CREATE INDEX idx_questions_category ON questions(category);
 CREATE INDEX idx_questions_diff ON questions(difficulty);

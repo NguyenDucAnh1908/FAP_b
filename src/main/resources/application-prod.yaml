@@ -1,0 +1,33 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+  flyway:
+    # application.yaml enables baseline-on-migrate so a developer can point the app at a
+    # hand-created local schema. In production that flag is dangerous: against a non-empty
+    # database with no flyway_schema_history it would stamp the current state as the baseline
+    # and silently skip every migration below baseline-version.
+    baseline-on-migrate: false
+    clean-disabled: true
+    validate-on-migrate: true
+    out-of-order: false
+  jpa:
+    hibernate:
+      # Restated even though application.yaml already sets it: this is the one setting whose
+      # accidental change would let Hibernate rewrite the production schema.
+      ddl-auto: validate
+    show-sql: false
+
+server:
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.fap: ${APP_LOG_LEVEL:INFO}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:WARN}
+    org.flywaydb: ${FLYWAY_LOG_LEVEL:INFO}
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}

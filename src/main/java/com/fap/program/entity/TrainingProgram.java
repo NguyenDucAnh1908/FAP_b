@@ -26,7 +26,7 @@ public class TrainingProgram {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "training_programs_seq")
-	@SequenceGenerator(name = "training_programs_seq", sequenceName = "training_programs_seq", allocationSize = 1)
+	@SequenceGenerator(name = "training_programs_seq", sequenceName = "training_programs_seq", allocationSize = 50)
 	private Long id;
 
 	@Column(nullable = false)

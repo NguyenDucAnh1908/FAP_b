@@ -2,13 +2,15 @@ package com.fap.role.service;
 
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.audit.AuditLogService;
-import com.fap.common.exception.NotFoundException;
+import com.fap.common.security.AuthorizationCache;
+import com.fap.common.security.RoleNames;
 import com.fap.role.dto.PermissionResponse;
 import com.fap.role.dto.RoleResponse;
 import com.fap.role.dto.UpdatePermissionRequest;
 import com.fap.role.dto.UpdatePermissionMatrixRequest;
 import com.fap.role.entity.Permission;
 import com.fap.role.entity.Role;
+import com.fap.role.enums.PermissionLevel;
 import com.fap.role.mapper.RoleMapper;
 import com.fap.role.repository.PermissionRepository;
 import com.fap.role.repository.RoleRepository;
@@ -22,7 +24,6 @@ import java.util.Set;
 
 @Service
 public class RoleService {
-
 	private static final Set<String> SUPPORTED_PERMISSION_RESOURCES = Set.of(
 			"user",
 			"syllabus",
@@ -35,16 +36,19 @@ public class RoleService {
 	private final PermissionRepository permissionRepository;
 	private final RoleMapper roleMapper;
 	private final AuditLogService auditLogService;
+	private final AuthorizationCache authorizationCache;
 
 	public RoleService(
 			RoleRepository roleRepository,
 			PermissionRepository permissionRepository,
 			RoleMapper roleMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			AuthorizationCache authorizationCache) {
 		this.roleRepository = roleRepository;
 		this.permissionRepository = permissionRepository;
 		this.roleMapper = roleMapper;
 		this.auditLogService = auditLogService;
+		this.authorizationCache = authorizationCache;
 	}
 
 	@Transactional(readOnly = true)
@@ -58,6 +62,7 @@ public class RoleService {
 	public List<PermissionResponse> permissionMatrix() {
 		return permissionRepository.findAll().stream()
 				.map(roleMapper::toResponse)
+				.map(this::enforceSuperAdminFullAccess)
 				.toList();
 	}
 
@@ -66,8 +71,7 @@ public class RoleService {
 		validatePermissionMatrix(request);
 		request.permissions().forEach(item -> {
 			String resource = normalizeResource(item.resource());
-			Role role = roleRepository.findById(item.roleId())
-					.orElseThrow(() -> new NotFoundException("Role not found"));
+			Role role = roleRepository.getRoleOrThrow(item.roleId());
 			Permission permission = permissionRepository.findByRoleIdAndResource(item.roleId(), resource)
 					.orElseGet(() -> {
 						Permission created = new Permission();
@@ -75,10 +79,13 @@ public class RoleService {
 						created.setResource(resource);
 						return created;
 					});
-			permission.setPermissionLevel(item.permissionLevel());
+			permission.setPermissionLevel(isSuperAdmin(role)
+					? PermissionLevel.full_access
+					: item.permissionLevel());
 			permissionRepository.save(permission);
 		});
 		auditLogService.record("UPDATE_PERMISSION_MATRIX", "permission", null);
+		authorizationCache.invalidatePermissionsAfterCommit();
 		return permissionMatrix();
 	}
 
@@ -98,5 +105,20 @@ public class RoleService {
 
 	private String normalizeResource(String resource) {
 		return resource.trim().toLowerCase(Locale.ROOT);
+	}
+
+	private PermissionResponse enforceSuperAdminFullAccess(PermissionResponse permission) {
+		if (!RoleNames.SUPER_ADMIN.equalsIgnoreCase(permission.roleName())) {
+			return permission;
+		}
+		return new PermissionResponse(
+				permission.roleId(),
+				permission.roleName(),
+				permission.resource(),
+				PermissionLevel.full_access);
+	}
+
+	private boolean isSuperAdmin(Role role) {
+		return RoleNames.SUPER_ADMIN.equalsIgnoreCase(role.getName());
 	}
 }

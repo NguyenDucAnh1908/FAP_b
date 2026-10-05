@@ -53,8 +53,10 @@ public class QuizAttemptController {
 	public PageResponse<AssignedQuizResponse> assigned(
 			@AuthenticationPrincipal FapUserPrincipal principal,
 			@RequestParam(defaultValue = "1") @Min(1) int page,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		Page<AssignedQuizResponse> quizzes = quizAttemptService.assigned(principal.id(), page - 1, limit);
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String order) {
+		Page<AssignedQuizResponse> quizzes = quizAttemptService.assigned(principal.id(), page - 1, limit, sortBy, order);
 		return PageResponse.of(quizzes.getContent(), page, limit, quizzes.getTotalElements());
 	}
 

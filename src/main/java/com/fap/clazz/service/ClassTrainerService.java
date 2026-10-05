@@ -13,6 +13,7 @@ import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.security.RoleNames;
 import com.fap.notification.service.NotificationService;
 import com.fap.program.repository.TrainingProgramSyllabusRepository;
 import com.fap.syllabus.entity.Syllabus;
@@ -29,8 +30,6 @@ import java.util.Set;
 
 @Service
 public class ClassTrainerService {
-
-	private static final String TRAINER_ROLE = "Trainer";
 
 	private final ClassRepository classRepository;
 	private final ClassTrainerRepository classTrainerRepository;
@@ -88,9 +87,8 @@ public class ClassTrainerService {
 	}
 
 	private ClassTrainer createTrainerAssignment(FapClass fapClass, ClassTrainerItemRequest item) {
-		User user = userRepository.findWithRolesById(item.userId())
-				.orElseThrow(() -> new NotFoundException("User not found"));
-		if (user.getStatus() != UserStatus.Active || user.getRoles().stream().noneMatch(role -> TRAINER_ROLE.equals(role.getName()))) {
+		User user = userRepository.getWithRolesOrThrow(item.userId());
+		if (user.getStatus() != UserStatus.Active || user.getRoles().stream().noneMatch(role -> RoleNames.TRAINER.equals(role.getName()))) {
 			throw new ConflictException("CLASS_TRAINER_ROLE_REQUIRED", "Assigned user must be an active Trainer");
 		}
 		Syllabus syllabus = null;
@@ -99,8 +97,7 @@ public class ClassTrainerService {
 			if (!trainingProgramSyllabusRepository.existsByIdProgramIdAndIdSyllabusId(programId, item.syllabusId())) {
 				throw new ConflictException("CLASS_TRAINER_SYLLABUS_NOT_IN_PROGRAM", "Trainer syllabus must belong to the class training program");
 			}
-			syllabus = syllabusRepository.findById(item.syllabusId())
-					.orElseThrow(() -> new NotFoundException("Syllabus not found"));
+			syllabus = syllabusRepository.getOrThrow(item.syllabusId());
 		}
 		ClassTrainer classTrainer = new ClassTrainer();
 		classTrainer.setFapClass(fapClass);
@@ -121,13 +118,12 @@ public class ClassTrainerService {
 
 	private void ensureClassExists(Long classId) {
 		if (!classRepository.existsById(classId)) {
-			throw new NotFoundException("Class not found");
+			throw new NotFoundException("class", "Class not found");
 		}
 	}
 
 	private FapClass findPlanningClass(Long classId) {
-		FapClass fapClass = classRepository.findWithTrainingProgramById(classId)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
+		FapClass fapClass = classRepository.getWithTrainingProgramOrThrow(classId);
 		if (fapClass.getStatus() != ClassStatus.Planning) {
 			throw new ConflictException("CLASS_NOT_EDITABLE", "Only planning class can be edited");
 		}

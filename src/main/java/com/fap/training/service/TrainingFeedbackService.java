@@ -1,8 +1,10 @@
 package com.fap.training.service;
 
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.util.TextNormalizer;
 import com.fap.training.dto.CreateTrainingFeedbackRequest;
 import com.fap.training.dto.TrainingFeedbackResponse;
 import com.fap.training.dto.TrainingFeedbackSummaryResponse;
@@ -18,6 +20,7 @@ import com.fap.training.repository.TrainingSessionRepository;
 import com.fap.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,8 +50,7 @@ public class TrainingFeedbackService {
 
 	@Transactional
 	public TrainingFeedbackResponse submit(Long trainingSessionId, Long currentUserId, CreateTrainingFeedbackRequest request) {
-		TrainingSession session = trainingSessionRepository.findWithClassAndTrainerById(trainingSessionId)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
+		TrainingSession session = trainingSessionRepository.getWithClassAndTrainerOrThrow(trainingSessionId);
 		if (session.getStatus() != TrainingSessionStatus.Completed) {
 			throw new ConflictException("FEEDBACK_SESSION_NOT_COMPLETED", "Feedback is allowed only for completed training sessions");
 		}
@@ -71,7 +73,7 @@ public class TrainingFeedbackService {
 		feedback.setRatingContent(request.ratingContent());
 		feedback.setRatingTrainer(request.ratingTrainer());
 		feedback.setRatingOrganization(request.ratingOrganization());
-		feedback.setComment(normalize(request.comment()));
+		feedback.setComment(TextNormalizer.blankToNull(request.comment()));
 		feedback.setCreatedAt(now);
 		feedback.setUpdatedAt(now);
 		TrainingFeedback saved = trainingFeedbackRepository.save(feedback);
@@ -82,7 +84,7 @@ public class TrainingFeedbackService {
 	@Transactional(readOnly = true)
 	public TrainingFeedbackSummaryResponse summary(Long trainingSessionId) {
 		if (!trainingSessionRepository.existsById(trainingSessionId)) {
-			throw new NotFoundException("Training session not found");
+			throw new NotFoundException("training_session", "Training session not found");
 		}
 		TrainingFeedbackRepository.FeedbackSummary summary = trainingFeedbackRepository
 				.summarizeByTrainingSessionId(trainingSessionId);
@@ -104,16 +106,29 @@ public class TrainingFeedbackService {
 
 	@Transactional(readOnly = true)
 	public Page<TrainingFeedbackResponse> listMine(Long currentUserId, int page, int limit) {
+		return listMine(currentUserId, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<TrainingFeedbackResponse> listMine(
+			Long currentUserId,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "ratingContent", "ratingTrainer", "ratingOrganization");
 		return trainingFeedbackRepository
-				.findByUserIdOrderByCreatedAtDesc(currentUserId, PageRequest.of(page, limit))
+				.findByUserId(currentUserId, pageRequest)
 				.map(trainingFeedbackMapper::toResponse);
 	}
 
 	private Double averageOrZero(Double value) {
 		return value == null ? 0.0 : value;
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
 	}
 }

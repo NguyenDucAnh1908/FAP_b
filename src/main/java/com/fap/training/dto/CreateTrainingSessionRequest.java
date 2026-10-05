@@ -1,6 +1,7 @@
 package com.fap.training.dto;
 
 import com.fap.training.enums.TrainingSessionType;
+import com.fap.training.enums.TrainingRegistrationMode;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -20,6 +21,7 @@ public record CreateTrainingSessionRequest(
 		@NotNull LocalDateTime endTime,
 		@NotNull TrainingSessionType sessionType,
 		@Size(max = 512) String meetingLink,
-		@NotNull @Min(1) Integer capacity
+		@NotNull @Min(1) Integer capacity,
+		@NotNull TrainingRegistrationMode registrationMode
 ) {
 }

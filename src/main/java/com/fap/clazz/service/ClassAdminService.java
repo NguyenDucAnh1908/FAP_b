@@ -13,6 +13,7 @@ import com.fap.common.audit.AuditLogService;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.security.RoleNames;
 import com.fap.notification.service.NotificationService;
 import com.fap.user.entity.User;
 import com.fap.user.enums.UserStatus;
@@ -26,8 +27,6 @@ import java.util.Set;
 
 @Service
 public class ClassAdminService {
-
-	private static final String CLASS_ADMIN_ROLE = "Class Admin";
 
 	private final ClassRepository classRepository;
 	private final ClassAdminRepository classAdminRepository;
@@ -79,9 +78,8 @@ public class ClassAdminService {
 	}
 
 	private ClassAdmin createAdminAssignment(FapClass fapClass, Long userId) {
-		User user = userRepository.findWithRolesById(userId)
-				.orElseThrow(() -> new NotFoundException("User not found"));
-		if (user.getStatus() != UserStatus.Active || user.getRoles().stream().noneMatch(role -> CLASS_ADMIN_ROLE.equals(role.getName()))) {
+		User user = userRepository.getWithRolesOrThrow(userId);
+		if (user.getStatus() != UserStatus.Active || user.getRoles().stream().noneMatch(role -> RoleNames.CLASS_ADMIN.equals(role.getName()))) {
 			throw new ConflictException("CLASS_ADMIN_ROLE_REQUIRED", "Assigned user must be an active Class Admin");
 		}
 		ClassAdmin classAdmin = new ClassAdmin();
@@ -102,13 +100,12 @@ public class ClassAdminService {
 
 	private void ensureClassExists(Long classId) {
 		if (!classRepository.existsById(classId)) {
-			throw new NotFoundException("Class not found");
+			throw new NotFoundException("class", "Class not found");
 		}
 	}
 
 	private FapClass findPlanningClass(Long classId) {
-		FapClass fapClass = classRepository.findWithTrainingProgramById(classId)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
+		FapClass fapClass = classRepository.getWithTrainingProgramOrThrow(classId);
 		if (fapClass.getStatus() != ClassStatus.Planning) {
 			throw new ConflictException("CLASS_NOT_EDITABLE", "Only planning class can be edited");
 		}

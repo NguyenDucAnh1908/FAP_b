@@ -1,9 +1,12 @@
 package com.fap.program.service;
 
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.BadRequestException;
 import com.fap.common.exception.ConflictException;
 import com.fap.common.exception.NotFoundException;
+import com.fap.common.util.StatusTransitions;
+import com.fap.common.util.TextNormalizer;
 import com.fap.program.dto.CreateTrainingProgramRequest;
 import com.fap.program.dto.TrainingProgramResponse;
 import com.fap.program.dto.TrainingProgramSyllabusItemRequest;
@@ -55,8 +58,25 @@ public class TrainingProgramService {
 
 	@Transactional(readOnly = true)
 	public Page<TrainingProgramResponse> list(TrainingProgramStatus status, String keyword, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-		return programRepository.search(status, normalize(keyword), pageRequest)
+		return list(status, keyword, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<TrainingProgramResponse> list(
+			TrainingProgramStatus status,
+			String keyword,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
+				page,
+				limit,
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.DESC, "createdAt"),
+				"id", "createdAt", "name", "duration", "totalHours", "version", "status");
+		return programRepository.search(status, TextNormalizer.blankToNull(keyword), pageRequest)
 				.map(trainingProgramMapper::toResponse);
 	}
 
@@ -80,12 +100,12 @@ public class TrainingProgramService {
 
 	@Transactional(readOnly = true)
 	public TrainingProgramResponse get(Long id) {
-		return trainingProgramMapper.toResponse(findProgram(id));
+		return trainingProgramMapper.toResponse(programRepository.getTrainingProgramOrThrow(id));
 	}
 
 	@Transactional
 	public TrainingProgramResponse update(Long id, UpdateTrainingProgramRequest request, Long currentUserId) {
-		TrainingProgram program = findProgram(id);
+		TrainingProgram program = programRepository.getTrainingProgramOrThrow(id);
 		ensurePlanning(program);
 		program.setName(request.name());
 		program.setDuration(request.duration());
@@ -99,7 +119,7 @@ public class TrainingProgramService {
 
 	@Transactional
 	public TrainingProgramResponse updateStatus(Long id, TrainingProgramStatus status, Long currentUserId) {
-		TrainingProgram program = findProgram(id);
+		TrainingProgram program = programRepository.getTrainingProgramOrThrow(id);
 		validateTransition(program, status);
 		program.setStatus(status);
 		program.setUpdatedAt(LocalDateTime.now());
@@ -110,7 +130,7 @@ public class TrainingProgramService {
 
 	@Transactional
 	public void delete(Long id, Long currentUserId) {
-		TrainingProgram program = findProgram(id);
+		TrainingProgram program = programRepository.getTrainingProgramOrThrow(id);
 		ensurePlanning(program);
 		program.setDeleted(true);
 		program.setDeletedAt(LocalDateTime.now());
@@ -132,7 +152,7 @@ public class TrainingProgramService {
 			Long id,
 			UpdateTrainingProgramSyllabusesRequest request,
 			Long currentUserId) {
-		TrainingProgram program = findProgram(id);
+		TrainingProgram program = programRepository.getTrainingProgramOrThrow(id);
 		ensurePlanning(program);
 		validateSyllabusItems(request.syllabuses());
 		programSyllabusRepository.deleteByIdProgramId(id);
@@ -152,8 +172,7 @@ public class TrainingProgramService {
 	private TrainingProgramSyllabus createProgramSyllabus(
 			TrainingProgram program,
 			TrainingProgramSyllabusItemRequest item) {
-		Syllabus syllabus = syllabusRepository.findById(item.syllabusId())
-				.orElseThrow(() -> new NotFoundException("Syllabus not found"));
+		Syllabus syllabus = syllabusRepository.getOrThrow(item.syllabusId());
 		if (syllabus.getStatus() != SyllabusStatus.Active) {
 			throw new ConflictException("TRAINING_PROGRAM_SYLLABUS_NOT_ACTIVE", "Only active syllabuses can be attached");
 		}
@@ -179,28 +198,22 @@ public class TrainingProgramService {
 	}
 
 	private void validateTransition(TrainingProgram program, TrainingProgramStatus target) {
-		if (program.getStatus() == target) {
-			return;
-		}
-		boolean allowed = (program.getStatus() == TrainingProgramStatus.Planning && target == TrainingProgramStatus.Active)
-				|| (program.getStatus() == TrainingProgramStatus.Planning && target == TrainingProgramStatus.Inactive)
-				|| (program.getStatus() == TrainingProgramStatus.Active && target == TrainingProgramStatus.Inactive);
-		if (!allowed) {
-			throw new ConflictException("INVALID_TRAINING_PROGRAM_STATUS_TRANSITION", "Invalid training program status transition");
-		}
-		if (target == TrainingProgramStatus.Active && programSyllabusRepository.countByIdProgramId(program.getId()) == 0) {
+		StatusTransitions.requireAllowed(
+				program.getStatus(),
+				target,
+				"INVALID_TRAINING_PROGRAM_STATUS_TRANSITION",
+				"Invalid training program status transition");
+		// The same-status no-op (Active -> Active) must not re-check syllabuses; only publishing does.
+		if (program.getStatus() != target
+				&& target == TrainingProgramStatus.Active
+				&& programSyllabusRepository.countByIdProgramId(program.getId()) == 0) {
 			throw new ConflictException("TRAINING_PROGRAM_SYLLABUS_REQUIRED", "Training program requires at least one active syllabus before publishing");
 		}
 	}
 
-	private TrainingProgram findProgram(Long id) {
-		return programRepository.findById(id)
-				.orElseThrow(() -> new NotFoundException("Training program not found"));
-	}
-
 	private void ensureProgramExists(Long id) {
 		if (!programRepository.existsById(id)) {
-			throw new NotFoundException("Training program not found");
+			throw new NotFoundException("training_program", "Training program not found");
 		}
 	}
 
@@ -208,9 +221,5 @@ public class TrainingProgramService {
 		if (program.getStatus() != TrainingProgramStatus.Planning) {
 			throw new ConflictException("TRAINING_PROGRAM_NOT_EDITABLE", "Only planning training program can be edited");
 		}
-	}
-
-	private String normalize(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
 	}
 }

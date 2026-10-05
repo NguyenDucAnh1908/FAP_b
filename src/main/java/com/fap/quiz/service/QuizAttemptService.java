@@ -5,9 +5,10 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fap.common.audit.AuditLogService;
+import com.fap.common.metrics.DomainMetrics;
 import com.fap.common.exception.BadRequestException;
+import com.fap.common.api.PageRequestFactory;
 import com.fap.common.exception.ConflictException;
-import com.fap.common.exception.NotFoundException;
 import com.fap.quiz.dto.AssignedQuizResponse;
 import com.fap.quiz.dto.QuizAnswerItemRequest;
 import com.fap.quiz.dto.QuizAttemptReviewQuestionResponse;
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -65,6 +67,8 @@ public class QuizAttemptService {
 	private final QuizAttemptMapper quizAttemptMapper;
 	private final ObjectMapper objectMapper;
 	private final AuditLogService auditLogService;
+	private final DomainMetrics domainMetrics;
+	private final Clock clock;
 
 	public QuizAttemptService(
 			QuizRepository quizRepository,
@@ -74,7 +78,9 @@ public class QuizAttemptService {
 			UserRepository userRepository,
 			QuizAttemptMapper quizAttemptMapper,
 			ObjectMapper objectMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			DomainMetrics domainMetrics,
+			Clock clock) {
 		this.quizRepository = quizRepository;
 		this.quizAssignmentRepository = quizAssignmentRepository;
 		this.quizQuestionRepository = quizQuestionRepository;
@@ -83,19 +89,34 @@ public class QuizAttemptService {
 		this.quizAttemptMapper = quizAttemptMapper;
 		this.objectMapper = objectMapper;
 		this.auditLogService = auditLogService;
+		this.domainMetrics = domainMetrics;
+		this.clock = clock;
 	}
 
 	@Transactional(readOnly = true)
 	public Page<AssignedQuizResponse> assigned(Long currentUserId, int page, int limit) {
-		PageRequest pageRequest = PageRequest.of(
+		return assigned(currentUserId, page, limit, null, null);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<AssignedQuizResponse> assigned(
+			Long currentUserId,
+			int page,
+			int limit,
+			String sortBy,
+			String order) {
+		PageRequest pageRequest = PageRequestFactory.create(
 				page,
 				limit,
-				Sort.by(Sort.Direction.ASC, "closeDate").and(Sort.by(Sort.Direction.DESC, "id")));
+				sortBy,
+				order,
+				Sort.by(Sort.Direction.ASC, "closeDate").and(Sort.by(Sort.Direction.DESC, "id")),
+				"id", "closeDate", "openDate", "title", "durationMinutes", "status");
 		return quizRepository.searchAssignedToUser(
 						currentUserId,
 						QuizStatus.Published,
 						ELIGIBLE_REGISTRATION_STATUSES,
-						LocalDate.now(),
+						LocalDate.now(clock),
 						pageRequest)
 				.map(quiz -> {
 					long attemptCount = quizAttemptRepository.countByQuizIdAndUserId(quiz.getId(), currentUserId);
@@ -112,7 +133,7 @@ public class QuizAttemptService {
 
 	@Transactional
 	public QuizAttemptResponse start(Long quizId, Long currentUserId) {
-		Quiz quiz = findQuiz(quizId);
+		Quiz quiz = quizRepository.getQuizOrThrow(quizId);
 		ensureAvailable(quiz);
 		ensureAssignedToUser(quizId, currentUserId);
 		ensureNoInProgressAttempt(quizId, currentUserId);
@@ -127,7 +148,7 @@ public class QuizAttemptService {
 		attempt.setAttemptNumber((int) attemptCount + 1);
 		attempt.setStatus(QuizAttemptStatus.InProgress);
 		attempt.setAnswersJson(EMPTY_ANSWERS_JSON);
-		attempt.setStartedAt(LocalDateTime.now());
+		attempt.setStartedAt(LocalDateTime.now(clock));
 		QuizAttempt saved = quizAttemptRepository.save(attempt);
 		auditLogService.record("START_QUIZ_ATTEMPT", "quiz_attempt", saved.getId());
 		return toResponse(saved);
@@ -135,7 +156,7 @@ public class QuizAttemptService {
 
 	@Transactional
 	public QuizAttemptResponse saveAnswers(Long attemptId, SaveQuizAnswersRequest request, Long currentUserId) {
-		QuizAttempt attempt = findOwnAttempt(attemptId, currentUserId);
+		QuizAttempt attempt = quizAttemptRepository.getByIdAndUserIdOrThrow(attemptId, currentUserId);
 		ensureInProgress(attempt);
 		List<QuizQuestion> quizQuestions = quizQuestions(attempt);
 		if (autoSubmitIfExpired(attempt, quizQuestions)) {
@@ -149,26 +170,28 @@ public class QuizAttemptService {
 
 	@Transactional
 	public QuizAttemptResponse submit(Long attemptId, Long currentUserId) {
-		QuizAttempt attempt = findOwnAttempt(attemptId, currentUserId);
-		ensureInProgress(attempt);
-		List<QuizQuestion> quizQuestions = quizQuestions(attempt);
-		if (autoSubmitIfExpired(attempt, quizQuestions)) {
+		return domainMetrics.recordQuizSubmit(() -> {
+			QuizAttempt attempt = quizAttemptRepository.getByIdAndUserIdOrThrow(attemptId, currentUserId);
+			ensureInProgress(attempt);
+			List<QuizQuestion> quizQuestions = quizQuestions(attempt);
+			if (autoSubmitIfExpired(attempt, quizQuestions)) {
+				return quizAttemptMapper.toResponse(attempt, orderedQuestions(attempt, quizQuestions));
+			}
+			submitAttempt(attempt, quizQuestions, LocalDateTime.now(clock), "SUBMIT_QUIZ_ATTEMPT");
 			return quizAttemptMapper.toResponse(attempt, orderedQuestions(attempt, quizQuestions));
-		}
-		submitAttempt(attempt, quizQuestions, LocalDateTime.now(), "SUBMIT_QUIZ_ATTEMPT");
-		return quizAttemptMapper.toResponse(attempt, orderedQuestions(attempt, quizQuestions));
+		});
 	}
 
 	@Transactional
 	public QuizAttemptResponse get(Long attemptId, Long currentUserId) {
-		QuizAttempt attempt = findOwnAttempt(attemptId, currentUserId);
+		QuizAttempt attempt = quizAttemptRepository.getByIdAndUserIdOrThrow(attemptId, currentUserId);
 		autoSubmitIfExpired(attempt, quizQuestions(attempt));
 		return toResponse(attempt);
 	}
 
 	@Transactional
 	public QuizAttemptReviewResponse review(Long attemptId, Long currentUserId) {
-		QuizAttempt attempt = findOwnAttempt(attemptId, currentUserId);
+		QuizAttempt attempt = quizAttemptRepository.getByIdAndUserIdOrThrow(attemptId, currentUserId);
 		List<QuizQuestion> quizQuestions = quizQuestions(attempt);
 		autoSubmitIfExpired(attempt, quizQuestions);
 		if (attempt.getStatus() != QuizAttemptStatus.Submitted) {
@@ -180,16 +203,6 @@ public class QuizAttemptService {
 	private QuizAttemptResponse toResponse(QuizAttempt attempt) {
 		List<QuizQuestion> questions = orderedQuestions(attempt, quizQuestions(attempt));
 		return quizAttemptMapper.toResponse(attempt, questions);
-	}
-
-	private Quiz findQuiz(Long quizId) {
-		return quizRepository.findById(quizId)
-				.orElseThrow(() -> new NotFoundException("Quiz not found"));
-	}
-
-	private QuizAttempt findOwnAttempt(Long attemptId, Long currentUserId) {
-		return quizAttemptRepository.findByIdAndUserId(attemptId, currentUserId)
-				.orElseThrow(() -> new NotFoundException("Quiz attempt not found"));
 	}
 
 	private List<QuizQuestion> quizQuestions(QuizAttempt attempt) {
@@ -212,7 +225,7 @@ public class QuizAttemptService {
 		if (quiz.getStatus() != QuizStatus.Published) {
 			throw new ConflictException("QUIZ_NOT_AVAILABLE", "Only published quiz can be attempted");
 		}
-		LocalDate today = LocalDate.now();
+		LocalDate today = LocalDate.now(clock);
 		if (quiz.getOpenDate() != null && today.isBefore(quiz.getOpenDate())) {
 			throw new ConflictException("QUIZ_NOT_OPEN", "Quiz is not open yet");
 		}
@@ -247,7 +260,7 @@ public class QuizAttemptService {
 	}
 
 	private boolean autoSubmitIfExpired(QuizAttempt attempt, List<QuizQuestion> quizQuestions) {
-		if (attempt.getStatus() != QuizAttemptStatus.InProgress || !isExpired(attempt, LocalDateTime.now())) {
+		if (attempt.getStatus() != QuizAttemptStatus.InProgress || !isExpired(attempt, LocalDateTime.now(clock))) {
 			return false;
 		}
 		submitAttempt(attempt, quizQuestions, expiresAt(attempt), "AUTO_SUBMIT_QUIZ_ATTEMPT_EXPIRED");

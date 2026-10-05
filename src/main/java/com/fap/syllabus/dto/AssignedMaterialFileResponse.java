@@ -14,6 +14,7 @@ public record AssignedMaterialFileResponse(
 		Long fileSize,
 		String contentType,
 		Long uploadedBy,
-		LocalDateTime uploadedAt
+		LocalDateTime uploadedAt,
+		boolean storedContent
 ) {
 }

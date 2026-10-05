@@ -1,5 +1,6 @@
 package com.fap.training.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.training.entity.TrainingRegistration;
 import com.fap.training.enums.TrainingRegistrationStatus;
 import com.fap.training.enums.TrainingSessionStatus;
@@ -17,8 +18,66 @@ import java.util.Optional;
 
 public interface TrainingRegistrationRepository extends JpaRepository<TrainingRegistration, Long> {
 
+	@Query("""
+			select r.status as status, count(r) as total
+			from TrainingRegistration r
+			where (:classAdminId is null
+			       or exists (select ca.id from ClassAdmin ca
+			                  where ca.fapClass = r.trainingSession.fapClass
+			                    and ca.user.id = :classAdminId))
+			  and (:fromDate is null or r.trainingSession.sessionDate >= :fromDate)
+			  and (:toDate is null or r.trainingSession.sessionDate <= :toDate)
+			group by r.status
+			""")
+	List<AnalyticsRegistrationStatusCount> countStatusesForAnalytics(
+			@Param("classAdminId") Long classAdminId,
+			@Param("fromDate") LocalDate fromDate,
+			@Param("toDate") LocalDate toDate);
+
+	@Query("""
+			select count(distinct r.user.id)
+			from TrainingRegistration r
+			where r.status in :statuses
+			  and (:classAdminId is null
+			       or exists (select ca.id from ClassAdmin ca
+			                  where ca.fapClass = r.trainingSession.fapClass
+			                    and ca.user.id = :classAdminId))
+			  and (:fromDate is null or r.trainingSession.sessionDate >= :fromDate)
+			  and (:toDate is null or r.trainingSession.sessionDate <= :toDate)
+			""")
+	long countDistinctParticipantsForAnalytics(
+			@Param("classAdminId") Long classAdminId,
+			@Param("statuses") Collection<TrainingRegistrationStatus> statuses,
+			@Param("fromDate") LocalDate fromDate,
+			@Param("toDate") LocalDate toDate);
+
+	interface AnalyticsRegistrationStatusCount {
+		TrainingRegistrationStatus getStatus();
+
+		Long getTotal();
+	}
+
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
 	Optional<TrainingRegistration> findByTrainingSessionIdAndUserId(Long trainingSessionId, Long userId);
+
+	/**
+	 * Lookup for callers that treat a missing registration as not found. Feedback submission uses
+	 * the same finder but answers with a conflict instead, so it stays on the finder.
+	 */
+	default TrainingRegistration getByTrainingSessionIdAndUserIdOrThrow(Long trainingSessionId, Long userId) {
+		return findByTrainingSessionIdAndUserId(trainingSessionId, userId)
+				.orElseThrow(() -> new NotFoundException("training_registration", "Training registration not found"));
+	}
+
+	/** All registrations of a session, to sync many users against it without a lookup per user. */
+	List<TrainingRegistration> findByTrainingSessionId(Long trainingSessionId);
+
+	/** One user's registrations across sessions, to sync that user without a lookup per session. */
+	List<TrainingRegistration> findByUserIdAndTrainingSessionIdIn(Long userId, Collection<Long> trainingSessionIds);
+
+	@EntityGraph(attributePaths = {"trainingSession", "user"})
+	Optional<TrainingRegistration> findByTrainingSessionIdAndUserIdAndStatus(
+			Long trainingSessionId, Long userId, TrainingRegistrationStatus status);
 
 	@EntityGraph(attributePaths = {"trainingSession", "user"})
 	List<TrainingRegistration> findByTrainingSessionIdAndStatusInOrderByRegisteredAtAscIdAsc(
@@ -86,6 +145,28 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 
 	long countByTrainingSessionIdAndStatus(Long trainingSessionId, TrainingRegistrationStatus status);
 
+	@Query("""
+			select r.user.id
+			from TrainingRegistration r
+			where r.trainingSession.id = :trainingSessionId
+			  and r.status = :status
+			""")
+	List<Long> findUserIdsByTrainingSessionIdAndStatus(
+			@Param("trainingSessionId") Long trainingSessionId,
+			@Param("status") TrainingRegistrationStatus status);
+
+	/** Registrations of every user in a class, for per-class calculations that would otherwise query per user. */
+	@EntityGraph(attributePaths = "trainingSession")
+	@Query("""
+			select r
+			from TrainingRegistration r
+			where r.trainingSession.fapClass.id = :classId
+			  and r.status in :statuses
+			""")
+	List<TrainingRegistration> findByClassIdAndStatusIn(
+			@Param("classId") Long classId,
+			@Param("statuses") Collection<TrainingRegistrationStatus> statuses);
+
 	@EntityGraph(attributePaths = {"trainingSession", "trainingSession.fapClass", "trainingSession.trainer", "user"})
 	@Query("""
 			select r
@@ -99,4 +180,20 @@ public interface TrainingRegistrationRepository extends JpaRepository<TrainingRe
 			@Param("userId") Long userId,
 			@Param("classId") Long classId,
 			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses);
+
+	@EntityGraph(attributePaths = {"trainingSession", "trainingSession.fapClass", "trainingSession.trainer", "user"})
+	@Query("""
+			select r
+			from TrainingRegistration r
+			where r.user.id = :userId
+			  and r.trainingSession.fapClass.id = :classId
+			  and r.trainingSession.status = :sessionStatus
+			  and r.status in :registrationStatuses
+			order by r.trainingSession.sessionDate asc, r.trainingSession.startTime asc, r.id asc
+			""")
+	List<TrainingRegistration> findFutureByClassAndUser(
+			@Param("classId") Long classId,
+			@Param("userId") Long userId,
+			@Param("sessionStatus") TrainingSessionStatus sessionStatus,
+			@Param("registrationStatuses") Collection<TrainingRegistrationStatus> registrationStatuses);
 }

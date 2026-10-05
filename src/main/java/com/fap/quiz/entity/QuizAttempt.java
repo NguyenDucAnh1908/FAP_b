@@ -15,6 +15,7 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -28,7 +29,7 @@ public class QuizAttempt {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "quiz_attempts_seq")
-	@SequenceGenerator(name = "quiz_attempts_seq", sequenceName = "quiz_attempts_seq", allocationSize = 1)
+	@SequenceGenerator(name = "quiz_attempts_seq", sequenceName = "quiz_attempts_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -70,4 +71,8 @@ public class QuizAttempt {
 
 	@Column(name = "submitted_at")
 	private LocalDateTime submittedAt;
+
+	@Version
+	@Column(name = "version_no", nullable = false)
+	private Long versionNo;
 }

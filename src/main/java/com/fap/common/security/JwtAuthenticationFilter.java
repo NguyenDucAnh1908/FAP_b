@@ -6,8 +6,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -18,9 +16,9 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 	private final JwtService jwtService;
-	private final UserDetailsService userDetailsService;
+	private final FapUserDetailsService userDetailsService;
 
-	public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
+	public JwtAuthenticationFilter(JwtService jwtService, FapUserDetailsService userDetailsService) {
 		this.jwtService = jwtService;
 		this.userDetailsService = userDetailsService;
 	}
@@ -38,10 +36,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 		String token = header.substring(7);
 		try {
+			// extractSubject verifies the signature and expiry, so the token is parsed only once.
 			String subject = jwtService.extractSubject(token);
 			if (subject != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-				UserDetails userDetails = userDetailsService.loadUserByUsername(subject);
-				if (jwtService.isValid(token, userDetails)) {
+				FapUserPrincipal userDetails = userDetailsService.loadPrincipalForToken(subject);
+				// A deactivated user's unexpired token must stop working immediately.
+				if (userDetails.isEnabled() && subject.equals(userDetails.getUsername())) {
 					UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
 							userDetails,
 							null,

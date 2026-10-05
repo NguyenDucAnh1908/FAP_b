@@ -1,7 +1,8 @@
 package com.fap.syllabus.repository;
 
+import com.fap.common.exception.NotFoundException;
 import com.fap.syllabus.entity.MaterialFile;
-import com.fap.training.enums.TrainingRegistrationStatus;
+import com.fap.clazz.enums.ClassEnrollmentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -21,8 +22,17 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
 	Optional<MaterialFile> findByIdAndTopicId(Long id, Long topicId);
 
+	default MaterialFile getByIdAndTopicIdOrThrow(Long id, Long topicId) {
+		return findByIdAndTopicId(id, topicId)
+				.orElseThrow(() -> new NotFoundException("material_file", "Material file not found"));
+	}
+
 	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
 	Optional<MaterialFile> findWithTopicById(Long id);
+
+	default MaterialFile getWithTopicOrThrow(Long id) {
+		return findWithTopicById(id).orElseThrow(() -> new NotFoundException("material_file", "Material file not found"));
+	}
 
 	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
 	@Query(
@@ -52,70 +62,114 @@ public interface MaterialFileRepository extends JpaRepository<MaterialFile, Long
 			@Param("keyword") String keyword,
 			Pageable pageable);
 
+	// Eligibility is an EXISTS, not a join: joining enrollments multiplies rows per class/program, and
+	// the DISTINCT that removed them fails on Oracle (ORA-00932) because Syllabus has CLOB columns.
 	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
 	@Query(
 			value = """
-					select distinct m
+					select m
 					from MaterialFile m
-					join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
-					join FapClass c on c.trainingProgram = tps.program
-					join TrainingSession s on s.fapClass = c
-					join TrainingRegistration r on r.trainingSession = s
-					where r.user.id = :userId
-					  and r.status in :eligibleStatuses
+					join m.topic t
+					join t.unit u
+					join u.day d
+					join d.syllabus s
+					where exists (
+					      select e.id
+					      from TrainingProgramSyllabus tps
+					      join FapClass c on c.trainingProgram = tps.program
+					      join ClassEnrollment e on e.fapClass = c
+					      where tps.syllabus = s
+					        and e.user.id = :userId
+					        and e.status in :eligibleStatuses
+					  )
 					  and (:keyword is null
 					       or lower(m.fileName) like concat(concat('%', lower(:keyword)), '%')
 					       or lower(m.fileUrl) like concat(concat('%', lower(:keyword)), '%')
 					       or lower(coalesce(m.contentType, '')) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.name) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.unit.day.syllabus.name) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.unit.day.syllabus.code) like concat(concat('%', lower(:keyword)), '%'))
+					       or lower(t.name) like concat(concat('%', lower(:keyword)), '%')
+					       or lower(s.name) like concat(concat('%', lower(:keyword)), '%')
+					       or lower(s.code) like concat(concat('%', lower(:keyword)), '%'))
 					""",
 			countQuery = """
-					select count(distinct m)
+					select count(m)
 					from MaterialFile m
-					join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
-					join FapClass c on c.trainingProgram = tps.program
-					join TrainingSession s on s.fapClass = c
-					join TrainingRegistration r on r.trainingSession = s
-					where r.user.id = :userId
-					  and r.status in :eligibleStatuses
+					join m.topic t
+					join t.unit u
+					join u.day d
+					join d.syllabus s
+					where exists (
+					      select e.id
+					      from TrainingProgramSyllabus tps
+					      join FapClass c on c.trainingProgram = tps.program
+					      join ClassEnrollment e on e.fapClass = c
+					      where tps.syllabus = s
+					        and e.user.id = :userId
+					        and e.status in :eligibleStatuses
+					  )
 					  and (:keyword is null
 					       or lower(m.fileName) like concat(concat('%', lower(:keyword)), '%')
 					       or lower(m.fileUrl) like concat(concat('%', lower(:keyword)), '%')
 					       or lower(coalesce(m.contentType, '')) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.name) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.unit.day.syllabus.name) like concat(concat('%', lower(:keyword)), '%')
-					       or lower(m.topic.unit.day.syllabus.code) like concat(concat('%', lower(:keyword)), '%'))
+					       or lower(t.name) like concat(concat('%', lower(:keyword)), '%')
+					       or lower(s.name) like concat(concat('%', lower(:keyword)), '%')
+					       or lower(s.code) like concat(concat('%', lower(:keyword)), '%'))
 					""")
 	Page<MaterialFile> searchAssignedToUser(
 			@Param("userId") Long userId,
-			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
+			@Param("eligibleStatuses") Collection<ClassEnrollmentStatus> eligibleStatuses,
 			@Param("keyword") String keyword,
 			Pageable pageable);
 
 	@EntityGraph(attributePaths = {"topic", "topic.unit", "topic.unit.day", "topic.unit.day.syllabus"})
 	@Query("""
-			select distinct m
+			select m
 			from MaterialFile m
-			join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
-			join FapClass c on c.trainingProgram = tps.program
-			join TrainingSession s on s.fapClass = c
-			join TrainingRegistration r on r.trainingSession = s
-			where r.user.id = :userId
-			  and c.id = :classId
-			  and r.status in :eligibleStatuses
+			join m.topic t
+			join t.unit u
+			join u.day d
+			join d.syllabus s
+			where exists (
+			      select e.id
+			      from TrainingProgramSyllabus tps
+			      join FapClass c on c.trainingProgram = tps.program
+			      join ClassEnrollment e on e.fapClass = c
+			      where tps.syllabus = s
+			        and c.id = :classId
+			        and e.user.id = :userId
+			        and e.status in :eligibleStatuses
+			  )
 			  and (:keyword is null
 			       or lower(m.fileName) like concat(concat('%', lower(:keyword)), '%')
 			       or lower(m.fileUrl) like concat(concat('%', lower(:keyword)), '%')
 			       or lower(coalesce(m.contentType, '')) like concat(concat('%', lower(:keyword)), '%')
-			       or lower(m.topic.name) like concat(concat('%', lower(:keyword)), '%')
-			       or lower(m.topic.unit.day.syllabus.name) like concat(concat('%', lower(:keyword)), '%')
-			       or lower(m.topic.unit.day.syllabus.code) like concat(concat('%', lower(:keyword)), '%'))
+			       or lower(t.name) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(s.name) like concat(concat('%', lower(:keyword)), '%')
+			       or lower(s.code) like concat(concat('%', lower(:keyword)), '%'))
 			""")
 	List<MaterialFile> findAssignedToUserByClass(
 			@Param("userId") Long userId,
 			@Param("classId") Long classId,
-			@Param("eligibleStatuses") Collection<TrainingRegistrationStatus> eligibleStatuses,
+			@Param("eligibleStatuses") Collection<ClassEnrollmentStatus> eligibleStatuses,
 			@Param("keyword") String keyword);
+
+	/**
+	 * Ownership probe for downloads. Trainees hold {@code learning_material:view} globally, so the
+	 * method-level permission check alone would expose every material to every trainee; this walks
+	 * the same eligibility chain as {@link #searchAssignedToUser} to confirm the user is actually
+	 * registered for a session that teaches the material.
+	 */
+	@Query("""
+			select count(m) > 0
+			from MaterialFile m
+			join TrainingProgramSyllabus tps on tps.syllabus = m.topic.unit.day.syllabus
+			join FapClass c on c.trainingProgram = tps.program
+			join ClassEnrollment e on e.fapClass = c
+			where m.id = :materialId
+			  and e.user.id = :userId
+			  and e.status in :eligibleStatuses
+			""")
+	boolean existsAssignedToUser(
+			@Param("materialId") Long materialId,
+			@Param("userId") Long userId,
+			@Param("eligibleStatuses") Collection<ClassEnrollmentStatus> eligibleStatuses);
 }

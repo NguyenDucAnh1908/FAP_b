@@ -160,7 +160,7 @@ Common errors:
 | `400` | `INVALID_QUIZ_DATE_RANGE` | `openDate` is after `closeDate`. |
 | `400` | `DUPLICATE_QUIZ_QUESTION` | The same question appears more than once. |
 | `400` | `DUPLICATE_QUIZ_QUESTION_SORT_ORDER` | More than one question uses the same `sortOrder`. |
-| `404` | `NOT_FOUND` | Quiz or one of the questions does not exist. |
+| `404` | `RESOURCE_NOT_FOUND` | Quiz or one of the questions does not exist. |
 | `409` | `QUIZ_NOT_EDITABLE` | Only draft quizzes can be edited. |
 | `409` | `QUIZ_QUESTION_REQUIRED` | Quiz has no questions and cannot be published. |
 | `409` | `INVALID_QUIZ_STATUS_TRANSITION` | Requested status transition is not allowed. |

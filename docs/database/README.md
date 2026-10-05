@@ -12,40 +12,24 @@ Generated from:
 | `oracle/schema.sql` | Canonical Oracle 19c+ DDL for FAP backend v1 |
 | `oracle/indexes.sql` | Standalone index DDL extracted for DBA review |
 | `oracle/constraints_validation.sql` | Oracle data dictionary queries to validate constraints and indexes after migration |
-| `flyway/V1__create_fap_schema.sql` | Flyway migration using the canonical Oracle DDL |
-| `flyway/V2__create_sequences_and_seed_initial_roles_and_admin.sql` | Oracle sequences for JPA ID generation plus initial roles, permission matrix, and local Super Admin seed |
-| `flyway/V3__fix_initial_admin_password_hash.sql` | Corrects the initial local Super Admin BCrypt password hash |
-| `flyway/V4__create_password_reset_tokens.sql` | Adds password reset OTP storage for forgot-password flow |
-| `flyway/V5__create_audit_logs_sequence.sql` | Adds Oracle sequence for audit log JPA ID generation |
-| `flyway/V6__create_syllabus_sequences.sql` | Adds Oracle sequence for syllabus JPA ID generation |
-| `flyway/V7__create_syllabus_outline_sequences.sql` | Adds Oracle sequences for syllabus day, unit, and topic JPA ID generation |
-| `flyway/V8__create_material_files_sequence.sql` | Adds Oracle sequence for material file JPA ID generation |
-| `flyway/V9__create_training_programs_sequence.sql` | Adds Oracle sequence for training program JPA ID generation |
-| `flyway/V10__create_classes_sequence.sql` | Adds Oracle sequence for class JPA ID generation |
-| `flyway/V11__create_class_trainers_sequence.sql` | Adds Oracle sequence for class trainer assignment JPA ID generation |
-| `flyway/V12__create_training_sessions_sequence.sql` | Adds Oracle sequence for training session JPA ID generation |
-| `flyway/V13__create_training_registrations_sequence.sql` | Adds Oracle sequence for training registration JPA ID generation |
-| `flyway/V14__create_attendance_records_sequence.sql` | Adds Oracle sequence for attendance record JPA ID generation |
-| `flyway/V15__create_notifications_sequence.sql` | Adds Oracle sequence for notification JPA ID generation |
-| `flyway/V16__create_training_feedbacks.sql` | Adds training feedback table, sequence, constraints, and indexes |
-| `flyway/V17__create_questions_sequence.sql` | Adds Oracle sequence for question bank JPA ID generation |
-| `flyway/V18__create_quizzes_sequence_and_quiz_permissions.sql` | Adds Oracle sequence for quiz JPA ID generation, question points, and quiz permission seed |
-| `flyway/V19__create_quiz_assignments_sequence_and_fix_assignment_uniques.sql` | Adds Oracle sequence for quiz assignment JPA ID generation and fixes assignment uniqueness indexes |
-| `flyway/V20__create_quiz_attempts_sequence_and_support_in_progress.sql` | Adds Oracle sequence for quiz attempt JPA ID generation and supports in-progress quiz attempts |
+| `../../src/main/resources/db/migration/` | **Canonical schema history**: every Flyway migration (V1 ... V33). The copies that used to live under `docs/database/flyway/` were removed because they had drifted from the applied migrations. |
+| `../../src/main/resources/db/seed/` | Demo accounts, sample classes and e2e fixtures. Loaded only by the `local` (and `it`) profile and excluded from the deployable jar. |
+| `../../src/main/resources/db/migration/V29__create_class_enrollments_and_registration_modes.sql` | Adds the official class roster, enrollment settings, data migration, and session registration modes |
+| `../../src/main/resources/db/migration/V30__create_course_results_and_completion_policy.sql` | Adds class completion policy, final course results, quiz snapshots, adjustment history, and result backfill |
+| `../../src/main/resources/db/migration/V31__add_class_enrollment_approval_workflow.sql` | Adds pending approval/rejection states and enrollment review audit fields |
+| `../../src/main/resources/db/migration/V32__add_performance_indexes.sql` | Adds function-based case-insensitive lookup indexes, missing foreign-key indexes, and schedule-conflict/dashboard indexes; replaces `idx_ts_class`/`idx_ts_trainer` with composites |
+| `../../src/main/resources/db/migration/V33__use_pooled_sequence_allocation.sql` | Sets every sequence to `INCREMENT BY 50 CACHE 20` to match the entities' `allocationSize = 50` (ids are no longer contiguous) |
 | `liquibase/db.changelog-master.xml` | Liquibase changelog that executes the canonical Oracle DDL |
 | `liquibase/rollback/001_drop_fap_schema_oracle.sql` | Liquibase rollback SQL |
 | `indexes_and_constraints.md` | Human-readable inventory of indexes, constraints, and non-DDL rules |
 
 ## Flyway
 
-Place Flyway migrations under your backend migration folder, for example:
-
-```text
-src/main/resources/db/migration/V1__create_fap_schema.sql
-src/main/resources/db/migration/V2__create_sequences_and_seed_initial_roles_and_admin.sql
-src/main/resources/db/migration/V3__fix_initial_admin_password_hash.sql
-src/main/resources/db/migration/V4__create_password_reset_tokens.sql
-```
+`src/main/resources/db/migration` is the single source of truth for the schema; this folder holds
+DBA/reference material only. `oracle/schema.sql` and `oracle/indexes.sql` are consolidated
+snapshots for review and may lag behind the latest migration; when they disagree, the migrations
+win. `DatabaseSchemaIT` boots the application against Oracle with `ddl-auto=validate`, so the
+migrations and the JPA entities are verified to match on every `mvnw verify`.
 
 ## Liquibase
 

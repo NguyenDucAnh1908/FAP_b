@@ -186,20 +186,13 @@ Use generated artifacts:
 | Purpose | File |
 |---|---|
 | Canonical Oracle DDL | `docs/database/oracle/schema.sql` |
-| Flyway migration | `docs/database/flyway/V1__create_fap_schema.sql` |
+| Flyway migrations | `src/main/resources/db/migration/` (canonical; V1 creates the schema) |
 | Liquibase changelog | `docs/database/liquibase/db.changelog-master.xml` |
 | Index/constraint inventory | `docs/database/indexes_and_constraints.md` |
 
-Spring backend should copy:
-
-```text
-docs/database/flyway/V1__create_fap_schema.sql
--> src/main/resources/db/migration/V1__create_fap_schema.sql
-docs/database/flyway/V2__create_sequences_and_seed_initial_roles_and_admin.sql
--> src/main/resources/db/migration/V2__create_sequences_and_seed_initial_roles_and_admin.sql
-docs/database/flyway/V3__fix_initial_admin_password_hash.sql
--> src/main/resources/db/migration/V3__fix_initial_admin_password_hash.sql
-```
+The migrations are maintained directly under `src/main/resources/db/migration` (schema and
+production reference data) and `src/main/resources/db/seed` (local demo data, excluded from the
+deployable jar). The former copies under `docs/database/flyway/` were removed.
 
 Recommended Flyway config:
 

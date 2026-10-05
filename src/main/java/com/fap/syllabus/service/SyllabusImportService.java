@@ -60,7 +60,8 @@ public class SyllabusImportService {
 
 		List<String[]> rows = parseCsv(file);
 		if (rows.isEmpty()) {
-			throw new BadRequestException("IMPORT_FILE_EMPTY", "CSV file has no data rows");
+			throw new BadRequestException("IMPORT_FILE_EMPTY", "CSV file has no data rows")
+					.withMessageKey("error.IMPORT_FILE_EMPTY.no_data_rows");
 		}
 
 		String[] headers = rows.get(0);
@@ -108,7 +109,8 @@ public class SyllabusImportService {
 				}
 			}
 		} catch (Exception e) {
-			throw new BadRequestException("IMPORT_FILE_PARSE_ERROR", "Failed to parse CSV file: " + e.getMessage());
+			throw new BadRequestException("IMPORT_FILE_PARSE_ERROR", "Failed to parse CSV file: " + e.getMessage())
+					.withMessageArgs(e.getMessage());
 		}
 		return rows;
 	}
@@ -145,7 +147,8 @@ public class SyllabusImportService {
 		}
 		for (String expected : EXPECTED_HEADERS) {
 			if (!headerSet.contains(expected)) {
-				throw new BadRequestException("IMPORT_HEADER_MISSING", "Missing required header: " + expected);
+				throw new BadRequestException("IMPORT_HEADER_MISSING", "Missing required header: " + expected)
+						.withMessageArgs(expected);
 			}
 		}
 	}

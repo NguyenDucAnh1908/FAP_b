@@ -27,7 +27,7 @@ public class Question {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "questions_seq")
-	@SequenceGenerator(name = "questions_seq", sequenceName = "questions_seq", allocationSize = 1)
+	@SequenceGenerator(name = "questions_seq", sequenceName = "questions_seq", allocationSize = 50)
 	private Long id;
 
 	@Lob

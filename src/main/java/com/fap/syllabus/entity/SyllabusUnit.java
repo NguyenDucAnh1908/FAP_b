@@ -27,7 +27,7 @@ public class SyllabusUnit {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "syllabus_units_seq")
-	@SequenceGenerator(name = "syllabus_units_seq", sequenceName = "syllabus_units_seq", allocationSize = 1)
+	@SequenceGenerator(name = "syllabus_units_seq", sequenceName = "syllabus_units_seq", allocationSize = 50)
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)

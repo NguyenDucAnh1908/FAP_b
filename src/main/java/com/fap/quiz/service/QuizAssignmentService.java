@@ -17,6 +17,7 @@ import com.fap.quiz.repository.QuizRepository;
 import com.fap.training.entity.TrainingSession;
 import com.fap.training.repository.TrainingSessionRepository;
 import com.fap.user.repository.UserRepository;
+import com.fap.result.repository.ClassCompletionQuizRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ public class QuizAssignmentService {
 	private final UserRepository userRepository;
 	private final QuizAssignmentMapper quizAssignmentMapper;
 	private final AuditLogService auditLogService;
+	private final ClassCompletionQuizRepository completionQuizRepository;
 
 	public QuizAssignmentService(
 			QuizRepository quizRepository,
@@ -41,7 +43,8 @@ public class QuizAssignmentService {
 			TrainingSessionRepository trainingSessionRepository,
 			UserRepository userRepository,
 			QuizAssignmentMapper quizAssignmentMapper,
-			AuditLogService auditLogService) {
+			AuditLogService auditLogService,
+			ClassCompletionQuizRepository completionQuizRepository) {
 		this.quizRepository = quizRepository;
 		this.quizAssignmentRepository = quizAssignmentRepository;
 		this.classRepository = classRepository;
@@ -49,6 +52,7 @@ public class QuizAssignmentService {
 		this.userRepository = userRepository;
 		this.quizAssignmentMapper = quizAssignmentMapper;
 		this.auditLogService = auditLogService;
+		this.completionQuizRepository = completionQuizRepository;
 	}
 
 	@Transactional(readOnly = true)
@@ -61,7 +65,7 @@ public class QuizAssignmentService {
 
 	@Transactional
 	public QuizAssignmentResponse assign(Long quizId, CreateQuizAssignmentRequest request, Long currentUserId) {
-		Quiz quiz = findQuiz(quizId);
+		Quiz quiz = quizRepository.getQuizOrThrow(quizId);
 		ensurePublished(quiz);
 		validateScope(request);
 
@@ -83,9 +87,12 @@ public class QuizAssignmentService {
 
 	@Transactional
 	public void delete(Long quizId, Long assignmentId) {
-		QuizAssignment assignment = quizAssignmentRepository.findByQuizIdAndId(quizId, assignmentId)
-				.orElseThrow(() -> new NotFoundException("Quiz assignment not found"));
+		QuizAssignment assignment = quizAssignmentRepository.getByQuizIdAndIdOrThrow(quizId, assignmentId);
 		ensurePublished(assignment.getQuiz());
+		if (assignment.getFapClass() != null
+				&& completionQuizRepository.existsByFapClassIdAndQuizId(assignment.getFapClass().getId(), quizId)) {
+			throw new ConflictException("QUIZ_REQUIRED_FOR_COMPLETION", "Quiz is required by the class completion policy");
+		}
 		quizAssignmentRepository.delete(assignment);
 		auditLogService.record("DELETE_QUIZ_ASSIGNMENT", "quiz_assignment", assignment.getId());
 	}
@@ -95,7 +102,7 @@ public class QuizAssignmentService {
 			throw new ConflictException("DUPLICATE_QUIZ_CLASS_ASSIGNMENT", "Quiz is already assigned to this class");
 		}
 		FapClass fapClass = classRepository.findById(classId)
-				.orElseThrow(() -> new NotFoundException("Class not found"));
+				.orElseThrow(() -> new NotFoundException("class", "Class not found"));
 		assignment.setFapClass(fapClass);
 	}
 
@@ -104,7 +111,7 @@ public class QuizAssignmentService {
 			throw new ConflictException("DUPLICATE_QUIZ_SESSION_ASSIGNMENT", "Quiz is already assigned to this training session");
 		}
 		TrainingSession trainingSession = trainingSessionRepository.findById(trainingSessionId)
-				.orElseThrow(() -> new NotFoundException("Training session not found"));
+				.orElseThrow(() -> new NotFoundException("training_session", "Training session not found"));
 		assignment.setTrainingSession(trainingSession);
 	}
 
@@ -116,14 +123,9 @@ public class QuizAssignmentService {
 		}
 	}
 
-	private Quiz findQuiz(Long quizId) {
-		return quizRepository.findById(quizId)
-				.orElseThrow(() -> new NotFoundException("Quiz not found"));
-	}
-
 	private void ensureQuizExists(Long quizId) {
 		if (!quizRepository.existsById(quizId)) {
-			throw new NotFoundException("Quiz not found");
+			throw new NotFoundException("quiz", "Quiz not found");
 		}
 	}
 

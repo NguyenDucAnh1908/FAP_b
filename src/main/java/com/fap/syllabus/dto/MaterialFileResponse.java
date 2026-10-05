@@ -10,6 +10,7 @@ public record MaterialFileResponse(
 		Long fileSize,
 		String contentType,
 		Long uploadedBy,
-		LocalDateTime uploadedAt
+		LocalDateTime uploadedAt,
+		boolean storedContent
 ) {
 }

@@ -45,14 +45,20 @@ for (const file of walk(sourceRoot).sort()) {
   const basePath = baseMatch ? mappingPath(baseMatch[1]) : '';
   const tag = (source.match(/@Tag\(name = "([^"]+)"\)/) || [, 'Untagged'])[1];
   const lines = source.split(/\r?\n/);
+  let lastMappingLine = -1;
 
   for (let i = 0; i < lines.length; i += 1) {
     const mapping = lines[i].trim().match(/^@(GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b(.*)$/);
     if (!mapping) {
       continue;
     }
-    const previousAnnotations = lines.slice(Math.max(0, i - 10), i).join('\n');
-    const summary = (previousAnnotations.match(/@Operation\(summary = "([^"]+)"\)/) || [, ''])[1];
+    // Only annotations after the previous handler belong to this mapping; a plain 10-line window
+    // attributed a short preceding endpoint's @Operation to the next one.
+    const windowStart = Math.max(0, i - 10, lastMappingLine + 1);
+    const previousAnnotations = lines.slice(windowStart, i).join('\n');
+    lastMappingLine = i;
+    const summaries = [...previousAnnotations.matchAll(/@Operation\(summary = "([^"]+)"\)/g)];
+    const summary = summaries.length ? summaries[summaries.length - 1][1] : '';
     const responseCodes = [...previousAnnotations.matchAll(/responseCode = "(\d+)"/g)].map(match => match[1]);
     endpoints.push({
       tag,
@@ -94,6 +100,27 @@ output.push('');
 output.push('```text');
 output.push('Bearer <access-token>');
 output.push('```');
+output.push('');
+output.push('## Pagination and sorting');
+output.push('');
+output.push('All paginated GET list endpoints accept these common parameters:');
+output.push('');
+output.push('| Parameter | Meaning | Default |');
+output.push('|---|---|---|');
+output.push('| `page` | Page number, starting from 1 | `1` |');
+output.push('| `limit` | Number of records per page | `20` |');
+output.push('| `sortBy` | Entity field used for sorting | Endpoint default |');
+output.push('| `order` | `asc` or `desc` | `asc` when `sortBy` is provided |');
+output.push('');
+output.push('Example:');
+output.push('');
+output.push('```text');
+output.push('GET /api/v1/syllabuses?page=1&limit=20&sortBy=name&order=asc');
+output.push('```');
+output.push('');
+output.push('If `sortBy` is omitted, the endpoint keeps its existing default order. Unsupported');
+output.push('fields or values other than `asc` and `desc` return `400 INVALID_SORT_FIELD` or');
+output.push('`400 INVALID_SORT_ORDER`.');
 output.push('');
 output.push(`## Endpoint Inventory (${endpoints.length} operations)`);
 output.push('');

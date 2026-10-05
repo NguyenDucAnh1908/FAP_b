@@ -40,9 +40,15 @@ src/test/java/com/fap/
   syllabus/
   program/
   clazz/
+  training/
   quiz/
-  calendar/
+  result/
+  dashboard/
+  support/   (shared IT base: AbstractOracleIT, fixtures)
 ```
+
+Unit tests are `*Test` (Surefire, no database). Integration tests are `*IT` (Failsafe, real Oracle
+through `AbstractOracleIT`; see README "Tests").
 
 ## Test Types
 

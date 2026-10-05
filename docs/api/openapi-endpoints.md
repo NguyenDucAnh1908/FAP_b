@@ -18,7 +18,28 @@ Most `/api/v1/**` endpoints require JWT Bearer authentication. Use Swagger UI **
 Bearer <access-token>
 ```
 
-## Endpoint Inventory (115 operations)
+## Pagination and sorting
+
+All paginated GET list endpoints accept these common parameters:
+
+| Parameter | Meaning | Default |
+|---|---|---|
+| `page` | Page number, starting from 1 | `1` |
+| `limit` | Number of records per page | `20` |
+| `sortBy` | Entity field used for sorting | Endpoint default |
+| `order` | `asc` or `desc` | `asc` when `sortBy` is provided |
+
+Example:
+
+```text
+GET /api/v1/syllabuses?page=1&limit=20&sortBy=name&order=asc
+```
+
+If `sortBy` is omitted, the endpoint keeps its existing default order. Unsupported
+fields or values other than `asc` and `desc` return `400 INVALID_SORT_FIELD` or
+`400 INVALID_SORT_ORDER`.
+
+## Endpoint Inventory (143 operations)
 
 ### Audit Logs
 
@@ -49,9 +70,36 @@ Bearer <access-token>
 | PUT | `/api/v1/classes/{id}` | Update classes | 200, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/classes/{id}/admins` | List admins | 200, 400, 401, 403, 404, 409 |
 | PUT | `/api/v1/classes/{id}/admins` | Replace admins | 200, 400, 401, 403, 404, 409 |
+| GET | `/api/v1/classes/{id}/enrollments` | List class enrollments | - |
+| POST | `/api/v1/classes/{id}/enrollments` | Add trainees to class | - |
+| DELETE | `/api/v1/classes/{id}/enrollments/{userId}` | Withdraw trainee from class | - |
+| PATCH | `/api/v1/classes/{id}/enrollments/{userId}/approve` | Approve trainee class enrollment request | - |
+| PATCH | `/api/v1/classes/{id}/enrollments/{userId}/reject` | Reject trainee class enrollment request | - |
+| DELETE | `/api/v1/classes/{id}/enrollments/me` | Withdraw current trainee from class | - |
+| POST | `/api/v1/classes/{id}/enrollments/me` | Submit current trainee class enrollment request | - |
 | PATCH | `/api/v1/classes/{id}/status` | Update status | 200, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/classes/{id}/trainers` | List trainers | 200, 400, 401, 403, 404, 409 |
 | PUT | `/api/v1/classes/{id}/trainers` | Replace trainers | 200, 400, 401, 403, 404, 409 |
+
+### Course Results
+
+| Method | Path | Summary | Documented responses |
+|---|---|---|---|
+| GET | `/api/v1/classes/{classId}/completion-policy` | Get class completion policy | - |
+| PUT | `/api/v1/classes/{classId}/completion-policy` | Update class completion policy | - |
+| GET | `/api/v1/classes/{classId}/results` | List class course results | - |
+| GET | `/api/v1/classes/{classId}/results/{userId}` | Get trainee course result | - |
+| PATCH | `/api/v1/classes/{classId}/results/{userId}` | Adjust trainee course result | - |
+| POST | `/api/v1/classes/{classId}/results/calculate` | Calculate class course results | - |
+| POST | `/api/v1/classes/{classId}/results/publish` | Publish class course results | - |
+| GET | `/api/v1/me/classes/{classId}/result` | Get current trainee published course result | - |
+
+### Dashboards
+
+| Method | Path | Summary | Documented responses |
+|---|---|---|---|
+| GET | `/api/v1/me/admin-dashboard` | Get Super Admin system dashboard | - |
+| GET | `/api/v1/me/training-analytics` | Get date-filtered training analytics | - |
 
 ### Materials
 
@@ -62,7 +110,16 @@ Bearer <access-token>
 | DELETE | `/api/v1/materials/{id}` | Delete materials | 204, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/materials/{id}` | Get materials detail | 200, 400, 401, 403, 404, 409 |
 | PUT | `/api/v1/materials/{id}` | Update materials | 200, 400, 401, 403, 404, 409 |
+| GET | `/api/v1/materials/{id}/download` | Download a material file | 200, 401, 403, 404 |
+| POST | `/api/v1/materials/upload` | Upload a material file | 201, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/me/materials` | List current user assigned materials | 200, 400, 401, 403, 404, 409 |
+
+### My Class Enrollments
+
+| Method | Path | Summary | Documented responses |
+|---|---|---|---|
+| GET | `/api/v1/me/available-classes` | List classes open for self enrollment | - |
+| GET | `/api/v1/me/class-enrollments` | List current trainee class enrollments | - |
 
 ### My Learning
 
@@ -157,17 +214,16 @@ Bearer <access-token>
 |---|---|---|---|
 | GET | `/api/v1/syllabuses` | List syllabus | 200, 400, 401, 403, 404, 409 |
 | POST | `/api/v1/syllabuses` | Create syllabus | 201, 400, 401, 403, 404, 409 |
-| POST | `/api/v1/syllabuses/quick-create` | Quick create syllabus draft | 201, 400, 401, 403, 404, 409 |
-| POST | `/api/v1/syllabuses/full` | Create full syllabus with outline | 201, 400, 401, 403, 404, 409 |
-| PUT | `/api/v1/syllabuses/{id}/full` | Update full syllabus with outline | 200, 400, 401, 403, 404, 409 |
 | DELETE | `/api/v1/syllabuses/{id}` | Delete syllabus | 204, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/syllabuses/{id}` | Get syllabus detail | 200, 400, 401, 403, 404, 409 |
-| GET | `/api/v1/syllabuses/{id}/full` | Get full syllabus detail | 200, 400, 401, 403, 404, 409 |
 | PUT | `/api/v1/syllabuses/{id}` | Update syllabus | 200, 400, 401, 403, 404, 409 |
+| POST | `/api/v1/syllabuses/{id}/clone` | Create a new syllabus version from an active or inactive syllabus | 201, 400, 401, 403, 404, 409 |
 | POST | `/api/v1/syllabuses/{id}/days` | Create day | 201, 400, 401, 403, 404, 409 |
 | DELETE | `/api/v1/syllabuses/{id}/days/{dayId}` | Delete day | 204, 400, 401, 403, 404, 409 |
 | PUT | `/api/v1/syllabuses/{id}/days/{dayId}` | Update day | 200, 400, 401, 403, 404, 409 |
 | POST | `/api/v1/syllabuses/{id}/days/{dayId}/units` | Create unit | 201, 400, 401, 403, 404, 409 |
+| GET | `/api/v1/syllabuses/{id}/full` | Get full syllabus detail | 200, 400, 401, 403, 404, 409 |
+| PUT | `/api/v1/syllabuses/{id}/full` | Update full syllabus with outline | 200, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/syllabuses/{id}/outline` | Get outline detail | 200, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/syllabuses/{id}/output-standards` | Get output standards detail | 200, 400, 401, 403, 404, 409 |
 | PUT | `/api/v1/syllabuses/{id}/output-standards` | Replace output standards | 200, 400, 401, 403, 404, 409 |
@@ -180,14 +236,16 @@ Bearer <access-token>
 | DELETE | `/api/v1/syllabuses/{id}/units/{unitId}` | Delete unit | 204, 400, 401, 403, 404, 409 |
 | PUT | `/api/v1/syllabuses/{id}/units/{unitId}` | Update unit | 200, 400, 401, 403, 404, 409 |
 | POST | `/api/v1/syllabuses/{id}/units/{unitId}/topics` | Create topic | 201, 400, 401, 403, 404, 409 |
+| POST | `/api/v1/syllabuses/full` | Create full syllabus with outline | 201, 400, 401, 403, 404, 409 |
 | POST | `/api/v1/syllabuses/import` | Import syllabuses from CSV file | 200, 400, 401, 403, 404, 409 |
+| POST | `/api/v1/syllabuses/quick-create` | Quick create syllabus draft | 201, 400, 401, 403, 404, 409 |
 
 ### Training Feedback
 
 | Method | Path | Summary | Documented responses |
 |---|---|---|---|
 | GET | `/api/v1/me/feedback` | List current user training feedback | 200, 400, 401, 403, 404, 409 |
-| POST | `/api/v1/training-sessions/{id}/feedback` | Submit quiz attempt | 201, 400, 401, 403, 404, 409 |
+| POST | `/api/v1/training-sessions/{id}/feedback` | Submit training feedback | 201, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/training-sessions/{id}/feedback-summary` | Get summary | 200, 400, 401, 403, 404, 409 |
 
 ### Training Programs
@@ -213,6 +271,7 @@ Bearer <access-token>
 | PUT | `/api/v1/training-sessions/{id}` | Update training sessions | 200, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/training-sessions/{id}/attendance` | Attendance | 200, 400, 401, 403, 404, 409 |
 | PUT | `/api/v1/training-sessions/{id}/attendance` | Upsert Attendance | 200, 400, 401, 403, 404, 409 |
+| POST | `/api/v1/training-sessions/{id}/check-in` | QR self check-in — trainees scan to mark themselves present | 200, 401, 403, 404, 409 |
 | GET | `/api/v1/training-sessions/{id}/participants` | Participants | 200, 400, 401, 403, 404, 409 |
 | POST | `/api/v1/training-sessions/{id}/registrations` | Register | 200, 400, 401, 403, 404, 409 |
 | DELETE | `/api/v1/training-sessions/{id}/registrations/me` | Cancel My Registration | 200, 400, 401, 403, 404, 409 |
@@ -226,7 +285,9 @@ Bearer <access-token>
 | POST | `/api/v1/users` | Create users | 201, 400, 401, 403, 404, 409 |
 | GET | `/api/v1/users/{id}` | Get users detail | 200, 400, 401, 403, 404, 409 |
 | PUT | `/api/v1/users/{id}` | Update users | 200, 400, 401, 403, 404, 409 |
+| GET | `/api/v1/users/{id}/avatar` | Get user avatar image | 200, 401, 404 |
 | PATCH | `/api/v1/users/{id}/status` | Update status | 200, 400, 401, 403, 404, 409 |
+| POST | `/api/v1/users/me/avatar` | Upload own avatar (JPEG / PNG / WebP, max 2 MB) | 204, 400, 401 |
 
 ## Verification Checklist
 
